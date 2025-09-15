@@ -1,0 +1,501 @@
+---
+title: MCP Server Sandboxing
+description: Comprehensive guide to sandboxing and isolation for MCP servers
+sidebarTitle: Sandboxing
+---
+
+# MCP Server Sandboxing
+
+Plugged.in implements robust sandboxing for all STDIO MCP servers to ensure security and resource isolation. This guide covers the sandboxing architecture, configuration, and best practices.
+
+## Overview
+
+<Warning>
+Sandboxing is enabled by default for all STDIO MCP servers. Never disable sandboxing in production environments unless absolutely necessary.
+</Warning>
+
+Sandboxing provides:
+- **Process Isolation**: Each MCP server runs in its own isolated environment
+- **Filesystem Protection**: Restricted access to system files and directories
+- **Resource Limits**: CPU, memory, and I/O constraints
+- **Network Control**: Optional network isolation for untrusted servers
+- **Privilege Dropping**: Servers run with minimal privileges
+
+## Sandboxing Technologies
+
+### Bubblewrap (Primary)
+
+<Info>
+Bubblewrap is the preferred sandboxing technology due to its lightweight nature and user-namespace support.
+</Info>
+
+**Features:**
+- User namespace isolation (no root required)
+- Bind mount control for selective file access
+- Network namespace support
+- Resource limits via cgroups
+- Minimal performance overhead
+
+**Installation:**
+```bash
+# Ubuntu/Debian
+sudo apt-get install -y bubblewrap
+
+# RHEL/CentOS/Fedora
+sudo dnf install -y bubblewrap
+
+# Verify installation
+bwrap --version
+```
+
+### Firejail (Fallback)
+
+Firejail provides SUID-based sandboxing with extensive security profiles.
+
+**Features:**
+- Extensive security profiles
+- AppArmor/SELinux integration
+- X11 sandboxing support
+- Network filtering capabilities
+- Comprehensive logging
+
+**Installation:**
+```bash
+# Ubuntu/Debian
+sudo apt-get install -y firejail
+
+# RHEL/CentOS/Fedora
+sudo dnf install -y firejail
+
+# Verify installation
+firejail --version
+```
+
+### FUSE Requirements
+
+Some applications require FUSE (Filesystem in Userspace) support:
+
+```bash
+# Install FUSE3
+sudo apt-get install -y fuse3 libfuse3-3
+
+# Enable FUSE for containers
+sudo modprobe fuse
+
+# Verify FUSE is available
+fusermount3 --version
+```
+
+## Configuration
+
+### Environment Variables
+
+Configure sandboxing behavior through environment variables:
+
+```env
+# Sandboxing Type
+MCP_ISOLATION_TYPE=bubblewrap      # Options: bubblewrap | firejail | none
+MCP_ISOLATION_FALLBACK=firejail    # Fallback if primary not available
+
+# Network Isolation
+MCP_ENABLE_NETWORK_ISOLATION=false # Set to true for strict isolation
+
+# Resource Limits
+MCP_CPU_CORES_MAX=0.5              # Maximum CPU cores (0.5 = 50% of one core)
+MCP_MEMORY_MAX_MB=512              # Maximum memory in MB
+MCP_IO_READ_MBPS=10                # I/O read limit in MB/s
+MCP_IO_WRITE_MBPS=5                # I/O write limit in MB/s
+MCP_PROCESS_TIMEOUT_MS=300000      # Process timeout in milliseconds
+MCP_STARTUP_TIMEOUT_MS=10000       # Startup timeout in milliseconds
+
+# Package Storage
+MCP_PACKAGE_STORE_DIR=/var/mcp-packages
+MCP_PNPM_STORE_DIR=/var/mcp-packages/pnpm-store
+MCP_UV_CACHE_DIR=/var/mcp-packages/uv-cache
+```
+
+### Sandboxing Modes
+
+<Tabs>
+  <Tab title="Bubblewrap Mode">
+    **Default and recommended mode**
+
+    ```typescript
+    // Bubblewrap configuration
+    {
+      isolation: {
+        type: "bubblewrap",
+        config: {
+          unshareAll: true,          // Unshare all namespaces
+          shareNet: true,             // Allow network (configurable)
+          dieWithParent: true,        // Terminate on parent exit
+          newSession: true,           // New session for process
+          uid: 1000,                  // Run as non-root user
+          gid: 1000,                  // Run as non-root group
+          hostname: "mcp-sandbox",    // Isolated hostname
+          capDrop: ["ALL"],          // Drop all capabilities
+          capAdd: ["CAP_NET_BIND_SERVICE"] // Add specific capabilities
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Firejail Mode">
+    **Fallback mode with SUID-based isolation**
+
+    ```typescript
+    // Firejail configuration
+    {
+      isolation: {
+        type: "firejail",
+        config: {
+          private: "/tmp/mcp-workspace",  // Private workspace
+          noroot: true,                   // No root access
+          net: "none",                     // Network isolation
+          nodbus: true,                    // No D-Bus access
+          nogroups: true,                  // No supplementary groups
+          nonewprivs: true,                // No new privileges
+          seccomp: true,                  // Seccomp filtering
+          capsDropAll: true,               // Drop all capabilities
+          quiet: true                      // Suppress firejail output
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="No Sandboxing">
+    **NOT recommended for production**
+
+    ```env
+    MCP_ISOLATION_TYPE=none
+    ```
+
+    <Warning>
+    Disabling sandboxing exposes your system to potential security risks. Only use for debugging in isolated environments.
+    </Warning>
+  </Tab>
+</Tabs>
+
+## Implementation Details
+
+### Filesystem Isolation
+
+The sandboxing system creates isolated filesystem views:
+
+```typescript
+// Bubblewrap filesystem bindings
+const filesystemBindings = [
+  // Read-only system directories
+  { source: "/usr", target: "/usr", readonly: true },
+  { source: "/lib", target: "/lib", readonly: true },
+  { source: "/lib64", target: "/lib64", readonly: true },
+
+  // Writable workspace
+  { source: "/tmp/mcp-workspace", target: "/workspace", readonly: false },
+
+  // Package manager directories
+  { source: MCP_PACKAGE_STORE_DIR, target: MCP_PACKAGE_STORE_DIR, readonly: false },
+
+  // Optional: User home (restricted)
+  { source: "~/.config", target: "~/.config", readonly: true }
+];
+```
+
+### Resource Limits
+
+Resource constraints applied to sandboxed processes:
+
+```typescript
+// Resource limit configuration
+const resourceLimits = {
+  cpu: {
+    cores: 0.5,                    // 50% of one CPU core
+    nice: 10                       // Lower priority
+  },
+  memory: {
+    max: 512 * 1024 * 1024,       // 512 MB
+    swap: 0                        // No swap usage
+  },
+  io: {
+    readBandwidth: 10 * 1024 * 1024,  // 10 MB/s read
+    writeBandwidth: 5 * 1024 * 1024,  // 5 MB/s write
+    maxOpenFiles: 1024             // File descriptor limit
+  },
+  process: {
+    maxProcesses: 32,              // Process limit
+    timeout: 300000                // 5 minute timeout
+  }
+};
+```
+
+### Network Isolation
+
+Control network access for sandboxed servers:
+
+<AccordionGroup>
+  <Accordion title="Full Network Access (Default)">
+    ```env
+    MCP_ENABLE_NETWORK_ISOLATION=false
+    ```
+    - Servers can access external networks
+    - Suitable for API-based MCP servers
+    - Docker socket access allowed
+  </Accordion>
+
+  <Accordion title="Network Isolation">
+    ```env
+    MCP_ENABLE_NETWORK_ISOLATION=true
+    ```
+    - No network access
+    - Loopback interface only
+    - Suitable for compute-only servers
+  </Accordion>
+
+  <Accordion title="Custom Network Rules">
+    ```typescript
+    // Advanced network configuration
+    {
+      network: {
+        isolation: "partial",
+        allowedHosts: ["api.example.com"],
+        allowedPorts: [443, 8080],
+        denyLocal: true
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Security Considerations
+
+### Privilege Escalation Prevention
+
+1. **Drop All Capabilities**: Remove all Linux capabilities by default
+2. **No New Privileges**: Prevent privilege escalation via setuid
+3. **User Namespace**: Run in unprivileged user namespace
+4. **Seccomp Filtering**: Restrict system calls
+
+### Directory Traversal Protection
+
+```typescript
+// Path validation for sandbox
+function validateSandboxPath(path: string): boolean {
+  const normalized = path.normalize(path);
+  const resolved = path.resolve(path);
+
+  // Prevent directory traversal
+  if (normalized.includes('..')) return false;
+
+  // Ensure path is within allowed directories
+  const allowedPaths = [
+    '/tmp/mcp-workspace',
+    MCP_PACKAGE_STORE_DIR
+  ];
+
+  return allowedPaths.some(allowed =>
+    resolved.startsWith(allowed)
+  );
+}
+```
+
+### OAuth and Authentication
+
+Special handling for OAuth-enabled MCP servers:
+
+```typescript
+// OAuth directory isolation
+if (server.requiresOAuth) {
+  const oauthDir = path.join(
+    MCP_PACKAGE_STORE_DIR,
+    'servers',
+    server.uuid,
+    'oauth'
+  );
+
+  // Bind OAuth directory for token storage
+  filesystemBindings.push({
+    source: oauthDir,
+    target: oauthDir,
+    readonly: false
+  });
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="Sandbox tools not found">
+    **Error:** "bwrap: command not found"
+
+    **Solution:**
+    ```bash
+    # Install bubblewrap
+    sudo apt-get update
+    sudo apt-get install -y bubblewrap
+
+    # Or use firejail as fallback
+    sudo apt-get install -y firejail
+    export MCP_ISOLATION_TYPE=firejail
+    ```
+  </Accordion>
+
+  <Accordion title="Permission denied errors">
+    **Error:** "Permission denied: /var/mcp-packages"
+
+    **Solution:**
+    ```bash
+    # Fix ownership and permissions
+    sudo mkdir -p /var/mcp-packages
+    sudo chown -R $USER:$USER /var/mcp-packages
+    sudo chmod -R 755 /var/mcp-packages
+    ```
+  </Accordion>
+
+  <Accordion title="FUSE not available">
+    **Error:** "fusermount: fuse device not found"
+
+    **Solution:**
+    ```bash
+    # Install and enable FUSE
+    sudo apt-get install -y fuse3
+    sudo modprobe fuse
+
+    # For Docker containers
+    docker run --cap-add SYS_ADMIN --device /dev/fuse
+    ```
+  </Accordion>
+
+  <Accordion title="Network isolation too restrictive">
+    **Error:** "Cannot connect to API endpoint"
+
+    **Solution:**
+    ```bash
+    # Disable network isolation for API servers
+    export MCP_ENABLE_NETWORK_ISOLATION=false
+
+    # Or allow specific servers to bypass
+    server.applySandboxing = false  # Use with caution
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Debug Mode
+
+Enable debug logging for sandboxing:
+
+```bash
+# Enable sandbox debugging
+export DEBUG=mcp:sandbox
+export MCP_SANDBOX_VERBOSE=true
+
+# View sandbox configuration
+cat /proc/[PID]/status | grep Cap
+cat /proc/[PID]/cgroup
+```
+
+### Testing Sandboxing
+
+Verify sandboxing is working:
+
+```bash
+# Test with bubblewrap
+bwrap \
+  --unshare-all \
+  --share-net \
+  --die-with-parent \
+  --ro-bind /usr /usr \
+  --ro-bind /lib /lib \
+  --ro-bind /lib64 /lib64 \
+  --tmpfs /tmp \
+  --proc /proc \
+  --dev /dev \
+  -- /bin/sh -c "echo 'Sandbox works!'"
+
+# Test with firejail
+firejail \
+  --quiet \
+  --private=/tmp/test \
+  --noroot \
+  --net=none \
+  -- /bin/sh -c "echo 'Firejail works!'"
+```
+
+## Best Practices
+
+<Steps>
+  <Step title="Always Use Sandboxing">
+    Never disable sandboxing in production. If a server requires it, investigate alternatives.
+  </Step>
+  <Step title="Principle of Least Privilege">
+    Grant minimal permissions required for functionality.
+  </Step>
+  <Step title="Regular Updates">
+    Keep sandboxing tools updated for latest security fixes.
+  </Step>
+  <Step title="Monitor Resource Usage">
+    Track CPU, memory, and I/O usage to tune limits.
+  </Step>
+  <Step title="Test Thoroughly">
+    Test MCP servers in sandbox before production deployment.
+  </Step>
+  <Step title="Document Exceptions">
+    If sandboxing must be disabled, document the reason and compensating controls.
+  </Step>
+</Steps>
+
+## Performance Impact
+
+Sandboxing overhead is minimal:
+
+| Metric | No Sandbox | Bubblewrap | Firejail |
+|--------|------------|------------|----------|
+| Startup Time | 100ms | 120ms (+20%) | 150ms (+50%) |
+| Memory Overhead | 0 MB | 2-4 MB | 5-10 MB |
+| CPU Overhead | 0% | < 1% | 1-2% |
+| I/O Overhead | 0% | < 1% | 2-3% |
+
+## Platform-Specific Notes
+
+### Docker Containers
+
+For Docker deployments:
+
+```dockerfile
+# Install sandboxing tools in container
+RUN apt-get update && apt-get install -y \
+    bubblewrap \
+    firejail \
+    fuse3
+
+# Enable required capabilities
+docker run \
+  --cap-add SYS_ADMIN \
+  --cap-add NET_ADMIN \
+  --security-opt apparmor=unconfined \
+  --device /dev/fuse \
+  pluggedin:latest
+```
+
+### Kubernetes
+
+For Kubernetes deployments:
+
+```yaml
+securityContext:
+  capabilities:
+    add:
+      - SYS_ADMIN
+      - NET_ADMIN
+  privileged: false
+  runAsNonRoot: true
+  runAsUser: 1000
+```
+
+## Support
+
+For sandboxing assistance:
+- **Documentation**: [docs.plugged.in](https://docs.plugged.in)
+- **Security Issues**: security@plugged.in
+- **GitHub Issues**: [Report issues](https://github.com/VeriTeknik/pluggedin-app/issues)

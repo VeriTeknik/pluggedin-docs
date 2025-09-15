@@ -94,10 +94,13 @@ RUN pnpm build
 # Production stage
 FROM node:20-alpine AS runner
 
-# Install runtime dependencies
+# Install runtime dependencies and sandboxing tools
 RUN apk add --no-cache \
     python3 \
     curl \
+    bubblewrap \
+    firejail \
+    fuse3 \
     && npm install -g pnpm
 
 # Create app user
@@ -315,6 +318,11 @@ PORT=3000
 MCP_PACKAGE_STORE_DIR=/app/.cache/mcp-packages
 MCP_PNPM_STORE_DIR=/app/.cache/mcp-packages/pnpm-store
 MCP_UV_CACHE_DIR=/app/.cache/mcp-packages/uv-cache
+
+# Sandboxing Configuration
+MCP_ISOLATION_TYPE=bubblewrap
+MCP_ISOLATION_FALLBACK=firejail
+MCP_ENABLE_NETWORK_ISOLATION=false
 
 # API Keys (optional)
 ANTHROPIC_API_KEY=your-key

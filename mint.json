@@ -66,6 +66,7 @@
       "group": "Security",
       "pages": [
         "security/overview",
+        "security/sandboxing",
         "security/url-validation"
       ]
     },

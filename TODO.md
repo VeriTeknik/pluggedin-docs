@@ -33,6 +33,9 @@ Migrating documentation from `/pluggedin-app/docs` to new Mintlify-powered docum
 - [x] Create MCP Proxy documentation suite
 - [x] Create security documentation (URL validation)
 - [x] Create platform documentation (User management)
+- [x] **Create sandboxing documentation** (security/sandboxing.mdx)
+- [x] **Update deployment guides with sandboxing requirements** (bubblewrap, firejail, fuse3)
+- [x] **Add sandboxing configuration to platform overview**
 
 #### Cleanup Tasks for Main Repository (After Full Migration)
 - [ ] Remove `/docs` directory from pluggedin-app
@@ -144,6 +147,13 @@ pluggedin-docs/
 - Focus on English-only documentation
 - Preserve all technical content from original docs
 - Enhance with Mintlify features (search, AI, components)
+
+### Sandboxing Requirements
+- **Bubblewrap**: Primary sandboxing tool (user-namespace based)
+- **Firejail**: Fallback sandboxing tool (SUID-based)
+- **FUSE3**: Required for some sandboxed applications
+- Sandboxing is enabled by default for all STDIO MCP servers
+- Configuration via MCP_ISOLATION_TYPE and MCP_ISOLATION_FALLBACK
 
 ### Version Highlights to Document
 - **v2.10.0**: Security audit, performance optimizations, encryption overhaul

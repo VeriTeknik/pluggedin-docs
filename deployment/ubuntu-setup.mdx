@@ -119,6 +119,34 @@ echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
+### 6. Sandboxing Tools (Required for Security)
+
+<Warning>
+Sandboxing is critical for secure execution of MCP servers. Install at least one sandboxing tool.
+</Warning>
+
+```bash
+# Install Bubblewrap (preferred sandboxing tool)
+sudo apt-get install -y bubblewrap
+
+# Install Firejail (fallback sandboxing tool)
+sudo apt-get install -y firejail
+
+# Install FUSE (required for some sandboxed applications)
+sudo apt-get install -y fuse3 libfuse3-3
+
+# Verify installations
+bwrap --version
+firejail --version
+fusermount3 --version
+```
+
+**Why Sandboxing is Required:**
+- **Security Isolation**: Prevents MCP servers from accessing sensitive system files
+- **Resource Limits**: Controls CPU, memory, and I/O usage
+- **Network Isolation**: Optional network restrictions for untrusted servers
+- **Process Containment**: Prevents escape from sandbox environment
+
 ## Application Deployment
 
 ### 1. Clone Repository
@@ -161,8 +189,10 @@ MCP_PACKAGE_STORE_DIR="/var/www/pluggedin/.cache/mcp-packages"
 MCP_PNPM_STORE_DIR="/var/www/pluggedin/.cache/mcp-packages/pnpm-store"
 MCP_UV_CACHE_DIR="/var/www/pluggedin/.cache/mcp-packages/uv-cache"
 
-# Security
-MCP_ISOLATION_TYPE="none"  # Or "firejail" if installed
+# Sandboxing Configuration (IMPORTANT for security)
+MCP_ISOLATION_TYPE="bubblewrap"  # Primary: bubblewrap | firejail | none
+MCP_ISOLATION_FALLBACK="firejail"  # Fallback if primary not available
+MCP_ENABLE_NETWORK_ISOLATION="false"  # Set to true for stricter isolation
 
 # API Keys (optional)
 PLUGGEDIN_API_KEY="your-api-key"
@@ -354,22 +384,37 @@ sudo ufw allow 443/tcp
 sudo ufw --force enable
 ```
 
-### 2. Install Sandboxing (Optional)
+### 2. Configure Sandboxing
 
 <Note>
-Sandboxing provides additional security for running MCP servers but may impact performance.
+Sandboxing is enabled by default for all STDIO MCP servers. Ensure tools are properly installed.
 </Note>
 
 ```bash
-# Install Firejail
-sudo apt-get install -y firejail
+# Verify sandboxing tools are installed
+which bwrap || sudo apt-get install -y bubblewrap
+which firejail || sudo apt-get install -y firejail
 
-# Or install Bubblewrap
-sudo apt-get install -y bubblewrap
+# Test sandboxing functionality
+bwrap --version
+firejail --version
 
-# Update .env
-echo 'MCP_ISOLATION_TYPE="firejail"' >> .env
+# Configure sandboxing in .env
+cat >> .env << EOF
+MCP_ISOLATION_TYPE="bubblewrap"
+MCP_ISOLATION_FALLBACK="firejail"
+MCP_ENABLE_NETWORK_ISOLATION="false"
+EOF
+
+# Set appropriate permissions for sandbox directories
+sudo chown -R www-data:www-data /var/www/pluggedin/.cache
+sudo chmod -R 755 /var/www/pluggedin/.cache
 ```
+
+**Sandboxing Modes:**
+- **bubblewrap**: Lightweight, user-namespace based isolation (recommended)
+- **firejail**: SUID-based sandboxing with extensive security profiles
+- **none**: Disable sandboxing (NOT recommended for production)
 
 ### 3. Database Security
 

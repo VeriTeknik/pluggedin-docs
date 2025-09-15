@@ -97,6 +97,19 @@ All sensitive data is protected with enterprise-grade security measures.
 - **SSRF Prevention**: Comprehensive URL validation
 - **Rate Limiting**: Tiered limits for different operations
 
+### 🛡️ Sandboxing & Isolation
+
+<Info>
+All STDIO MCP servers run in secure sandboxed environments by default.
+</Info>
+
+- **Bubblewrap Sandboxing**: User-namespace based isolation (primary)
+- **Firejail Support**: SUID-based sandboxing (fallback)
+- **Resource Limits**: CPU, memory, and I/O constraints
+- **Filesystem Isolation**: Restricted access to system files
+- **Network Control**: Optional network isolation for untrusted servers
+- **Process Containment**: Prevents escape from sandbox environment
+
 ### 🔔 Notification System
 
 Real-time activity tracking with optional email delivery:
