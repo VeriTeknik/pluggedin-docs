@@ -9,22 +9,42 @@ Migrating documentation from `/pluggedin-app/docs` to new Mintlify-powered docum
 - [x] Analyze current documentation structure
 - [x] Investigate version history and releases (v2.10.3 for app, v1.10.2 for MCP)
 - [x] Create migration plan
+- [x] Set up Mintlify project structure
+- [x] Create introduction.mdx homepage
+- [x] Create platform/overview.mdx
+- [x] Create platform/registry.mdx
+- [x] Create platform/sharing-servers.mdx
+- [x] Create security/overview.mdx
+- [x] Create quickstart/installation.mdx
+- [x] Create quickstart/configuration.mdx
+- [x] Add cloud version emphasis
+- [x] Fix logo visibility issues
 
 ### 🚧 In Progress
-- [ ] Set up Mintlify project structure
+- [ ] Migrate API documentation from swagger-ui to static pages
 
 ### 📋 Pending Tasks
 
-#### Phase 1: Project Setup
-- [ ] Install Mintlify CLI (`npm i -g mint`)
-- [ ] Initialize Mintlify project with `mint init`
-- [ ] Create basic project structure
+#### High Priority - API Documentation Migration
+- [ ] Create `api/reference.mdx` - Main API reference page
+- [ ] Create `api/authentication.mdx` - Authentication guide
+- [ ] Document Search & Discovery endpoints
+- [ ] Document Documents API endpoints
+- [ ] Document Collections API endpoints
+- [ ] Document MCP Servers API endpoints
+- [ ] Document Registry API endpoints
+- [ ] Document Embedded Chat API endpoints
+- [ ] Remove swagger-ui-react dependency from main app
 
-#### Phase 2: Configuration
-- [ ] Create `mint.json` with navigation and settings
-- [ ] Add logo and favicon assets
-- [ ] Configure colors and branding
-- [ ] Set up custom domain configuration for docs.plugged.in
+#### Cleanup Tasks for Main Repository (After Full Migration)
+- [ ] Remove `/docs` directory from pluggedin-app
+- [ ] Remove `/public/locales` directory (multi-language files)
+- [ ] Remove swagger-ui-react and @types/swagger-ui-react from package.json
+- [ ] Remove `/app/(sidebar-layout)/(container)/api-docs` page
+- [ ] Remove `/app/api/docs` route (if exists)
+- [ ] Update all internal links to point to docs.plugged.in
+- [ ] Update README.md to reference new documentation site
+- [ ] Clean up any documentation-related dependencies
 
 #### Phase 3: Content Migration
 

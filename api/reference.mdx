@@ -1,0 +1,552 @@
+---
+title: API Reference
+description: Complete API documentation for Plugged.in platform
+sidebarTitle: API Reference
+---
+
+# API Reference
+
+<Info>
+The Plugged.in API provides programmatic access to manage MCP servers, documents, and platform features. All API endpoints are available in both the cloud platform and self-hosted installations.
+</Info>
+
+## Base URLs
+
+<Tabs>
+  <Tab title="Cloud Platform">
+    ```
+    https://plugged.in/api
+    ```
+  </Tab>
+  <Tab title="Self-Hosted">
+    ```
+    https://your-domain.com/api
+    ```
+  </Tab>
+  <Tab title="Local Development">
+    ```
+    http://localhost:12005/api
+    ```
+  </Tab>
+</Tabs>
+
+## Authentication
+
+Most API endpoints require authentication. See the [Authentication Guide](/api/authentication) for detailed information.
+
+### Quick Start
+
+Include your API key in the request headers:
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Rate Limiting
+
+API endpoints have different rate limits based on the operation type:
+
+| Endpoint Type | Limit | Window |
+|--------------|-------|---------|
+| Authentication | 5 requests | 15 minutes |
+| General API | 60 requests | 1 minute |
+| Public Search | 100 requests | 1 minute |
+| Sensitive Operations | 10 requests | 1 hour |
+| AI Documents | 10 requests | 1 hour |
+
+## API Endpoints
+
+### Search & Discovery
+
+#### Search MCP Servers
+
+Search for MCP servers in the registry and community.
+
+<CodeGroup>
+```bash cURL
+curl "https://plugged.in/api/search?q=database&source=registry" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/search?q=database&source=registry', {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY'
+  }
+});
+const data = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+  'https://plugged.in/api/search',
+  params={'q': 'database', 'source': 'registry'},
+  headers={'Authorization': 'Bearer YOUR_API_KEY'}
+)
+data = response.json()
+```
+</CodeGroup>
+
+**Query Parameters:**
+- `q` (string, required) - Search query
+- `source` (string) - Filter by source: `registry`, `community`, `all`
+- `package` (string) - Filter by package type: `npm`, `docker`, `pypi`
+- `repository` (string) - Filter by repository source
+- `sort` (string) - Sort results: `relevance`, `recent`, `popular`
+- `limit` (integer) - Results per page (default: 20, max: 100)
+- `offset` (integer) - Pagination offset
+
+**Response:**
+```json
+{
+  "servers": [
+    {
+      "uuid": "123e4567-e89b-12d3-a456-426614174000",
+      "slug": "example-server",
+      "title": "Example MCP Server",
+      "description": "A sample MCP server",
+      "repository_url": "https://github.com/user/repo",
+      "package_type": "npm",
+      "installation_count": 1250,
+      "rating": 4.5,
+      "transports": ["stdio", "sse"]
+    }
+  ],
+  "total": 42,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+### MCP Servers
+
+#### Get Server Details
+
+Retrieve detailed information about a specific MCP server.
+
+```bash
+GET /api/servers/{uuid}
+```
+
+<CodeGroup>
+```bash cURL
+curl "https://plugged.in/api/servers/123e4567-e89b-12d3-a456-426614174000" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/servers/123e4567-e89b-12d3-a456-426614174000', {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY'
+  }
+});
+const server = await response.json();
+```
+</CodeGroup>
+
+**Response:**
+```json
+{
+  "uuid": "123e4567-e89b-12d3-a456-426614174000",
+  "name": "Example Server",
+  "transport": "stdio",
+  "command": "node",
+  "args": ["index.js"],
+  "env": {
+    "API_KEY": "***"
+  },
+  "tools": [
+    {
+      "name": "example_tool",
+      "description": "An example tool",
+      "parameters": {}
+    }
+  ],
+  "resources": [],
+  "prompts": []
+}
+```
+
+#### Create MCP Server
+
+Add a new MCP server to your profile.
+
+```bash
+POST /api/mcp-servers
+```
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://plugged.in/api/mcp-servers" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Server",
+    "transport": "stdio",
+    "command": "node",
+    "args": ["server.js"],
+    "env": {
+      "API_KEY": "my-api-key"
+    }
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/mcp-servers', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    name: 'My Server',
+    transport: 'stdio',
+    command: 'node',
+    args: ['server.js'],
+    env: {
+      API_KEY: 'my-api-key'
+    }
+  })
+});
+```
+</CodeGroup>
+
+**Request Body:**
+```json
+{
+  "name": "string (required)",
+  "transport": "stdio | sse | http",
+  "command": "string (for stdio)",
+  "args": ["array", "of", "arguments"],
+  "url": "string (for http/sse)",
+  "env": {
+    "KEY": "value"
+  },
+  "notes": "optional notes"
+}
+```
+
+### Documents API
+
+#### List Documents
+
+Get documents from your library.
+
+```bash
+GET /api/documents
+```
+
+**Query Parameters:**
+- `profileUuid` (string, required) - Profile UUID
+- `limit` (integer) - Results per page (default: 20)
+- `offset` (integer) - Pagination offset
+- `search` (string) - Search query
+- `source` (string) - Filter by source: `upload`, `ai_generated`, `api`
+
+#### Upload Document
+
+Upload a document to your library.
+
+```bash
+POST /api/documents/upload
+```
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://plugged.in/api/documents/upload" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -F "file=@document.pdf" \
+  -F "profileUuid=your-profile-uuid"
+```
+
+```javascript JavaScript
+const formData = new FormData();
+formData.append('file', fileInput.files[0]);
+formData.append('profileUuid', 'your-profile-uuid');
+
+const response = await fetch('https://plugged.in/api/documents/upload', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY'
+  },
+  body: formData
+});
+```
+</CodeGroup>
+
+#### Search Documents
+
+Semantic search across your document library.
+
+```bash
+POST /api/documents/search
+```
+
+**Request Body:**
+```json
+{
+  "query": "search query",
+  "profileUuid": "profile-uuid",
+  "filters": {
+    "source": "ai_generated",
+    "modelName": "claude-3",
+    "dateFrom": "2024-01-01",
+    "dateTo": "2024-12-31"
+  },
+  "limit": 10
+}
+```
+
+### Collections API
+
+#### Get Collections
+
+Retrieve collections for a profile.
+
+```bash
+GET /api/collections/{profileUuid}
+```
+
+#### Create Collection
+
+Create a new collection of MCP servers.
+
+```bash
+POST /api/collections
+```
+
+**Request Body:**
+```json
+{
+  "name": "My Collection",
+  "description": "Collection description",
+  "profileUuid": "profile-uuid",
+  "serverUuids": ["server-uuid-1", "server-uuid-2"],
+  "isPublic": false
+}
+```
+
+### Registry API
+
+#### Submit to Registry
+
+Submit an MCP server to the official registry.
+
+```bash
+POST /api/registry/submit
+```
+
+**Request Body:**
+```json
+{
+  "repository": "https://github.com/username/repo",
+  "transport": ["stdio", "sse"],
+  "package_type": "npm",
+  "environment_variables": ["API_KEY", "DATABASE_URL"]
+}
+```
+
+**Requirements:**
+- Must be authenticated with GitHub
+- Must have repository ownership
+- Valid package.json/Dockerfile/setup.py
+
+#### Get Server Statistics
+
+Get detailed statistics for a server.
+
+```bash
+GET /api/servers/{uuid}/stats
+```
+
+**Response:**
+```json
+{
+  "installations": 1250,
+  "rating": 4.5,
+  "ratings_count": 28,
+  "trending_rank": 3,
+  "last_activity": "2024-01-15T10:30:00Z",
+  "daily_installs": [10, 15, 20, 25, 30, 35, 40]
+}
+```
+
+### User Management
+
+#### Check Username Availability
+
+Check if a username is available.
+
+```bash
+GET /api/check-username?username=desired-username
+```
+
+**Response:**
+```json
+{
+  "available": true
+}
+```
+
+#### Get User Profile
+
+Get public user profile information.
+
+```bash
+GET /api/users/{username}
+```
+
+**Response:**
+```json
+{
+  "username": "john_doe",
+  "bio": "MCP enthusiast",
+  "avatar_url": "https://...",
+  "is_public": true,
+  "followers_count": 42,
+  "following_count": 23,
+  "servers_count": 5
+}
+```
+
+### Notifications API
+
+#### Get Notifications
+
+Retrieve notifications for the authenticated user.
+
+```bash
+GET /api/notifications
+```
+
+**Query Parameters:**
+- `unread` (boolean) - Filter unread only
+- `limit` (integer) - Results per page
+- `offset` (integer) - Pagination offset
+
+#### Mark as Read
+
+Mark a notification as read.
+
+```bash
+PATCH /api/notifications/{id}/read
+```
+
+### Embedded Chat API
+
+#### Create Chat Session
+
+Initialize a new embedded chat session.
+
+```bash
+POST /api/embedded-chat/sessions
+```
+
+**Request Body:**
+```json
+{
+  "profileUuid": "profile-uuid",
+  "model": "claude-3-opus",
+  "temperature": 0.7,
+  "maxTokens": 4096
+}
+```
+
+#### Send Message
+
+Send a message in a chat session.
+
+```bash
+POST /api/embedded-chat/messages
+```
+
+**Request Body:**
+```json
+{
+  "sessionId": "session-id",
+  "message": "User message",
+  "includeContext": true
+}
+```
+
+## Error Handling
+
+All API endpoints return consistent error responses:
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable error message",
+    "details": {
+      "field": "Additional context"
+    }
+  }
+}
+```
+
+### Common Error Codes
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `UNAUTHORIZED` | 401 | Missing or invalid authentication |
+| `FORBIDDEN` | 403 | Insufficient permissions |
+| `NOT_FOUND` | 404 | Resource not found |
+| `RATE_LIMITED` | 429 | Rate limit exceeded |
+| `VALIDATION_ERROR` | 400 | Invalid request parameters |
+| `SERVER_ERROR` | 500 | Internal server error |
+
+## Webhooks
+
+Configure webhooks to receive real-time notifications about events.
+
+### Supported Events
+
+- `server.installed` - MCP server installed
+- `server.uninstalled` - MCP server removed
+- `document.created` - Document added to library
+- `collection.shared` - Collection made public
+- `user.followed` - User gained a follower
+
+### Webhook Payload
+
+```json
+{
+  "event": "server.installed",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "data": {
+    "server_uuid": "123e4567-e89b-12d3-a456-426614174000",
+    "user_id": "user-123"
+  }
+}
+```
+
+## SDK Libraries
+
+Official SDKs are available for popular languages:
+
+<CardGroup cols={3}>
+  <Card title="TypeScript/JavaScript" icon="js" href="https://npm.com/package/@pluggedin/sdk">
+    ```bash
+    npm install @pluggedin/sdk
+    ```
+  </Card>
+  <Card title="Python" icon="python" href="https://pypi.org/project/pluggedin-sdk">
+    ```bash
+    pip install pluggedin-sdk
+    ```
+  </Card>
+  <Card title="Go" icon="golang" href="https://pkg.go.dev/github.com/pluggedin/sdk-go">
+    ```bash
+    go get github.com/pluggedin/sdk-go
+    ```
+  </Card>
+</CardGroup>
+
+## Support
+
+- **Documentation**: [docs.plugged.in](https://docs.plugged.in)
+- **GitHub Issues**: [Report bugs](https://github.com/VeriTeknik/pluggedin-app/issues)
+- **Email Support**: api-support@plugged.in
