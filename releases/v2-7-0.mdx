@@ -1,0 +1,403 @@
+---
+title: Version 2.7.0 - Smart Server Wizard
+description: Comprehensive server creation wizard and OAuth integration
+sidebarTitle: v2.7.0
+---
+
+# Version 2.7.0 Release Notes
+
+<Badge variant="info">Feature Release</Badge>
+<Badge variant="success">OAuth Support</Badge>
+
+Released: January 26, 2025
+
+## Overview
+
+Version 2.7.0 introduces the **Smart Server Wizard**, a comprehensive multi-step guide for creating and configuring MCP servers, along with OAuth integration for streamable HTTP servers and a new trending servers discovery feature.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="Smart Server Wizard" icon="wand-magic-sparkles">
+    Multi-step guided server creation with registry submission
+  </Card>
+  <Card title="OAuth Integration" icon="key">
+    Streamable HTTP OAuth support for secure authentication
+  </Card>
+  <Card title="Trending Servers" icon="fire">
+    Activity-based trending algorithm for discovery
+  </Card>
+  <Card title="GitHub Verification" icon="github">
+    Automatic ownership verification for claimed servers
+  </Card>
+</CardGroup>
+
+## Smart Server Wizard
+
+### Multi-Step Configuration
+
+The new wizard guides users through server setup:
+
+<Steps>
+  <Step title="Server Type Selection">
+    Choose between registry servers, custom servers, or GitHub imports
+  </Step>
+  <Step title="Basic Configuration">
+    Set server name, description, and transport type
+  </Step>
+  <Step title="Environment Variables">
+    Automatic detection and configuration of required variables
+  </Step>
+  <Step title="Discovery Testing">
+    Real-time validation of server connectivity
+  </Step>
+  <Step title="Registry Submission">
+    Optional submission to the MCP Registry
+  </Step>
+</Steps>
+
+### GitHub Ownership Verification
+
+Automatically verify ownership of GitHub-based servers:
+
+```typescript
+// Verification process
+1. User claims server from GitHub repo
+2. System checks GitHub API for ownership
+3. Verified badge applied to server
+4. Enhanced trust in registry
+```
+
+### Environment Variable Detection
+
+The wizard automatically detects required environment variables:
+
+```json
+{
+  "env": {
+    "OPENAI_API_KEY": {
+      "required": true,
+      "description": "OpenAI API key for AI features"
+    },
+    "DATABASE_URL": {
+      "required": false,
+      "description": "PostgreSQL connection string"
+    }
+  }
+}
+```
+
+## OAuth Integration
+
+### Streamable HTTP OAuth
+
+Support for OAuth authentication in MCP servers:
+
+```typescript
+// OAuth configuration
+{
+  "transport": {
+    "type": "streamable",
+    "oauth": {
+      "provider": "github",
+      "clientId": "your-client-id",
+      "scopes": ["repo", "user"],
+      "redirectUri": "https://plugged.in/oauth/callback"
+    }
+  }
+}
+```
+
+### Session Management
+
+<Info>
+OAuth sessions are securely managed with automatic cleanup.
+</Info>
+
+**Features:**
+- PostgreSQL session storage
+- In-memory caching for performance
+- Automatic token refresh
+- Session expiry handling
+- Secure token storage
+
+### Supported Providers
+
+<Tabs>
+  <Tab title="GitHub">
+    ```json
+    {
+      "provider": "github",
+      "scopes": ["repo", "user", "gist"]
+    }
+    ```
+  </Tab>
+  <Tab title="Google">
+    ```json
+    {
+      "provider": "google",
+      "scopes": ["drive.readonly", "sheets"]
+    }
+    ```
+  </Tab>
+  <Tab title="Linear">
+    ```json
+    {
+      "provider": "linear",
+      "scopes": ["read", "write"]
+    }
+    ```
+  </Tab>
+  <Tab title="Custom">
+    ```json
+    {
+      "provider": "custom",
+      "authorizationUrl": "https://example.com/oauth/authorize",
+      "tokenUrl": "https://example.com/oauth/token"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Trending Servers
+
+### Activity-Based Algorithm
+
+Servers trend based on real-time activity:
+
+```typescript
+// Trending score calculation
+score = (installs * 0.4) +
+        (views * 0.2) +
+        (shares * 0.3) +
+        (recency * 0.1)
+```
+
+### Metrics Tracking
+
+- Installation count
+- View count
+- Share count
+- Recent activity
+- User engagement
+
+### Discovery Interface
+
+The trending section shows:
+- Top 10 trending servers
+- Activity sparklines
+- Installation badges
+- Quick install buttons
+
+## Registry Integration
+
+### Enhanced Submission Process
+
+<Steps>
+  <Step title="Validation">
+    Automatic validation of server configuration
+  </Step>
+  <Step title="Token Authentication">
+    Secure submission with registry tokens
+  </Step>
+  <Step title="Progress Tracking">
+    Real-time submission status updates
+  </Step>
+  <Step title="Error Handling">
+    Detailed error messages with fixes
+  </Step>
+</Steps>
+
+### Registry Schema Support
+
+Support for new registry schema format:
+
+```json
+{
+  "name": "my-server",
+  "description": "Server description",
+  "author": "username",
+  "transport": {
+    "type": "streamable",
+    "baseUrl": "https://api.example.com"
+  },
+  "tools": ["tool1", "tool2"],
+  "resources": ["resource1"],
+  "prompts": ["prompt1"]
+}
+```
+
+## Security Enhancements
+
+### Input Validation
+
+Comprehensive Zod schemas for all inputs:
+
+```typescript
+const serverSchema = z.object({
+  name: z.string().min(3).max(50),
+  description: z.string().max(500),
+  transport: z.union([
+    streamableSchema,
+    stdioSchema,
+    sseSchema
+  ]),
+  env: z.record(z.string(), envVarSchema).optional()
+});
+```
+
+### XSS Prevention
+
+Removed all instances of `dangerouslySetInnerHTML`:
+
+```typescript
+// Before (vulnerable)
+<div dangerouslySetInnerHTML={{ __html: content }} />
+
+// After (secure)
+<div>{DOMPurify.sanitize(content)}</div>
+```
+
+### OAuth Security
+
+- State parameter validation
+- PKCE flow support
+- Token encryption at rest
+- Automatic token cleanup
+- Session hijacking prevention
+
+## UI/UX Improvements
+
+### Wizard Interface
+
+<CardGroup cols={2}>
+  <Card title="Step Indicators" icon="list-check">
+    Clear progress through wizard steps
+  </Card>
+  <Card title="Validation Feedback" icon="circle-check">
+    Real-time validation with helpful messages
+  </Card>
+  <Card title="Auto-save" icon="floppy-disk">
+    Progress saved automatically
+  </Card>
+  <Card title="Help Tooltips" icon="circle-question">
+    Contextual help for each field
+  </Card>
+</CardGroup>
+
+### Connection Handling
+
+Improved StreamingCliToast:
+- Better error messages
+- Retry logic
+- Connection state indicators
+- Timeout handling
+
+## Performance Improvements
+
+### Query Optimization
+
+```sql
+-- New indexes for trending calculation
+CREATE INDEX idx_server_metrics_created ON server_metrics(created_at DESC);
+CREATE INDEX idx_server_activity ON servers(install_count, view_count);
+
+-- Optimized trending query
+SELECT s.*,
+  (install_count * 0.4 + view_count * 0.2 + share_count * 0.3) as score
+FROM servers s
+WHERE created_at > NOW() - INTERVAL '7 days'
+ORDER BY score DESC
+LIMIT 10;
+```
+
+### Bundle Size Reduction
+
+- Removed unused dependencies
+- Code splitting for wizard components
+- Lazy loading for OAuth providers
+
+## Migration Guide {#migration}
+
+### Database Updates
+
+```bash
+# Run migrations for new tables
+pnpm db:migrate
+
+# New tables added:
+# - oauth_sessions
+# - server_metrics
+# - github_verifications
+```
+
+### API Changes
+
+OAuth endpoints added:
+
+```typescript
+// Initiate OAuth flow
+GET /api/oauth/authorize?provider=github
+
+// OAuth callback
+GET /api/oauth/callback?code=xxx&state=yyy
+
+// Token refresh
+POST /api/oauth/refresh
+```
+
+### Environment Variables
+
+New optional variables:
+
+```env
+# OAuth providers
+GITHUB_CLIENT_ID=your-client-id
+GITHUB_CLIENT_SECRET=your-client-secret
+
+# Registry
+REGISTRY_API_URL=https://registry.plugged.in
+REGISTRY_API_TOKEN=your-token
+```
+
+## Bug Fixes
+
+- Fixed OAuth state management race conditions
+- Resolved registry submission timeout issues
+- Fixed server claiming for community servers
+- Corrected environment variable validation
+- Fixed LLM provider mapping in playground
+- Resolved console.log removal syntax errors
+- Fixed transport configuration handling
+
+## Known Issues
+
+- OAuth redirect may fail with strict browser settings
+- Large environment variable sets may cause UI lag
+- Registry submission may timeout for complex servers
+
+## Future Enhancements
+
+Planned for v2.8.0:
+- Advanced OAuth scopes management
+- Batch server imports
+- Server templates
+- Enhanced metrics dashboard
+- API rate limiting per OAuth app
+
+## Breaking Changes
+
+<Warning>
+SSE transport is now deprecated. Migrate to Streamable HTTP.
+</Warning>
+
+1. **SSE Deprecation**: SSE servers show migration warnings
+2. **Registry Format**: New schema format required
+3. **OAuth Required**: Some servers now require OAuth
+
+## Support
+
+For help with this release:
+- **Documentation**: [docs.plugged.in](https://docs.plugged.in)
+- **Wizard Guide**: [Server Creation Guide](/platform/servers)
+- **GitHub Issues**: [Report issues](https://github.com/VeriTeknik/pluggedin-app/issues)

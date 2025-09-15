@@ -1,0 +1,325 @@
+---
+title: Changelog
+description: Complete history of changes to the Plugged.in platform
+sidebarTitle: Changelog
+---
+
+# Changelog
+
+All notable changes to the Plugged.in platform are documented here. The project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## Latest Releases
+
+<CardGroup cols={3}>
+  <Card title="v2.10.3" icon="shield-check">
+    **Current Stable**
+    Security & Performance
+  </Card>
+  <Card title="v2.8.0" icon="robot">
+    AI Document Exchange
+    RAG v2 System
+  </Card>
+  <Card title="v2.7.0" icon="wand-magic-sparkles">
+    Smart Server Wizard
+    OAuth Integration
+  </Card>
+</CardGroup>
+
+## Version 2.10.x Series
+
+### [2.10.3] - 2025-01-28
+<Badge variant="success">Current Version</Badge>
+
+#### Security
+- Additional security patches
+- Updated dependencies
+- Enhanced input validation
+
+### [2.10.2] - 2025-01-27
+
+#### Fixed
+- Critical security vulnerabilities
+- Performance bottlenecks
+
+### [2.10.1] - 2025-01-27
+
+#### Fixed
+- Post-release bug fixes
+- UI consistency improvements
+
+### [2.10.0] - 2025-01-27
+<Badge variant="warning">Major Release</Badge>
+
+#### Security Audit & Performance Overhaul
+
+**Key Highlights:**
+- Comprehensive security audit addressing ALL GitHub security scanning findings
+- Complete encryption system overhaul
+- Enhanced Content Security Policy (CSP)
+- Performance optimizations across the entire platform
+
+#### Added
+- **Security Enhancements**
+  - New encryption migration system
+  - Enhanced password reset flow with secure tokens
+  - Comprehensive input sanitization
+  - CSRF protection improvements
+
+- **Performance Improvements**
+  - Optimized database indexes for 10x faster queries
+  - Reduced JavaScript bundle size by 40%
+  - Lazy loading for heavy components
+  - Improved caching strategies
+
+- **UI/UX Updates**
+  - Simplified Custom Instructions interface
+  - Better error messaging
+  - Enhanced loading states
+  - Improved mobile responsiveness
+
+#### Changed
+- Migrated from bcrypt to argon2 for password hashing
+- Standardized error handling across all API endpoints
+- Updated all dependencies to latest secure versions
+- Refactored authentication flow for better security
+
+#### Fixed
+- All critical vulnerabilities identified by CodeQL
+- Memory leaks in real-time connections
+- Race conditions in concurrent operations
+- XSS vulnerabilities in user-generated content
+
+## Version 2.9.x Series
+
+### [2.9.1-security] - 2025-01-27
+
+#### Security
+- Emergency security patch
+- Fixed authentication bypass vulnerability
+
+### [2.9.0] - 2025-01-27
+
+#### UUID Tool Prefixing & Collision Resolution
+
+#### Added
+- **Automatic UUID Tool Prefixing**
+  - Prevents tool name collisions between MCP servers
+  - Automatic UUID prefix generation
+  - Backward compatibility maintained
+
+- **Slug Generation System**
+  - Profile-scoped unique server identifiers
+  - SEO-friendly URLs for shared servers
+  - Automatic collision handling
+
+#### Changed
+- Enhanced server validation logic
+- Improved error messages for duplicate servers
+- Optimized database queries for slug operations
+
+#### Fixed
+- Tool name collision issues
+- CORS handling for external MCP servers
+- Authentication checks in server operations
+
+## Version 2.8.x Series
+
+### [2.8.0] - 2025-01-27
+<Badge variant="info">Feature Release</Badge>
+
+#### AI Document Exchange (RAG v2)
+
+**Revolutionary document management with AI integration:**
+
+#### Added
+- **AI Document Creation**
+  - Direct document generation via AI models
+  - Support for Markdown, JSON, HTML formats
+  - Model attribution tracking (provider, name, version)
+  - Automatic content deduplication
+
+- **Document Versioning**
+  - Complete version history
+  - Change diff tracking
+  - Parent-child relationships
+  - Rollback capabilities
+
+- **Advanced Search**
+  - Semantic search using PostgreSQL full-text
+  - Relevance scoring and ranking
+  - Filter by AI model, date, tags
+  - Automatic snippet generation
+
+- **Document Preview System**
+  - Multi-format viewer (PDF, images, text, code)
+  - Zoom controls (10%-500%)
+  - Page navigation for PDFs
+  - Fullscreen mode
+  - Metadata sidebar
+
+- **MCP Tools**
+  - `pluggedin_create_document` - AI document creation
+  - `pluggedin_search_documents` - Semantic search
+  - `pluggedin_get_document` - Document retrieval
+  - `pluggedin_update_document` - Document updates
+
+#### Security
+- 10MB content size limit
+- Rate limiting (10 requests/hour for AI creation)
+- Path traversal protection
+- Content sanitization for HTML/Markdown
+
+## Version 2.7.x Series
+
+### [2.7.0] - 2025-01-26
+<Badge variant="info">Feature Release</Badge>
+
+#### Smart Server Wizard & OAuth Integration
+
+#### Added
+- **Smart Server Wizard**
+  - Multi-step guided server creation
+  - GitHub ownership verification
+  - Environment variable detection
+  - Registry submission integration
+  - Real-time discovery testing
+
+- **OAuth Support**
+  - Streamable HTTP OAuth for MCP servers
+  - Session management with PostgreSQL
+  - Automatic token cleanup
+  - Support for GitHub, Google, and more
+
+- **Trending Servers**
+  - Activity-based trending algorithm
+  - Real-time metrics tracking
+  - Installation count tracking
+  - Enhanced discovery experience
+
+#### Changed
+- Simplified registry integration
+- Improved error handling
+- Enhanced search functionality
+- Better transport configuration
+
+#### Security
+- Comprehensive Zod validation
+- XSS vulnerability fixes
+- OAuth token security
+- Input sanitization improvements
+
+## Version 2.6.x Series
+
+### [2.6.2] - 2025-01-03
+
+#### Fixed
+- "SSEClientTransport already started" errors
+- Connection timeout issues
+- Retry logic improvements
+
+### [2.6.1] - 2025-01-03
+
+#### Added
+- SSE transport deprecation warnings
+- Auto-migration to Streamable HTTP
+- Migration UI for bulk conversion
+
+### [2.6.0] - 2025-01-03
+
+#### Added
+- **High-Performance Package Management**
+  - 10-100x faster npm installs with pnpm
+  - Python package management with uv
+  - Content-addressable storage caching
+
+- **CLI-Style Discovery Toast**
+  - Terminal-style notifications
+  - Real-time log streaming
+  - Color-coded output
+
+## Earlier Versions
+
+<Accordion title="View Earlier Releases">
+
+### [2.5.0] - 2024-12-15
+
+#### Added
+- Collections management system
+- Batch server operations
+- Enhanced sharing capabilities
+
+### [2.4.0] - 2024-12-01
+
+#### Added
+- User profiles system
+- Following/followers functionality
+- Activity feed
+
+### [2.3.0] - 2024-11-15
+
+#### Added
+- Internationalization (6 languages)
+- Email notification system
+- Rate limiting tiers
+
+### [2.2.0] - 2024-11-01
+
+#### Added
+- RAG v1 implementation
+- Document upload system
+- Vector search capabilities
+
+### [2.1.0] - 2024-10-15
+
+#### Added
+- Social platform features
+- Server sharing
+- Public profiles
+
+### [2.0.0] - 2024-10-01
+
+#### Changed
+- Complete platform rewrite
+- Migration to Next.js 15
+- New UI with Shadcn/UI
+
+### [1.0.0] - 2024-09-01
+
+#### Added
+- Initial MCP proxy implementation
+- Basic server management
+- Authentication system
+
+</Accordion>
+
+## Versioning Policy
+
+Plugged.in follows [Semantic Versioning](https://semver.org/):
+
+- **Major versions (X.0.0)**: Breaking changes
+- **Minor versions (0.X.0)**: New features, backward compatible
+- **Patch versions (0.0.X)**: Bug fixes and security updates
+
+## Support Lifecycle
+
+| Version | Status | Support Until |
+|---------|--------|--------------|
+| 2.10.x | **Current** | Active development |
+| 2.9.x | Supported | January 2026 |
+| 2.8.x | Supported | January 2026 |
+| 2.7.x | Maintenance | July 2025 |
+| < 2.7.0 | End of Life | - |
+
+## Migration Guides
+
+- [Migrating to v2.10.0](/releases/v2-10-0#migration)
+- [Migrating to v2.8.0](/releases/v2-8-0#migration)
+- [Migrating to v2.7.0](/releases/v2-7-0#migration)
+
+## Reporting Issues
+
+Found a bug or have a feature request?
+
+- **GitHub Issues**: [Report issues](https://github.com/VeriTeknik/pluggedin-app/issues)
+- **Security Issues**: Email security@plugged.in
+- **Feature Requests**: Use GitHub Discussions

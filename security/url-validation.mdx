@@ -1,0 +1,512 @@
+---
+title: URL Validation & Security
+description: Comprehensive guide to URL validation and SSRF prevention
+sidebarTitle: URL Validation
+---
+
+# URL Validation & Security
+
+Plugged.in implements multiple layers of URL validation to prevent Server-Side Request Forgery (SSRF) attacks and ensure secure connections to MCP servers.
+
+## Overview
+
+<Warning>
+Proper URL validation is critical for preventing SSRF attacks that could expose internal resources.
+</Warning>
+
+URL validation occurs at multiple levels:
+1. **Input Validation**: Syntax and format checking
+2. **Domain Allowlisting**: Approved domains only
+3. **IP Range Blocking**: Prevent internal network access
+4. **Protocol Validation**: HTTPS enforcement
+5. **Port Restrictions**: Limited to safe ports
+
+## Validation Layers
+
+### 1. Input Validation
+
+All URLs are validated using strict patterns:
+
+```typescript
+// URL validation schema using Zod
+const urlSchema = z.string()
+  .url("Invalid URL format")
+  .regex(/^https?:\/\//, "URL must start with http:// or https://")
+  .refine(url => {
+    try {
+      const parsed = new URL(url);
+      return parsed.hostname !== 'localhost' &&
+             !parsed.hostname.startsWith('127.') &&
+             !parsed.hostname.startsWith('192.168.') &&
+             !parsed.hostname.startsWith('10.') &&
+             !parsed.hostname.startsWith('172.');
+    } catch {
+      return false;
+    }
+  }, "URL points to restricted network");
+```
+
+### 2. Domain Allowlisting
+
+<Info>
+Only pre-approved domains are allowed for MCP server connections in production.
+</Info>
+
+```typescript
+const ALLOWED_DOMAINS = [
+  'github.com',
+  'api.github.com',
+  'registry.plugged.in',
+  'api.anthropic.com',
+  'api.openai.com',
+  '*.vercel.app', // Wildcard support
+  '*.netlify.app'
+];
+
+function isDomainAllowed(url: string): boolean {
+  const { hostname } = new URL(url);
+
+  return ALLOWED_DOMAINS.some(allowed => {
+    if (allowed.startsWith('*.')) {
+      const suffix = allowed.slice(2);
+      return hostname.endsWith(suffix);
+    }
+    return hostname === allowed;
+  });
+}
+```
+
+### 3. IP Range Blocking
+
+Prevent access to internal networks:
+
+```typescript
+const BLOCKED_IP_RANGES = [
+  '127.0.0.0/8',      // Loopback
+  '10.0.0.0/8',       // Private network
+  '172.16.0.0/12',    // Private network
+  '192.168.0.0/16',   // Private network
+  '169.254.0.0/16',   // Link-local
+  'fc00::/7',         // IPv6 private
+  '::1/128'           // IPv6 loopback
+];
+
+async function isIPAllowed(hostname: string): Promise<boolean> {
+  const addresses = await dns.resolve4(hostname);
+
+  for (const address of addresses) {
+    if (isInBlockedRange(address, BLOCKED_IP_RANGES)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+```
+
+### 4. Protocol Validation
+
+Enforce secure protocols:
+
+```typescript
+const ALLOWED_PROTOCOLS = ['https:', 'wss:'];
+const DEVELOPMENT_PROTOCOLS = ['http:', 'ws:'];
+
+function isProtocolAllowed(url: string): boolean {
+  const { protocol } = new URL(url);
+
+  if (process.env.NODE_ENV === 'development') {
+    return [...ALLOWED_PROTOCOLS, ...DEVELOPMENT_PROTOCOLS]
+      .includes(protocol);
+  }
+
+  return ALLOWED_PROTOCOLS.includes(protocol);
+}
+```
+
+### 5. Port Restrictions
+
+Limit connections to safe ports:
+
+```typescript
+const ALLOWED_PORTS = [
+  80,    // HTTP
+  443,   // HTTPS
+  3000,  // Common dev port
+  8080,  // Alternative HTTP
+  8443   // Alternative HTTPS
+];
+
+function isPortAllowed(url: string): boolean {
+  const { port, protocol } = new URL(url);
+
+  // Default ports
+  if (!port) {
+    return protocol === 'https:' || protocol === 'http:';
+  }
+
+  return ALLOWED_PORTS.includes(parseInt(port));
+}
+```
+
+## Implementation
+
+### Complete Validation Function
+
+```typescript
+export async function validateMCPServerURL(
+  url: string,
+  options: ValidationOptions = {}
+): Promise<ValidationResult> {
+  const {
+    allowLocalhost = false,
+    allowPrivateNetworks = false,
+    customAllowedDomains = [],
+    strict = true
+  } = options;
+
+  try {
+    // 1. Parse URL
+    const parsed = new URL(url);
+
+    // 2. Protocol check
+    if (!isProtocolAllowed(parsed.href)) {
+      return {
+        valid: false,
+        error: 'Protocol not allowed'
+      };
+    }
+
+    // 3. Port check
+    if (!isPortAllowed(parsed.href)) {
+      return {
+        valid: false,
+        error: 'Port not allowed'
+      };
+    }
+
+    // 4. Domain allowlist check (production only)
+    if (strict && !isDomainAllowed(parsed.href)) {
+      return {
+        valid: false,
+        error: 'Domain not in allowlist'
+      };
+    }
+
+    // 5. IP range check
+    if (!allowPrivateNetworks) {
+      const ipAllowed = await isIPAllowed(parsed.hostname);
+      if (!ipAllowed) {
+        return {
+          valid: false,
+          error: 'IP address in blocked range'
+        };
+      }
+    }
+
+    // 6. Additional security checks
+    if (hasPathTraversal(parsed.pathname)) {
+      return {
+        valid: false,
+        error: 'Path traversal detected'
+      };
+    }
+
+    return {
+      valid: true,
+      sanitized: sanitizeURL(parsed)
+    };
+
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Invalid URL format'
+    };
+  }
+}
+```
+
+### URL Sanitization
+
+Clean and normalize URLs:
+
+```typescript
+function sanitizeURL(parsed: URL): string {
+  // Remove credentials
+  parsed.username = '';
+  parsed.password = '';
+
+  // Remove fragment
+  parsed.hash = '';
+
+  // Normalize path
+  parsed.pathname = parsed.pathname
+    .replace(/\/+/g, '/')  // Multiple slashes
+    .replace(/\.\./g, '')  // Path traversal
+    .replace(/^\/~/, '/'); // Home directory
+
+  // Remove dangerous query parameters
+  const params = new URLSearchParams(parsed.search);
+  const dangerous = ['redirect', 'callback', 'return_to'];
+  dangerous.forEach(param => params.delete(param));
+  parsed.search = params.toString();
+
+  return parsed.toString();
+}
+```
+
+## Security Headers
+
+### Content Security Policy
+
+Prevent XSS and data injection:
+
+```typescript
+const CSP_DIRECTIVES = {
+  'default-src': ["'self'"],
+  'script-src': ["'self'", "'unsafe-inline'"],
+  'style-src': ["'self'", "'unsafe-inline'"],
+  'img-src': ["'self'", "data:", "https:"],
+  'connect-src': [
+    "'self'",
+    "https://api.github.com",
+    "https://registry.plugged.in",
+    "wss://plugged.in"
+  ],
+  'frame-ancestors': ["'none'"],
+  'form-action': ["'self'"],
+  'base-uri': ["'self'"]
+};
+```
+
+### Additional Security Headers
+
+```typescript
+app.use((req, res, next) => {
+  // Prevent clickjacking
+  res.setHeader('X-Frame-Options', 'DENY');
+
+  // Prevent MIME sniffing
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+
+  // Enable XSS protection
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+
+  // Referrer policy
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  // Permissions policy
+  res.setHeader('Permissions-Policy',
+    'geolocation=(), microphone=(), camera=()');
+
+  next();
+});
+```
+
+## SSRF Prevention
+
+### Request Interception
+
+Intercept and validate all outgoing requests:
+
+```typescript
+import { Agent } from 'https';
+
+const secureAgent = new Agent({
+  lookup: (hostname, options, callback) => {
+    // Custom DNS resolution with validation
+    dns.resolve4(hostname, (err, addresses) => {
+      if (err) return callback(err);
+
+      // Check each resolved IP
+      for (const address of addresses) {
+        if (isInBlockedRange(address)) {
+          return callback(new Error('Blocked IP range'));
+        }
+      }
+
+      callback(null, addresses[0], 4);
+    });
+  }
+});
+
+// Use secure agent for all requests
+const response = await fetch(url, {
+  agent: secureAgent
+});
+```
+
+### Timeout Protection
+
+Prevent hanging connections:
+
+```typescript
+const TIMEOUT_MS = 30000; // 30 seconds
+
+async function safeRequest(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => {
+    controller.abort();
+  }, TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      agent: secureAgent
+    });
+    return response;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+```
+
+## Testing URL Validation
+
+### Unit Tests
+
+```typescript
+describe('URL Validation', () => {
+  it('should reject localhost URLs', async () => {
+    const result = await validateMCPServerURL('http://localhost:3000');
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('restricted network');
+  });
+
+  it('should reject private IPs', async () => {
+    const result = await validateMCPServerURL('http://192.168.1.1');
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('blocked range');
+  });
+
+  it('should allow approved domains', async () => {
+    const result = await validateMCPServerURL('https://api.github.com');
+    expect(result.valid).toBe(true);
+  });
+
+  it('should sanitize URLs', async () => {
+    const result = await validateMCPServerURL(
+      'https://user:pass@example.com/../path?redirect=evil'
+    );
+    expect(result.sanitized).toBe('https://example.com/path');
+  });
+});
+```
+
+### Security Testing
+
+Test SSRF prevention:
+
+```bash
+# Test localhost bypass attempts
+curl -X POST /api/servers \
+  -d '{"url": "http://0.0.0.0:8080"}'
+
+# Test DNS rebinding
+curl -X POST /api/servers \
+  -d '{"url": "http://evil.rebind.network"}'
+
+# Test URL encoding bypass
+curl -X POST /api/servers \
+  -d '{"url": "http://127.0.0.1%2f"}'
+
+# Test redirect bypass
+curl -X POST /api/servers \
+  -d '{"url": "https://trusted.com/redirect?to=http://localhost"}'
+```
+
+## Configuration
+
+### Environment Variables
+
+```env
+# URL Validation
+ALLOWED_DOMAINS=github.com,api.anthropic.com
+BLOCK_PRIVATE_NETWORKS=true
+ENFORCE_HTTPS=true
+MAX_REDIRECT_COUNT=5
+
+# Timeouts
+REQUEST_TIMEOUT_MS=30000
+DNS_TIMEOUT_MS=5000
+
+# Security
+ENABLE_CSP=true
+ENABLE_HSTS=true
+```
+
+### Runtime Configuration
+
+```typescript
+interface SecurityConfig {
+  url: {
+    validation: {
+      enabled: boolean;
+      strict: boolean;
+      allowLocalhost: boolean;
+      allowPrivateNetworks: boolean;
+      customAllowedDomains: string[];
+      blockedPorts: number[];
+      maxRedirects: number;
+    };
+    sanitization: {
+      enabled: boolean;
+      removeCredentials: boolean;
+      removeFragment: boolean;
+      normalizeProtocol: boolean;
+    };
+  };
+  headers: {
+    csp: boolean;
+    hsts: boolean;
+    frameOptions: string;
+    contentTypeOptions: boolean;
+  };
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always Validate User Input">
+    Never trust user-provided URLs. Always validate before use.
+  </Accordion>
+
+  <Accordion title="Use Allowlists Over Blocklists">
+    Explicitly allow known-good domains rather than blocking bad ones.
+  </Accordion>
+
+  <Accordion title="Validate After Redirects">
+    Re-validate URLs after following redirects.
+  </Accordion>
+
+  <Accordion title="Log Security Events">
+    Log all validation failures for security monitoring.
+  </Accordion>
+
+  <Accordion title="Regular Security Audits">
+    Periodically review and update validation rules.
+  </Accordion>
+
+  <Accordion title="Defense in Depth">
+    Use multiple layers of validation, don't rely on a single check.
+  </Accordion>
+</AccordionGroup>
+
+## Troubleshooting
+
+### Common Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| Valid URL rejected | Domain not in allowlist | Add to ALLOWED_DOMAINS |
+| Timeout errors | DNS resolution slow | Increase DNS_TIMEOUT_MS |
+| False positives | Overly strict rules | Adjust validation options |
+| Bypass attempts | Inadequate validation | Add additional checks |
+
+## Support
+
+For security-related questions:
+- **Security Issues**: security@plugged.in
+- **Documentation**: [docs.plugged.in](https://docs.plugged.in)
+- **GitHub Issues**: [Report issues](https://github.com/VeriTeknik/pluggedin-app/issues)

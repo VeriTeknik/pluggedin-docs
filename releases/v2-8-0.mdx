@@ -1,0 +1,432 @@
+---
+title: Version 2.8.0 - AI Document Exchange
+description: Revolutionary document management with AI model attribution
+sidebarTitle: v2.8.0
+---
+
+# Version 2.8.0 Release Notes
+
+<Badge variant="info">Feature Release</Badge>
+<Badge variant="success">RAG v2</Badge>
+
+Released: January 27, 2025
+
+## Overview
+
+Version 2.8.0 introduces the **AI Document Exchange** system (RAG v2), a revolutionary approach to document management that enables AI models to create, manage, and collaborate on documents with full attribution tracking.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="AI Document Creation" icon="robot">
+    Direct document generation by AI models with attribution
+  </Card>
+  <Card title="Version Control" icon="code-branch">
+    Complete version history with change tracking
+  </Card>
+  <Card title="Semantic Search" icon="magnifying-glass">
+    Advanced search with relevance scoring
+  </Card>
+  <Card title="Multi-Format Support" icon="file-code">
+    Support for Markdown, JSON, HTML, and more
+  </Card>
+</CardGroup>
+
+## AI Document Exchange System
+
+### Document Creation API
+
+AI models can now create documents directly through the API:
+
+```bash
+POST /api/documents/ai
+Authorization: Bearer YOUR_API_KEY
+
+{
+  "title": "MCP Integration Guide",
+  "content": "# Complete guide to MCP integration...",
+  "format": "md",
+  "metadata": {
+    "model": {
+      "name": "Claude 3",
+      "provider": "Anthropic",
+      "version": "3.0"
+    },
+    "context": "User requested comprehensive MCP guide",
+    "visibility": "workspace"
+  },
+  "tags": ["mcp", "integration", "guide"]
+}
+```
+
+### Model Attribution
+
+Every AI-generated document tracks complete attribution:
+
+```json
+{
+  "document_id": "doc_abc123",
+  "attributions": [
+    {
+      "model_name": "Claude 3",
+      "model_provider": "Anthropic",
+      "model_version": "3.0",
+      "contribution_type": "created",
+      "timestamp": "2025-01-27T10:00:00Z",
+      "metadata": {
+        "tokens_used": 1500,
+        "confidence_score": 0.95
+      }
+    },
+    {
+      "model_name": "GPT-4",
+      "model_provider": "OpenAI",
+      "contribution_type": "reviewed",
+      "timestamp": "2025-01-27T11:00:00Z"
+    }
+  ]
+}
+```
+
+## Document Management Features
+
+### Version Control
+
+<Info>
+All documents now support complete version history with rollback capabilities.
+</Info>
+
+#### Version Tracking
+
+- Automatic version creation on updates
+- Parent-child relationships between versions
+- Change diff generation
+- Rollback to any previous version
+
+#### Version API
+
+```typescript
+// Get version history
+GET /api/documents/{id}/versions
+
+// Create new version
+POST /api/documents/{id}/versions
+{
+  "content": "Updated content",
+  "changeSummary": "Fixed typos and added examples"
+}
+
+// Rollback to version
+POST /api/documents/{id}/rollback/{versionId}
+```
+
+### Advanced Search
+
+PostgreSQL full-text search with relevance scoring:
+
+```typescript
+POST /api/documents/search
+{
+  "query": "MCP server configuration",
+  "filters": {
+    "modelName": "Claude 3",
+    "modelProvider": "Anthropic",
+    "dateFrom": "2025-01-01",
+    "dateTo": "2025-01-31",
+    "source": "ai_generated",
+    "tags": ["mcp", "configuration"]
+  },
+  "limit": 10,
+  "offset": 0
+}
+```
+
+**Search Features:**
+- Semantic relevance scoring
+- Automatic snippet generation
+- Keyword highlighting
+- Filter by AI model, date, tags, source
+- Pagination with total count
+
+## Document Preview System
+
+### Multi-Format Viewer
+
+The new document preview modal supports:
+
+<Tabs>
+  <Tab title="PDF">
+    - Page navigation
+    - Zoom controls (10%-500%)
+    - Text selection
+    - Search within document
+  </Tab>
+  <Tab title="Images">
+    - Pan and zoom
+    - Rotation controls
+    - Fullscreen mode
+    - Format support: PNG, JPG, GIF, WebP, SVG
+  </Tab>
+  <Tab title="Text/Code">
+    - Syntax highlighting for 20+ languages
+    - Line numbers
+    - Code folding
+    - Copy to clipboard
+  </Tab>
+  <Tab title="Markdown">
+    - Rendered preview
+    - Table of contents
+    - Link navigation
+    - Embedded media
+  </Tab>
+</Tabs>
+
+### Preview Controls
+
+```typescript
+// Preview component usage
+<DocumentPreview
+  document={document}
+  onClose={() => setPreviewOpen(false)}
+  onNavigate={(direction) => navigateDocument(direction)}
+  fullscreen={true}
+/>
+```
+
+## MCP Tools Integration
+
+New MCP tools for document operations:
+
+### pluggedin_create_document
+
+Create documents from MCP servers:
+
+```json
+{
+  "name": "pluggedin_create_document",
+  "parameters": {
+    "title": "API Documentation",
+    "content": "# API Reference...",
+    "format": "md",
+    "category": "documentation",
+    "tags": ["api", "reference"]
+  }
+}
+```
+
+### pluggedin_search_documents
+
+Search documents semantically:
+
+```json
+{
+  "name": "pluggedin_search_documents",
+  "parameters": {
+    "query": "authentication flow",
+    "limit": 5
+  }
+}
+```
+
+### pluggedin_get_document
+
+Retrieve specific documents:
+
+```json
+{
+  "name": "pluggedin_get_document",
+  "parameters": {
+    "documentId": "doc_abc123",
+    "includeContent": true,
+    "includeVersions": false
+  }
+}
+```
+
+### pluggedin_update_document
+
+Update existing documents:
+
+```json
+{
+  "name": "pluggedin_update_document",
+  "parameters": {
+    "documentId": "doc_abc123",
+    "operation": "append",
+    "content": "\n## New Section\nAdditional content..."
+  }
+}
+```
+
+## Security Enhancements
+
+### Rate Limiting
+
+- AI document creation: 10 requests per hour
+- Document search: 60 requests per minute
+- Document updates: 30 requests per minute
+
+### Content Security
+
+<Warning>
+All AI-generated content is sanitized before storage.
+</Warning>
+
+- HTML/Markdown sanitization
+- Path traversal protection
+- Content size limit: 10MB
+- File type validation
+- XSS prevention
+
+### Access Control
+
+```typescript
+// Document visibility levels
+enum Visibility {
+  PRIVATE = 'private',      // Only owner
+  WORKSPACE = 'workspace',   // Project members
+  PUBLIC = 'public'         // Everyone
+}
+```
+
+## Database Schema Updates
+
+### New Tables
+
+#### document_versions
+
+```sql
+CREATE TABLE document_versions (
+  id UUID PRIMARY KEY,
+  document_id UUID REFERENCES docs(id),
+  version_number INTEGER,
+  content TEXT,
+  content_hash VARCHAR(64),
+  change_summary TEXT,
+  created_at TIMESTAMP,
+  created_by UUID REFERENCES users(id)
+);
+```
+
+#### document_model_attributions
+
+```sql
+CREATE TABLE document_model_attributions (
+  id UUID PRIMARY KEY,
+  document_id UUID REFERENCES docs(id),
+  model_name VARCHAR(255),
+  model_provider VARCHAR(255),
+  model_version VARCHAR(50),
+  contribution_type VARCHAR(50),
+  metadata JSONB,
+  created_at TIMESTAMP
+);
+```
+
+### Updated docs Table
+
+New fields added:
+- `source`: 'upload' | 'ai_generated' | 'api'
+- `ai_metadata`: JSONB for AI-specific data
+- `content_hash`: SHA-256 hash for deduplication
+- `visibility`: Document visibility level
+- `version`: Current version number
+- `parent_document_id`: For version relationships
+
+## UI Enhancements
+
+### Library Interface
+
+<Steps>
+  <Step title="Source Filter">
+    Filter documents by source (Uploaded, AI Generated, API)
+  </Step>
+  <Step title="Model Attribution Badges">
+    Visual indicators for AI-generated content
+  </Step>
+  <Step title="Progress Tracking">
+    Real-time upload and processing progress
+  </Step>
+  <Step title="Preview on Click">
+    Instant document preview in modal
+  </Step>
+</Steps>
+
+### Upload Progress
+
+Enhanced progress tracking shows:
+- Text extraction progress
+- Chunking progress
+- Embedding generation
+- Database insertion
+- Estimated time remaining
+
+## Migration Guide {#migration}
+
+### Database Migration
+
+Run the migration script:
+
+```bash
+# Run new migrations
+pnpm db:migrate
+
+# The migration adds:
+# - document_versions table
+# - document_model_attributions table
+# - New fields to docs table
+```
+
+### API Updates
+
+Update your API calls to include model metadata:
+
+```javascript
+// Old API call
+await createDocument({
+  title: "My Document",
+  content: "Content here"
+});
+
+// New API call with attribution
+await createDocument({
+  title: "My Document",
+  content: "Content here",
+  metadata: {
+    model: {
+      name: "Claude 3",
+      provider: "Anthropic",
+      version: "3.0"
+    }
+  }
+});
+```
+
+## Performance Improvements
+
+- Optimized search queries with new indexes
+- Lazy loading for document previews
+- Content deduplication reduces storage by 30%
+- Streaming support for large documents
+
+## Known Issues
+
+- PDF preview may be slow for documents >100 pages
+- Search relevance scoring needs tuning for short queries
+- Version diff generation slow for very large documents
+
+## Future Enhancements
+
+Planned for future releases:
+- Real-time collaborative editing
+- Document templates
+- Advanced version merging
+- AI-powered document summarization
+- Export to multiple formats
+
+## Support
+
+For help with RAG v2 features:
+- **Documentation**: [docs.plugged.in](https://docs.plugged.in)
+- **API Reference**: [API Documentation](/api/reference)
+- **GitHub Issues**: [Report issues](https://github.com/VeriTeknik/pluggedin-app/issues)

@@ -1,0 +1,676 @@
+---
+title: Docker Deployment
+description: Deploy Plugged.in using Docker containers
+sidebarTitle: Docker
+---
+
+# Docker Deployment
+
+Deploy Plugged.in using Docker for consistent, scalable, and portable deployments across any environment.
+
+## Quick Start
+
+<Steps>
+  <Step title="Clone Repository">
+    ```bash
+    git clone https://github.com/VeriTeknik/pluggedin-app.git
+    cd pluggedin-app
+    ```
+  </Step>
+  <Step title="Configure Environment">
+    ```bash
+    cp .env.example .env
+    # Edit .env with your configuration
+    ```
+  </Step>
+  <Step title="Build and Run">
+    ```bash
+    docker-compose up -d
+    ```
+  </Step>
+  <Step title="Access Application">
+    Open [http://localhost:12005](http://localhost:12005)
+  </Step>
+</Steps>
+
+## Docker Architecture
+
+<CardGroup cols={2}>
+  <Card title="Application Container" icon="cube">
+    - Next.js application
+    - Node.js runtime
+    - MCP proxy server
+    - Port 12005 exposed
+  </Card>
+  <Card title="Database Container" icon="database">
+    - PostgreSQL 15
+    - Persistent volume
+    - Automatic migrations
+    - Port 5432 internal
+  </Card>
+  <Card title="Redis Container" icon="bolt">
+    - Session storage
+    - Cache layer
+    - Rate limiting
+    - Port 6379 internal
+  </Card>
+  <Card title="Nginx Container" icon="shield">
+    - Reverse proxy
+    - SSL termination
+    - Static file serving
+    - Ports 80/443 exposed
+  </Card>
+</CardGroup>
+
+## Production Dockerfile
+
+Create optimized multi-stage Dockerfile:
+
+```dockerfile
+# Build stage
+FROM node:20-alpine AS builder
+
+# Install dependencies for native modules
+RUN apk add --no-cache python3 make g++ curl
+
+# Install pnpm
+RUN npm install -g pnpm
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy application code
+COPY . .
+
+# Build application
+RUN pnpm build
+
+# Production stage
+FROM node:20-alpine AS runner
+
+# Install runtime dependencies
+RUN apk add --no-cache \
+    python3 \
+    curl \
+    && npm install -g pnpm
+
+# Create app user
+RUN addgroup -g 1001 nodejs \
+    && adduser -S nextjs -u 1001
+
+# Set working directory
+WORKDIR /app
+
+# Copy built application
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Create cache directories
+RUN mkdir -p /app/.cache/mcp-packages \
+    && chown -R nextjs:nodejs /app/.cache
+
+# Switch to non-root user
+USER nextjs
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
+
+# Start application
+CMD ["node", "server.js"]
+```
+
+## Docker Compose Configuration
+
+### Development Setup
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: pluggedin-app
+    ports:
+      - "12005:3000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://pluggedin:password@db:5432/pluggedin_dev
+      - NEXTAUTH_URL=http://localhost:12005
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - db
+      - redis
+    networks:
+      - pluggedin-network
+
+  db:
+    image: postgres:15-alpine
+    container_name: pluggedin-db
+    environment:
+      - POSTGRES_USER=pluggedin
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=pluggedin_dev
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - pluggedin-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: pluggedin-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - pluggedin-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  pluggedin-network:
+    driver: bridge
+```
+
+### Production Setup
+
+```yaml
+# docker-compose.prod.yml
+version: '3.8'
+
+services:
+  app:
+    image: pluggedin:latest
+    container_name: pluggedin-app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - app_cache:/app/.cache
+      - app_uploads:/app/uploads
+    depends_on:
+      - db
+      - redis
+    networks:
+      - pluggedin-network
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '1'
+          memory: 1G
+
+  db:
+    image: postgres:15-alpine
+    container_name: pluggedin-db
+    restart: always
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backup:/backup
+    networks:
+      - pluggedin-network
+    command:
+      - "postgres"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "max_connections=200"
+
+  redis:
+    image: redis:7-alpine
+    container_name: pluggedin-redis
+    restart: always
+    volumes:
+      - redis_data:/data
+    networks:
+      - pluggedin-network
+    command: redis-server --appendonly yes
+
+  nginx:
+    image: nginx:alpine
+    container_name: pluggedin-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx_cache:/var/cache/nginx
+    depends_on:
+      - app
+    networks:
+      - pluggedin-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  app_cache:
+  app_uploads:
+  nginx_cache:
+
+networks:
+  pluggedin-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+```
+
+## Environment Variables
+
+Create `.env` file for Docker deployment:
+
+```env
+# Database
+DATABASE_URL=postgresql://pluggedin:secure_password@db:5432/pluggedin_prod
+DB_USER=pluggedin
+DB_PASSWORD=secure_password
+DB_NAME=pluggedin_prod
+
+# Authentication
+NEXTAUTH_URL=https://your-domain.com
+NEXTAUTH_SECRET=generate-with-openssl-rand-base64-32
+
+# Redis
+REDIS_URL=redis://redis:6379
+
+# Application
+NODE_ENV=production
+PORT=3000
+
+# MCP Configuration
+MCP_PACKAGE_STORE_DIR=/app/.cache/mcp-packages
+MCP_PNPM_STORE_DIR=/app/.cache/mcp-packages/pnpm-store
+MCP_UV_CACHE_DIR=/app/.cache/mcp-packages/uv-cache
+
+# API Keys (optional)
+ANTHROPIC_API_KEY=your-key
+OPENAI_API_KEY=your-key
+
+# Email (optional)
+EMAIL_SERVER_HOST=smtp.gmail.com
+EMAIL_SERVER_PORT=587
+EMAIL_SERVER_USER=your-email
+EMAIL_SERVER_PASSWORD=your-password
+EMAIL_FROM=noreply@your-domain.com
+```
+
+## Building and Running
+
+### Build Image
+
+```bash
+# Build production image
+docker build -t pluggedin:latest .
+
+# Build with specific tag
+docker build -t pluggedin:v2.10.3 .
+
+# Build with build args
+docker build \
+  --build-arg NODE_VERSION=20 \
+  --build-arg NEXT_PUBLIC_API_URL=https://api.plugged.in \
+  -t pluggedin:latest .
+```
+
+### Run Containers
+
+<Tabs>
+  <Tab title="Development">
+    ```bash
+    # Start all services
+    docker-compose up -d
+
+    # View logs
+    docker-compose logs -f app
+
+    # Stop services
+    docker-compose down
+    ```
+  </Tab>
+  <Tab title="Production">
+    ```bash
+    # Use production compose file
+    docker-compose -f docker-compose.prod.yml up -d
+
+    # Scale application
+    docker-compose -f docker-compose.prod.yml up -d --scale app=3
+
+    # Rolling update
+    docker-compose -f docker-compose.prod.yml up -d --no-deps app
+    ```
+  </Tab>
+</Tabs>
+
+## Database Management
+
+### Migrations
+
+```bash
+# Run migrations
+docker-compose exec app pnpm db:migrate
+
+# Generate schema
+docker-compose exec app pnpm db:generate
+
+# Access database
+docker-compose exec db psql -U pluggedin -d pluggedin_prod
+```
+
+### Backup and Restore
+
+```bash
+# Backup database
+docker-compose exec db pg_dump -U pluggedin pluggedin_prod | gzip > backup_$(date +%Y%m%d_%H%M%S).sql.gz
+
+# Restore database
+gunzip -c backup_20240101_120000.sql.gz | docker-compose exec -T db psql -U pluggedin pluggedin_prod
+```
+
+## Nginx Configuration
+
+Create `nginx.conf` for production:
+
+```nginx
+events {
+    worker_connections 1024;
+}
+
+http {
+    upstream app {
+        least_conn;
+        server app:3000;
+    }
+
+    server {
+        listen 80;
+        server_name your-domain.com;
+        return 301 https://$server_name$request_uri;
+    }
+
+    server {
+        listen 443 ssl http2;
+        server_name your-domain.com;
+
+        ssl_certificate /etc/nginx/ssl/cert.pem;
+        ssl_certificate_key /etc/nginx/ssl/key.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        ssl_ciphers HIGH:!aNULL:!MD5;
+
+        client_max_body_size 10M;
+
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+
+        # Proxy to application
+        location / {
+            proxy_pass http://app;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection 'upgrade';
+            proxy_set_header Host $host;
+            proxy_cache_bypass $http_upgrade;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        # Static files
+        location /_next/static {
+            proxy_pass http://app;
+            proxy_cache_valid 200 365d;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+}
+```
+
+## Health Monitoring
+
+### Health Check Endpoint
+
+The application provides a health check endpoint:
+
+```bash
+# Check health
+curl http://localhost:12005/api/health
+
+# Response
+{
+  "status": "healthy",
+  "timestamp": "2024-01-01T12:00:00Z",
+  "version": "2.10.3",
+  "services": {
+    "database": "connected",
+    "redis": "connected",
+    "mcp": "ready"
+  }
+}
+```
+
+### Docker Health Check
+
+```dockerfile
+HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
+```
+
+## Scaling Strategies
+
+### Horizontal Scaling
+
+```yaml
+# docker-compose.scale.yml
+services:
+  app:
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: any
+```
+
+### Load Balancing
+
+Use Docker Swarm or Kubernetes for advanced load balancing:
+
+```bash
+# Initialize swarm
+docker swarm init
+
+# Deploy stack
+docker stack deploy -c docker-compose.prod.yml pluggedin
+
+# Scale service
+docker service scale pluggedin_app=5
+```
+
+## Troubleshooting
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="Container fails to start">
+    **Check logs:**
+    ```bash
+    docker-compose logs app
+    docker-compose ps
+    ```
+    **Verify environment variables and database connection**
+  </Accordion>
+
+  <Accordion title="Database connection issues">
+    **Verify database is running:**
+    ```bash
+    docker-compose exec db pg_isready
+    ```
+    **Check connection string in .env file**
+  </Accordion>
+
+  <Accordion title="Permission errors">
+    **Fix ownership:**
+    ```bash
+    docker-compose exec app chown -R nextjs:nodejs /app/.cache
+    ```
+  </Accordion>
+
+  <Accordion title="Out of memory">
+    **Increase memory limits:**
+    ```yaml
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Debug Mode
+
+Enable debug logging:
+
+```bash
+# Add to docker-compose.yml
+environment:
+  - DEBUG=mcp:*
+  - LOG_LEVEL=debug
+```
+
+### Container Access
+
+```bash
+# Access application container
+docker-compose exec app sh
+
+# Access database
+docker-compose exec db psql -U pluggedin
+
+# View real-time logs
+docker-compose logs -f --tail=100
+```
+
+## Security Best Practices
+
+<Warning>
+Never use default passwords in production. Always use secrets management.
+</Warning>
+
+### 1. Use Docker Secrets
+
+```yaml
+secrets:
+  db_password:
+    external: true
+  nextauth_secret:
+    external: true
+
+services:
+  app:
+    secrets:
+      - db_password
+      - nextauth_secret
+```
+
+### 2. Non-root User
+
+Always run containers as non-root:
+
+```dockerfile
+USER nextjs
+```
+
+### 3. Read-only Root Filesystem
+
+```yaml
+services:
+  app:
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache
+```
+
+### 4. Network Isolation
+
+```yaml
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true
+```
+
+## Backup Strategy
+
+Automated backup script:
+
+```bash
+#!/bin/bash
+# backup.sh
+
+BACKUP_DIR="/backups"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+# Backup database
+docker-compose exec -T db pg_dump -U pluggedin pluggedin_prod | \
+  gzip > "$BACKUP_DIR/db_$DATE.sql.gz"
+
+# Backup volumes
+docker run --rm \
+  -v pluggedin_app_uploads:/data \
+  -v $BACKUP_DIR:/backup \
+  alpine tar czf "/backup/uploads_$DATE.tar.gz" /data
+
+# Keep only last 30 days
+find $BACKUP_DIR -name "*.gz" -mtime +30 -delete
+```
+
+Add to crontab:
+```bash
+0 2 * * * /path/to/backup.sh
+```
+
+## Support
+
+For Docker deployment help:
+- **Documentation**: [docs.plugged.in](https://docs.plugged.in)
+- **Docker Hub**: [hub.docker.com/r/veriteknik/pluggedin](https://hub.docker.com/r/veriteknik/pluggedin)
+- **GitHub Issues**: [Report issues](https://github.com/VeriTeknik/pluggedin-app/issues)

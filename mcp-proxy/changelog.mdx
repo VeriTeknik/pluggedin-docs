@@ -1,0 +1,302 @@
+---
+title: MCP Proxy Changelog
+description: Version history and release notes for MCP Proxy
+sidebarTitle: Changelog
+---
+
+# MCP Proxy Changelog
+
+Track the evolution of the Plugged.in MCP Proxy server.
+
+## Latest Version
+
+<Card title="v1.10.2" icon="rocket">
+  **Current Stable Release**
+  Enhanced performance and OAuth support
+</Card>
+
+## Version 1.10.x Series
+
+### [1.10.2] - 2025-01-28
+<Badge variant="success">Current Version</Badge>
+
+#### Fixed
+- Memory leak in connection pooling
+- OAuth token refresh race condition
+- STDIO server timeout handling
+
+### [1.10.1] - 2025-01-27
+
+#### Fixed
+- Critical bug in tool name collision resolution
+- Connection cleanup on server disconnect
+
+### [1.10.0] - 2025-01-27
+<Badge variant="warning">Major Release</Badge>
+
+#### Added
+- **OAuth Support**: Full OAuth 2.0 flow for Streamable HTTP servers
+- **Connection Pooling**: Reuse connections for better performance
+- **Health Monitoring**: Automatic server health checks
+- **Circuit Breaker**: Prevent cascading failures
+
+#### Changed
+- Improved error messages with actionable fixes
+- Enhanced retry logic with exponential backoff
+- Optimized memory usage by 40%
+
+#### Security
+- Added rate limiting per API key
+- Enhanced input validation
+- Secure token storage for OAuth
+
+## Version 1.8.x Series
+
+### [1.8.0] - 2025-01-20
+<Badge variant="info">Feature Release</Badge>
+
+#### RAG v2 MCP Tools
+
+Added new MCP tools for AI Document Exchange:
+
+- `pluggedin_create_document` - Create documents via AI
+- `pluggedin_search_documents` - Semantic document search
+- `pluggedin_get_document` - Retrieve documents
+- `pluggedin_update_document` - Update existing documents
+- `pluggedin_list_documents` - List all documents
+- `pluggedin_delete_document` - Remove documents
+
+#### Performance
+- Optimized tool discovery caching
+- Reduced startup time by 50%
+- Improved response streaming
+
+## Version 1.4.x Series
+
+### [1.4.0] - 2024-12-15
+
+#### Added
+- **Streamable HTTP Transport**: Full support for new transport type
+- **Tool Prefixing**: Automatic UUID prefixing to prevent collisions
+- **Parallel Execution**: Execute multiple tools simultaneously
+- **Response Streaming**: Stream large responses efficiently
+
+#### Changed
+- Deprecated SSE transport in favor of Streamable HTTP
+- Improved error handling for network failures
+- Enhanced logging with structured output
+
+## Version 1.2.x Series
+
+### [1.2.6] - 2024-11-30
+
+#### Fixed
+- STDIO server hanging on large outputs
+- Memory leak in SSE connections
+- Race condition in tool discovery
+
+### [1.2.0] - 2024-11-15
+
+#### Added
+- **Multi-Server Support**: Aggregate multiple MCP servers
+- **Authentication System**: API key and custom auth support
+- **Caching Layer**: Cache tool discovery and resources
+- **Metrics Endpoint**: Prometheus-compatible metrics
+
+#### Performance
+- 10x faster tool discovery with caching
+- Reduced memory footprint by 60%
+- Optimized for Docker deployment
+
+## Version 1.0.0
+
+### [1.0.0] - 2024-10-01
+<Badge variant="warning">Initial Release</Badge>
+
+#### Features
+- Basic MCP proxy functionality
+- STDIO transport support
+- SSE transport support
+- Tool discovery and invocation
+- Resource listing
+- Prompt template support
+
+#### Known Limitations
+- Single server support only
+- No authentication
+- Limited error handling
+- No connection pooling
+
+## Version 0.x Series (Beta)
+
+### [0.5.10] - 2024-09-15
+
+#### Added
+- SSE transport experimental support
+- Basic error recovery
+- Debug logging
+
+### [0.5.9] - 2024-09-01
+
+#### Added
+- Initial beta release
+- STDIO transport only
+- Basic tool invocation
+
+## Migration Guides
+
+### Migrating from 1.8.x to 1.10.x
+
+<Steps>
+  <Step title="Update Configuration">
+    Add OAuth configuration for supported servers:
+    ```json
+    {
+      "oauth": {
+        "enabled": true,
+        "provider": "github"
+      }
+    }
+    ```
+  </Step>
+  <Step title="Enable Health Checks">
+    ```json
+    {
+      "monitoring": {
+        "health": {
+          "enabled": true,
+          "interval": 30000
+        }
+      }
+    }
+    ```
+  </Step>
+  <Step title="Update Dependencies">
+    ```bash
+    npm update @pluggedin/mcp-proxy
+    ```
+  </Step>
+</Steps>
+
+### Migrating from 1.2.x to 1.4.x
+
+<Warning>
+SSE transport is deprecated. Migrate to Streamable HTTP.
+</Warning>
+
+Update server configurations:
+
+```json
+// Old (SSE)
+{
+  "transport": {
+    "type": "sse",
+    "url": "https://example.com/sse"
+  }
+}
+
+// New (Streamable HTTP)
+{
+  "transport": {
+    "type": "streamable",
+    "baseUrl": "https://example.com/mcp"
+  }
+}
+```
+
+## Deprecation Notices
+
+### SSE Transport
+- **Deprecated in:** v1.4.0
+- **Removal planned:** v2.0.0
+- **Migration path:** Use Streamable HTTP transport
+- **Reason:** SSE is not part of official MCP specification
+
+### Legacy Authentication
+- **Deprecated in:** v1.10.0
+- **Removal planned:** v2.0.0
+- **Migration path:** Use API key or OAuth
+- **Reason:** Security improvements
+
+## Performance Benchmarks
+
+### Tool Discovery Performance
+
+| Version | Time (ms) | Memory (MB) |
+|---------|-----------|-------------|
+| 1.10.x | 45 | 32 |
+| 1.8.x | 120 | 48 |
+| 1.4.x | 250 | 64 |
+| 1.2.x | 500 | 96 |
+| 1.0.0 | 1200 | 128 |
+
+### Connection Management
+
+| Version | Max Connections | Pool Efficiency |
+|---------|----------------|-----------------|
+| 1.10.x | 1000 | 95% |
+| 1.8.x | 500 | 85% |
+| 1.4.x | 200 | 70% |
+| 1.2.x | 100 | 50% |
+| 1.0.0 | 10 | N/A |
+
+## Roadmap
+
+### Version 2.0.0 (Q2 2025)
+- GraphQL API support
+- WebSocket transport
+- Plugin system
+- Distributed proxy clustering
+- Advanced caching strategies
+
+### Version 1.12.0 (Q1 2025)
+- WebAuthn authentication
+- Request/response transformation
+- Custom middleware support
+- Enhanced monitoring dashboard
+
+### Version 1.11.0 (Next Release)
+- Batch tool invocation
+- Response compression
+- Custom retry strategies
+- Enhanced OAuth providers
+
+## Breaking Changes Log
+
+### Version 1.10.0
+- Changed authentication header from `X-API-Key` to `Authorization: Bearer`
+- Removed deprecated `servers.*.url` in favor of `servers.*.transport`
+
+### Version 1.4.0
+- SSE transport moved to deprecated status
+- Changed tool discovery response format
+
+### Version 1.2.0
+- Configuration file format changed
+- API endpoints restructured
+
+## Support Policy
+
+| Version | Status | Support Until |
+|---------|--------|--------------|
+| 1.10.x | **Active** | Active development |
+| 1.8.x | Maintenance | July 2025 |
+| 1.4.x | Security only | April 2025 |
+| 1.2.x | End of Life | - |
+| 1.0.0 | End of Life | - |
+
+## Reporting Issues
+
+Found a bug or have a feature request?
+
+- **GitHub Issues**: [Report issues](https://github.com/VeriTeknik/pluggedin-mcp/issues)
+- **Security Issues**: security@plugged.in
+- **Feature Requests**: Use GitHub Discussions
+
+## Contributing
+
+We welcome contributions! See our [Contributing Guide](https://github.com/VeriTeknik/pluggedin-mcp/blob/main/CONTRIBUTING.md) for details.
+
+## License
+
+MCP Proxy is released under the MIT License. See [LICENSE](https://github.com/VeriTeknik/pluggedin-mcp/blob/main/LICENSE) for details.

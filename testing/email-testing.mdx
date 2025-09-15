@@ -1,0 +1,459 @@
+---
+title: Email Testing Guide
+description: Test email functionality using Mailtrap and other services
+sidebarTitle: Email Testing
+---
+
+# Email Testing
+
+This guide explains how to test email functionality in Plugged.in using [Mailtrap](https://mailtrap.io) for development and staging environments.
+
+## Quick Setup with Mailtrap
+
+<Steps>
+  <Step title="Create Mailtrap Account">
+    Sign up for a free account at [Mailtrap.io](https://mailtrap.io)
+  </Step>
+  <Step title="Get SMTP Credentials">
+    Navigate to **Inboxes** → Select inbox → **SMTP Settings** → Choose **Nodemailer**
+  </Step>
+  <Step title="Configure Environment">
+    ```env
+    EMAIL_SERVER_HOST=sandbox.smtp.mailtrap.io
+    EMAIL_SERVER_PORT=2525
+    EMAIL_SERVER_USER=your-mailtrap-username
+    EMAIL_SERVER_PASSWORD=your-mailtrap-password
+    EMAIL_FROM=noreply@plugged.in
+    EMAIL_FROM_NAME=Plugged.in
+    ```
+  </Step>
+  <Step title="Test Email Delivery">
+    ```bash
+    curl -X POST http://localhost:12005/api/auth/test-email \
+      -H 'Content-Type: application/json' \
+      -H 'Authorization: Bearer your-admin-secret' \
+      -d '{"email": "test@example.com"}'
+    ```
+  </Step>
+</Steps>
+
+## Email Templates
+
+Plugged.in includes responsive HTML email templates for various notifications:
+
+<CardGroup cols={2}>
+  <Card title="Verification Email" icon="envelope-circle-check">
+    Sent when users register to verify their email address
+  </Card>
+  <Card title="Password Reset" icon="key">
+    Sent when users request a password reset
+  </Card>
+  <Card title="Notifications" icon="bell">
+    Activity alerts and system notifications
+  </Card>
+  <Card title="Welcome Email" icon="hand-wave">
+    Onboarding email for new users
+  </Card>
+</CardGroup>
+
+## Development Setup
+
+### 1. Install Dependencies
+
+Ensure email dependencies are installed:
+
+```bash
+pnpm install nodemailer @types/nodemailer
+```
+
+### 2. Configure Mailtrap
+
+<Tabs>
+  <Tab title="Using UI">
+    1. Log into [Mailtrap Dashboard](https://mailtrap.io)
+    2. Navigate to **Inboxes**
+    3. Click on your inbox
+    4. Copy SMTP credentials
+    5. Select **Nodemailer** integration
+  </Tab>
+  <Tab title="Using API">
+    ```bash
+    # Get API token from Mailtrap settings
+    curl -X GET "https://mailtrap.io/api/v1/inboxes" \
+      -H "Api-Token: your-api-token"
+    ```
+  </Tab>
+</Tabs>
+
+### 3. Environment Configuration
+
+Create or update `.env.local`:
+
+```env
+# Mailtrap Settings
+EMAIL_SERVER_HOST=sandbox.smtp.mailtrap.io
+EMAIL_SERVER_PORT=2525
+EMAIL_SERVER_USER=your-username
+EMAIL_SERVER_PASSWORD=your-password
+
+# Email Configuration
+EMAIL_FROM=noreply@plugged.in
+EMAIL_FROM_NAME=Plugged.in
+ENABLE_EMAIL_VERIFICATION=true
+
+# Admin Secret for Testing
+ADMIN_SECRET=your-secret-key
+```
+
+### 4. Test Email Functionality
+
+#### Using Application Forms
+
+- **Password Reset**: Visit `/forgot-password`
+- **User Registration**: Visit `/register`
+- **Email Verification**: Complete registration flow
+
+#### Using Test Endpoint
+
+```bash
+# Test email delivery
+curl -X POST http://localhost:12005/api/auth/test-email \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer your-admin-secret' \
+  -d '{
+    "email": "test@example.com",
+    "subject": "Test Email",
+    "template": "verification"
+  }'
+```
+
+## Email Template Customization
+
+### Template Structure
+
+All email templates follow this structure:
+
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      /* Responsive styles */
+      @media only screen and (max-width: 600px) {
+        .container { width: 100% !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Header with logo -->
+    <div class="header">
+      <img src="data:image/png;base64,..." alt="Plugged.in">
+    </div>
+
+    <!-- Main content -->
+    <div class="content">
+      <!-- Dynamic content here -->
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+      © 2024 Plugged.in. All rights reserved.
+    </div>
+  </body>
+</html>
+```
+
+### Customizing Templates
+
+Edit email templates in `lib/email.ts`:
+
+```typescript
+// lib/email.ts
+export const emailTemplates = {
+  verification: (token: string) => ({
+    subject: 'Verify your email',
+    html: generateTemplate({
+      title: 'Email Verification',
+      content: `Click below to verify your email`,
+      buttonText: 'Verify Email',
+      buttonUrl: `${process.env.NEXTAUTH_URL}/verify?token=${token}`
+    })
+  }),
+
+  passwordReset: (token: string) => ({
+    subject: 'Reset your password',
+    html: generateTemplate({
+      title: 'Password Reset',
+      content: `Click below to reset your password`,
+      buttonText: 'Reset Password',
+      buttonUrl: `${process.env.NEXTAUTH_URL}/reset-password?token=${token}`
+    })
+  })
+};
+```
+
+### Logo Customization
+
+<Note>
+Logos are embedded as base64 to ensure display even when images are blocked.
+</Note>
+
+Replace the logo:
+
+```typescript
+// Convert logo to base64
+const logoBase64 = fs.readFileSync('logo.png').toString('base64');
+
+// Update in lib/email.ts
+const DEFAULT_LOGO_BASE64 = `data:image/png;base64,${logoBase64}`;
+```
+
+**Logo Guidelines:**
+- Maximum size: 30KB (to avoid email size issues)
+- Recommended dimensions: 200x50px
+- Format: PNG with transparency or JPEG
+- Optimize before converting to base64
+
+## Testing Strategies
+
+### Unit Testing
+
+```typescript
+// tests/email.test.ts
+import { sendEmail } from '@/lib/email';
+import { vi, describe, it, expect } from 'vitest';
+
+describe('Email Service', () => {
+  it('should send verification email', async () => {
+    const mockTransport = {
+      sendMail: vi.fn().mockResolvedValue({ messageId: '123' })
+    };
+
+    const result = await sendEmail({
+      to: 'test@example.com',
+      subject: 'Test',
+      html: '<p>Test</p>'
+    });
+
+    expect(mockTransport.sendMail).toHaveBeenCalled();
+    expect(result.messageId).toBe('123');
+  });
+});
+```
+
+### Integration Testing
+
+```typescript
+// tests/email.integration.test.ts
+describe('Email Integration', () => {
+  it('should deliver to Mailtrap', async () => {
+    const response = await fetch('/api/auth/test-email', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.ADMIN_SECRET}`
+      },
+      body: JSON.stringify({
+        email: 'integration@test.com'
+      })
+    });
+
+    expect(response.status).toBe(200);
+
+    // Verify in Mailtrap API
+    const mailtrapMessages = await checkMailtrap();
+    expect(mailtrapMessages).toContainEmail('integration@test.com');
+  });
+});
+```
+
+## Production Email Services
+
+### Supported Providers
+
+<Tabs>
+  <Tab title="SendGrid">
+    ```env
+    EMAIL_SERVER_HOST=smtp.sendgrid.net
+    EMAIL_SERVER_PORT=587
+    EMAIL_SERVER_USER=apikey
+    EMAIL_SERVER_PASSWORD=your-sendgrid-api-key
+    ```
+  </Tab>
+  <Tab title="AWS SES">
+    ```env
+    EMAIL_SERVER_HOST=email-smtp.us-east-1.amazonaws.com
+    EMAIL_SERVER_PORT=587
+    EMAIL_SERVER_USER=your-smtp-username
+    EMAIL_SERVER_PASSWORD=your-smtp-password
+    ```
+  </Tab>
+  <Tab title="Mailgun">
+    ```env
+    EMAIL_SERVER_HOST=smtp.mailgun.org
+    EMAIL_SERVER_PORT=587
+    EMAIL_SERVER_USER=postmaster@your-domain.mailgun.org
+    EMAIL_SERVER_PASSWORD=your-mailgun-password
+    ```
+  </Tab>
+  <Tab title="Gmail">
+    ```env
+    EMAIL_SERVER_HOST=smtp.gmail.com
+    EMAIL_SERVER_PORT=587
+    EMAIL_SERVER_USER=your-email@gmail.com
+    EMAIL_SERVER_PASSWORD=your-app-password
+    ```
+  </Tab>
+</Tabs>
+
+### Production Checklist
+
+<Checklist>
+- [ ] Replace Mailtrap with production email service
+- [ ] Configure SPF, DKIM, and DMARC records
+- [ ] Set up email bounce handling
+- [ ] Implement rate limiting for email sending
+- [ ] Add email analytics tracking
+- [ ] Configure unsubscribe links
+- [ ] Test email deliverability
+- [ ] Monitor email reputation
+- [ ] Remove or secure test endpoints
+- [ ] Update logo to production version
+</Checklist>
+
+## Email Debugging
+
+### Common Issues
+
+<AccordionGroup>
+  <Accordion title="Emails not appearing in Mailtrap">
+    **Solutions:**
+    - Verify Mailtrap credentials in `.env`
+    - Check console for error messages
+    - Ensure `EMAIL_SERVER_PORT` is 2525 (not 25 or 587)
+    - Test connection with telnet: `telnet sandbox.smtp.mailtrap.io 2525`
+  </Accordion>
+
+  <Accordion title="Connection timeout errors">
+    **Solutions:**
+    - Check firewall settings
+    - Verify network allows outbound SMTP
+    - Try alternative ports (2525, 587, 465)
+    - Use secure connection: `EMAIL_SERVER_SECURE=true`
+  </Accordion>
+
+  <Accordion title="Authentication failed">
+    **Solutions:**
+    - Regenerate Mailtrap credentials
+    - Ensure no extra spaces in credentials
+    - Check for special characters that need escaping
+    - Verify account is active and not suspended
+  </Accordion>
+
+  <Accordion title="Images not displaying">
+    **Solutions:**
+    - Use base64 embedded images
+    - Keep image size under 30KB
+    - Test in multiple email clients
+    - Provide alt text for accessibility
+  </Accordion>
+</AccordionGroup>
+
+### Debug Mode
+
+Enable detailed logging:
+
+```typescript
+// lib/email.ts
+import { createTransport } from 'nodemailer';
+
+const transporter = createTransport({
+  host: process.env.EMAIL_SERVER_HOST,
+  port: Number(process.env.EMAIL_SERVER_PORT),
+  auth: {
+    user: process.env.EMAIL_SERVER_USER,
+    pass: process.env.EMAIL_SERVER_PASSWORD,
+  },
+  debug: true, // Enable debug output
+  logger: true // Log to console
+});
+```
+
+### Testing Tools
+
+<CardGroup cols={2}>
+  <Card title="Mailtrap" icon="inbox">
+    Safe email testing sandbox
+    [mailtrap.io](https://mailtrap.io)
+  </Card>
+  <Card title="Mail Tester" icon="shield-check">
+    Spam score analysis
+    [mail-tester.com](https://www.mail-tester.com)
+  </Card>
+  <Card title="Litmus" icon="desktop">
+    Email client preview testing
+    [litmus.com](https://litmus.com)
+  </Card>
+  <Card title="Email on Acid" icon="flask">
+    Comprehensive email testing
+    [emailonacid.com](https://www.emailonacid.com)
+  </Card>
+</CardGroup>
+
+## API Reference
+
+### Test Email Endpoint
+
+```typescript
+POST /api/auth/test-email
+Authorization: Bearer {admin-secret}
+
+{
+  "email": "recipient@example.com",
+  "subject": "Custom Subject",
+  "template": "verification" | "passwordReset" | "notification"
+}
+
+Response:
+{
+  "success": true,
+  "messageId": "abc123",
+  "preview": "https://mailtrap.io/inboxes/123/messages/456"
+}
+```
+
+### Email Service Methods
+
+```typescript
+// Send email
+await sendEmail({
+  to: string | string[],
+  subject: string,
+  html: string,
+  text?: string,
+  attachments?: Array<{
+    filename: string,
+    content: Buffer
+  }>
+});
+
+// Send templated email
+await sendTemplatedEmail({
+  to: string,
+  template: 'verification' | 'passwordReset',
+  data: {
+    token: string,
+    userName?: string,
+    expiresIn?: string
+  }
+});
+```
+
+## Support
+
+For email testing assistance:
+- **Documentation**: [docs.plugged.in](https://docs.plugged.in)
+- **Mailtrap Support**: [help.mailtrap.io](https://help.mailtrap.io)
+- **GitHub Issues**: [Report issues](https://github.com/VeriTeknik/pluggedin-app/issues)
