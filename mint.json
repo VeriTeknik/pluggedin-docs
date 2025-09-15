@@ -1,0 +1,114 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Plugged.in Documentation",
+  "logo": {
+    "dark": "/logo/pluggedin-wl.png",
+    "light": "/logo/pluggedin-wl-black.png",
+    "href": "https://plugged.in"
+  },
+  "favicon": "/logo/P-logo.png",
+  "colors": {
+    "primary": "#0D9373",
+    "light": "#07C983",
+    "dark": "#0D9373",
+    "anchors": {
+      "from": "#0D9373",
+      "to": "#07C983"
+    }
+  },
+  "topbarLinks": [
+    {
+      "name": "Platform",
+      "url": "https://plugged.in"
+    },
+    {
+      "name": "GitHub",
+      "url": "https://github.com/VeriTeknik/pluggedin-app"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Sign Up",
+    "url": "https://plugged.in/register"
+  },
+  "tabs": [
+    {
+      "name": "API Reference",
+      "url": "api"
+    },
+    {
+      "name": "MCP Proxy",
+      "url": "mcp-proxy"
+    },
+    {
+      "name": "Changelog",
+      "url": "releases"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": [
+        "introduction",
+        "quickstart/installation",
+        "quickstart/configuration"
+      ]
+    },
+    {
+      "group": "Platform Features",
+      "pages": [
+        "platform/overview",
+        "platform/registry",
+        "platform/sharing-servers",
+        "platform/user-management"
+      ]
+    },
+    {
+      "group": "Security",
+      "pages": [
+        "security/overview",
+        "security/url-validation"
+      ]
+    },
+    {
+      "group": "Deployment",
+      "pages": [
+        "deployment/ubuntu-setup",
+        "deployment/docker"
+      ]
+    },
+    {
+      "group": "Testing",
+      "pages": [
+        "testing/email-testing"
+      ]
+    },
+    {
+      "group": "API Documentation",
+      "pages": [
+        "api/reference",
+        "api/authentication"
+      ]
+    },
+    {
+      "group": "MCP Proxy",
+      "pages": [
+        "mcp-proxy/overview",
+        "mcp-proxy/installation",
+        "mcp-proxy/changelog"
+      ]
+    },
+    {
+      "group": "Release Notes",
+      "pages": [
+        "releases/changelog",
+        "releases/v2-10-0",
+        "releases/v2-8-0",
+        "releases/v2-7-0"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/VeriTeknik",
+    "twitter": "https://twitter.com/pluggedin"
+  }
+}

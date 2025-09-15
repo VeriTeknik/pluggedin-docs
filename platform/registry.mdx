@@ -1,0 +1,335 @@
+---
+title: Registry Features
+description: Comprehensive guide to the Plugged.in Registry system for MCP servers
+sidebarTitle: Registry
+---
+
+# Plugged.in Registry Features
+
+The Plugged.in Registry is a comprehensive system for discovering, sharing, and managing Model Context Protocol (MCP) servers. It provides a unified platform for the MCP ecosystem.
+
+## Overview
+
+The registry consists of three main components:
+
+<CardGroup cols={3}>
+  <Card title="Official Registry" icon="certificate">
+    **registry.plugged.in**
+
+    Curated and verified MCP servers with GitHub ownership verification
+  </Card>
+  <Card title="Community Servers" icon="users">
+    User-submitted servers pending verification with quick sharing capabilities
+  </Card>
+  <Card title="Local Servers" icon="computer">
+    Private servers for individual use with full customization
+  </Card>
+</CardGroup>
+
+## Key Features
+
+### 1. Add Server to Registry
+
+Submit your MCP server to the official registry for global discovery.
+
+<Steps>
+  <Step title="Navigate">
+    Go to MCP Servers → Add to Registry
+  </Step>
+  <Step title="Enter Repository">
+    Enter your GitHub repository URL
+  </Step>
+  <Step title="Auto-Detection">
+    System automatically detects:
+    - Package type (npm, docker, pypi)
+    - Environment variables
+    - Available transports (STDIO, SSE, Streamable HTTP)
+  </Step>
+  <Step title="Review">
+    Review and confirm details
+  </Step>
+  <Step title="Submit">
+    Submit for registry publication
+  </Step>
+</Steps>
+
+<Info>
+**Requirements:**
+- GitHub repository ownership
+- Valid package.json/Dockerfile/setup.py
+- Connected GitHub account
+</Info>
+
+### 2. Community Servers
+
+Share servers with the community before official registry approval.
+
+**Features:**
+- Quick sharing without verification
+- Public discovery through search
+- Can be claimed by repository owners
+- Automatic migration to registry upon claiming
+
+**Process:**
+1. Navigate to Search → Add to Community
+2. Fill in server details
+3. Submit for immediate availability
+
+### 3. Server Claiming
+
+Claim ownership of community servers and publish to official registry.
+
+<Tabs>
+  <Tab title="Process">
+    1. Find your server in community listings
+    2. Click "Claim This Server"
+    3. Verify GitHub ownership
+    4. Server is automatically:
+       - Published to official registry
+       - Statistics migrated
+       - Removed from community
+  </Tab>
+  <Tab title="Benefits">
+    - Establish ownership
+    - Get official verification
+    - Maintain installation statistics
+    - Access analytics
+  </Tab>
+</Tabs>
+
+### 4. Enhanced Search
+
+<AccordionGroup>
+  <Accordion title="Search Features">
+    - **Multi-source search**: Registry, Community, or All
+    - **Package filters**: npm, docker, pypi
+    - **Repository filters**: GitHub, GitLab, etc.
+    - **Sort options**: Relevance, Recent, Popular
+    - **Real-time results**: Instant filtering
+    - **Rich metadata**: Ratings, installations, descriptions
+  </Accordion>
+
+  <Accordion title="Search Interface">
+    ```
+    [Search Box] [Source Dropdown] [Filters]
+    - Package Registry: npm/docker/pypi
+    - Repository Source: github.com/gitlab.com
+    - Sort: relevance/recent
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### 5. Server Statistics
+
+**Tracked Metrics:**
+- Installation count
+- Average rating (1-5 stars)
+- Number of ratings
+- Activity logs
+- Trending status
+
+<Note>
+Statistics automatically migrate when:
+- Community server is claimed
+- Server moves between sources
+- Duplicate servers are consolidated
+</Note>
+
+## API Endpoints
+
+### Public Search API
+
+```bash
+GET /api/search
+```
+
+Query the registry without authentication.
+
+**Parameters:**
+- `q` - Search query
+- `source` - Filter by source (registry/community/all)
+- `package` - Filter by package type
+- `repository` - Filter by repository source
+- `sort` - Sort results (relevance/recent)
+- `limit` - Results per page
+- `offset` - Pagination offset
+
+**Example:**
+```bash
+curl "https://plugged.in/api/search?q=database&source=registry&package=npm"
+```
+
+### Add to Registry API
+
+```bash
+POST /api/registry/submit
+```
+
+Submit a server to the registry (requires authentication).
+
+**Body:**
+```json
+{
+  "repository": "https://github.com/username/repo",
+  "transport": ["stdio", "sse"],
+  "package_type": "npm",
+  "environment_variables": ["API_KEY", "DATABASE_URL"]
+}
+```
+
+### Server Statistics API
+
+```bash
+GET /api/servers/{uuid}/stats
+```
+
+Get detailed statistics for a specific server.
+
+**Response:**
+```json
+{
+  "installations": 1250,
+  "rating": 4.5,
+  "ratings_count": 28,
+  "trending_rank": 3,
+  "last_activity": "2024-01-15T10:30:00Z"
+}
+```
+
+## Database Schema
+
+### Registry Servers Table
+
+```sql
+CREATE TABLE registry_servers (
+    uuid UUID PRIMARY KEY,
+    slug TEXT UNIQUE NOT NULL,
+    repository_url TEXT NOT NULL,
+    package_type TEXT,
+    transports TEXT[],
+    environment_variables TEXT[],
+    claimed_by_user_id UUID,
+    is_verified BOOLEAN DEFAULT false,
+    installation_count INTEGER DEFAULT 0,
+    rating_sum INTEGER DEFAULT 0,
+    rating_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+### Community Servers Table
+
+```sql
+CREATE TABLE community_servers (
+    uuid UUID PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    repository_url TEXT,
+    submitted_by_user_id UUID NOT NULL,
+    can_be_claimed BOOLEAN DEFAULT true,
+    installation_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+## Implementation Details
+
+### GitHub Verification
+
+The system verifies GitHub ownership through:
+1. OAuth token validation
+2. Repository access check
+3. Collaborator status verification
+4. Organization membership check
+
+### Auto-Detection Logic
+
+<CodeGroup>
+```javascript Package Detection
+// Detects npm, docker, or pypi packages
+function detectPackageType(repoFiles) {
+  if (repoFiles.includes('package.json')) return 'npm';
+  if (repoFiles.includes('Dockerfile')) return 'docker';
+  if (repoFiles.includes('setup.py')) return 'pypi';
+  return 'unknown';
+}
+```
+
+```javascript Transport Detection
+// Detects available MCP transports
+function detectTransports(packageJson) {
+  const transports = [];
+  if (packageJson.mcp?.stdio) transports.push('stdio');
+  if (packageJson.mcp?.sse) transports.push('sse');
+  if (packageJson.mcp?.http) transports.push('http');
+  return transports;
+}
+```
+</CodeGroup>
+
+### Statistics Migration
+
+When a server is claimed:
+1. Copy installation_count from community to registry
+2. Migrate user ratings and reviews
+3. Transfer activity logs
+4. Update trending calculations
+5. Remove from community table
+
+## Best Practices
+
+### For Server Authors
+
+<Steps>
+  <Step title="Prepare Repository">
+    - Ensure clear README documentation
+    - Add MCP configuration to package.json
+    - Include example usage
+  </Step>
+  <Step title="Test Locally">
+    - Verify server works with MCP clients
+    - Test all advertised features
+    - Check environment variable handling
+  </Step>
+  <Step title="Submit to Registry">
+    - Use the Smart Server Wizard
+    - Provide accurate metadata
+    - Include helpful descriptions
+  </Step>
+  <Step title="Maintain">
+    - Respond to user feedback
+    - Keep dependencies updated
+    - Monitor usage statistics
+  </Step>
+</Steps>
+
+### For Users
+
+- **Search effectively**: Use filters to find specific server types
+- **Check ratings**: Review community feedback before installing
+- **Report issues**: Help improve servers by reporting problems
+- **Rate servers**: Provide feedback to help others
+
+## Troubleshooting
+
+<Warning>
+**Common Issues:**
+- GitHub verification fails: Ensure you're logged in with the correct account
+- Auto-detection misses features: Check package.json MCP configuration
+- Statistics not updating: May take up to 5 minutes to reflect changes
+</Warning>
+
+## Future Enhancements
+
+- Automated testing of submitted servers
+- Enhanced verification badges
+- Server categories and tags
+- Advanced analytics dashboard
+- API rate limiting tiers
+
+## Related Documentation
+
+- [Sharing Servers](/platform/sharing-servers)
+- [API Reference](/api/reference)
+- [Platform Overview](/platform/overview)

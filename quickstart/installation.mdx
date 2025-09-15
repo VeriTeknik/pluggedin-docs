@@ -1,0 +1,496 @@
+---
+title: Installation Guide
+description: Get started with Plugged.in in minutes
+sidebarTitle: Installation
+---
+
+# Installation Guide
+
+Get up and running with Plugged.in quickly. Choose between using our hosted platform or self-hosting the application.
+
+## Quick Start (Hosted Platform)
+
+The fastest way to get started is using our hosted platform at [plugged.in](https://plugged.in).
+
+<Steps>
+  <Step title="Sign Up">
+    Create your account at [plugged.in/register](https://plugged.in/register)
+  </Step>
+  <Step title="Configure MCP Proxy">
+    Install the MCP proxy following the instructions in your dashboard
+  </Step>
+  <Step title="Add MCP Servers">
+    Browse and add servers from the registry or configure your own
+  </Step>
+  <Step title="Connect Your Client">
+    Use the generated configuration with Claude, Cursor, or other MCP clients
+  </Step>
+</Steps>
+
+## Self-Hosting
+
+For organizations that prefer to host their own instance, follow these comprehensive steps.
+
+### Prerequisites
+
+<CardGroup cols={2}>
+  <Card title="System Requirements" icon="server">
+    - Node.js 18+ or 20+
+    - PostgreSQL 15+
+    - 2GB+ RAM
+    - 10GB+ storage
+  </Card>
+  <Card title="Optional Services" icon="plug">
+    - Redis (for caching)
+    - SMTP server (for emails)
+    - S3-compatible storage
+  </Card>
+</CardGroup>
+
+### Installation Steps
+
+#### 1. Clone the Repositories
+
+<CodeGroup>
+```bash Web Application
+git clone https://github.com/VeriTeknik/pluggedin-app.git
+cd pluggedin-app
+```
+
+```bash MCP Proxy
+git clone https://github.com/VeriTeknik/pluggedin-mcp.git
+cd pluggedin-mcp
+```
+</CodeGroup>
+
+#### 2. Install Dependencies
+
+<Tabs>
+  <Tab title="pnpm (recommended)">
+    ```bash
+    # Web application
+    cd pluggedin-app
+    pnpm install
+
+    # MCP Proxy
+    cd ../pluggedin-mcp
+    npm install
+    ```
+  </Tab>
+  <Tab title="npm">
+    ```bash
+    # Web application
+    cd pluggedin-app
+    npm install
+
+    # MCP Proxy
+    cd ../pluggedin-mcp
+    npm install
+    ```
+  </Tab>
+</Tabs>
+
+#### 3. Configure Environment Variables
+
+Create a `.env` file in the `pluggedin-app` directory based on `.env.example`:
+
+<Tabs>
+  <Tab title="Required Configuration">
+    ```bash
+    # Database
+    DATABASE_URL="postgresql://user:password@localhost:5432/pluggedin"
+    DATABASE_SSL=false                     # Set to true for production
+    DATABASE_SSL_REJECT_UNAUTHORIZED=false # Set to false for self-signed certs
+
+    # Authentication
+    NEXTAUTH_URL="http://localhost:12005"
+    NEXTAUTH_SECRET="your-secret-key-here" # Generate with: openssl rand -base64 32
+    NEXT_PUBLIC_APP_URL="http://localhost:12005"
+
+    # Encryption (REQUIRED for MCP server configs)
+    NEXT_SERVER_ACTIONS_ENCRYPTION_KEY="" # Generate with: openssl rand -base64 32
+
+    # Feature Flags
+    ENABLE_RAG=true                    # Enable document processing
+    ENABLE_NOTIFICATIONS=true          # Enable notification system
+    ENABLE_EMAIL_VERIFICATION=false    # Email verification for new users
+    ```
+  </Tab>
+
+  <Tab title="Email Configuration">
+    ```bash
+    # Email Server (Optional but recommended)
+    EMAIL_FROM="noreply@plugged.in"
+    EMAIL_FROM_NAME="Pluggedin"
+    EMAIL_REPLY_TO="support@plugged.in"
+    EMAIL_SERVER_HOST="smtp.example.com"
+    EMAIL_SERVER_PORT="587"
+    EMAIL_SERVER_USER=""
+    EMAIL_SERVER_PASSWORD=""
+
+    # Email Automation
+    ENABLE_WELCOME_EMAILS=true
+    ENABLE_FOLLOW_UP_EMAILS=true
+    WELCOME_EMAIL_DELAY_MINUTES=5
+    FOLLOW_UP_2_DAYS=2
+    FOLLOW_UP_5_DAYS=5
+
+    # Unsubscribe Security
+    UNSUBSCRIBE_TOKEN_SECRET="" # Generate with: openssl rand -base64 32
+    ```
+  </Tab>
+
+  <Tab title="OAuth Providers">
+    ```bash
+    # GitHub OAuth (for registry features)
+    GITHUB_ID=""
+    GITHUB_SECRET=""
+    GITHUB_TOKEN=""            # For API calls
+    GITHUB_CLIENT_ID=""        # For registry auth
+
+    # Google OAuth
+    GOOGLE_CLIENT_ID=""
+    GOOGLE_CLIENT_SECRET=""
+
+    # Twitter OAuth
+    TWITTER_CLIENT_ID=""
+    TWITTER_CLIENT_SECRET=""
+    ```
+  </Tab>
+
+  <Tab title="AI & Registry">
+    ```bash
+    # AI Model API Keys (Optional)
+    ANTHROPIC_API_KEY=""
+    OPENAI_API_KEY=""
+    GOOGLE_API_KEY=""
+
+    # Registry Configuration
+    REGISTRY_API_URL="http://localhost:3001"
+    REGISTRY_INTERNAL_API_KEY="your-secure-internal-api-key"
+    REGISTRY_AUTH_TOKEN=""     # JWT for publishing
+
+    # RAG Configuration
+    RAG_API_URL=""
+    ```
+  </Tab>
+
+  <Tab title="Advanced Settings">
+    ```bash
+    # Admin Configuration
+    ADMIN_NOTIFICATION_EMAILS=""           # Comma-separated admin emails
+    ADMIN_NOTIFICATION_SEVERITIES="ALERT,CRITICAL"
+    ADMIN_DAILY_SUMMARY=false
+    ADMIN_FAILED_LOGIN_THRESHOLD=5
+    ADMIN_MIGRATION_SECRET=""
+    NEXT_PUBLIC_ADMIN_USERS=""             # Admin user emails
+
+    # MCP Resource Limits
+    MCP_CPU_CORES_MAX=0.5                 # 50% of one core
+    MCP_MEMORY_MAX_MB=512
+    MCP_IO_READ_MBPS=10
+    MCP_IO_WRITE_MBPS=5
+    MCP_PROCESS_TIMEOUT_MS=300000         # 5 minutes
+    MCP_STARTUP_TIMEOUT_MS=10000          # 10 seconds
+
+    # Package Management
+    MCP_PACKAGE_STORE_DIR="/var/mcp-packages"
+    MCP_PNPM_STORE_DIR="/var/mcp-packages/pnpm-store"
+    MCP_UV_CACHE_DIR="/var/mcp-packages/uv-cache"
+    MCP_PACKAGE_CACHE_DAYS=30
+    MCP_PREWARM_COMMON_PACKAGES=true
+
+    # Isolation Configuration
+    MCP_ISOLATION_TYPE="bubblewrap"       # bubblewrap | firejail | none
+    MCP_ISOLATION_FALLBACK="firejail"
+    MCP_ENABLE_NETWORK_ISOLATION=false
+
+    # Stripe Payments (Optional)
+    STRIPE_SECRET_KEY=""
+    STRIPE_WEBHOOK_SECRET=""
+    NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=""
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+**Security Requirements:**
+1. **Generate unique secrets** for each key using `openssl rand -base64 32`
+2. **Never commit** actual keys to version control
+3. **Use different keys** for NEXTAUTH_SECRET and UNSUBSCRIBE_TOKEN_SECRET
+4. **Enable SSL** for production database connections
+</Warning>
+
+<Note>
+**Quick secret generation commands:**
+```bash
+# Generate all required secrets at once
+echo "NEXTAUTH_SECRET=$(openssl rand -base64 32)"
+echo "NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=$(openssl rand -base64 32)"
+echo "UNSUBSCRIBE_TOKEN_SECRET=$(openssl rand -base64 32)"
+echo "REGISTRY_INTERNAL_API_KEY=$(openssl rand -base64 32)"
+```
+</Note>
+
+#### 4. Set Up Database
+
+```bash
+# Create database
+createdb pluggedin
+
+# Run migrations
+cd pluggedin-app
+pnpm db:migrate
+
+# Optional: Run auth migrations
+pnpm db:migrate:auth
+```
+
+#### 5. Start the Applications
+
+<CodeGroup>
+```bash Development
+# Terminal 1: Web application
+cd pluggedin-app
+pnpm dev
+
+# Terminal 2: MCP Proxy
+cd pluggedin-mcp
+npm run dev
+```
+
+```bash Production
+# Build and start web application
+cd pluggedin-app
+pnpm build
+pnpm start
+
+# Build and start MCP proxy
+cd pluggedin-mcp
+npm run build
+npm start
+```
+</CodeGroup>
+
+The application will be available at:
+- Web Interface: `http://localhost:12005`
+- MCP Proxy: `http://localhost:3000`
+
+## Docker Installation
+
+For containerized deployment, use our Docker setup.
+
+### Using Docker Compose
+
+```yaml
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: pluggedin
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  app:
+    build: ./pluggedin-app
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/pluggedin
+      NEXTAUTH_URL: http://localhost:12005
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
+    ports:
+      - "12005:12005"
+    depends_on:
+      - postgres
+
+  mcp-proxy:
+    build: ./pluggedin-mcp
+    environment:
+      PLUGGEDIN_API_KEY: ${PLUGGEDIN_API_KEY}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - app
+
+volumes:
+  postgres_data:
+```
+
+Start with:
+```bash
+docker-compose up -d
+```
+
+### Individual Docker Containers
+
+<Tabs>
+  <Tab title="Build Images">
+    ```bash
+    # Build web application
+    cd pluggedin-app
+    docker build -t pluggedin-app .
+
+    # Build MCP proxy
+    cd pluggedin-mcp
+    docker build -t pluggedin-mcp .
+    ```
+  </Tab>
+  <Tab title="Run Containers">
+    ```bash
+    # Run PostgreSQL
+    docker run -d \
+      --name pluggedin-db \
+      -e POSTGRES_DB=pluggedin \
+      -e POSTGRES_USER=postgres \
+      -e POSTGRES_PASSWORD=postgres \
+      -p 5432:5432 \
+      postgres:15
+
+    # Run web application
+    docker run -d \
+      --name pluggedin-app \
+      -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/pluggedin \
+      -e NEXTAUTH_URL=http://localhost:12005 \
+      -e NEXTAUTH_SECRET=your-secret-key \
+      -p 12005:12005 \
+      pluggedin-app
+
+    # Run MCP proxy
+    docker run -d \
+      --name pluggedin-mcp \
+      -e PLUGGEDIN_API_KEY=your-api-key \
+      -p 3000:3000 \
+      pluggedin-mcp
+    ```
+  </Tab>
+</Tabs>
+
+## MCP Client Configuration
+
+After installation, configure your MCP client to use Plugged.in.
+
+### Claude Desktop
+
+Add to your Claude configuration file:
+
+<Tabs>
+  <Tab title="macOS">
+    Location: `~/Library/Application Support/Claude/claude_desktop_config.json`
+
+    ```json
+    {
+      "mcpServers": {
+        "pluggedin": {
+          "command": "node",
+          "args": ["/path/to/pluggedin-mcp/dist/index.js"],
+          "env": {
+            "PLUGGEDIN_API_KEY": "your-api-key"
+          }
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Windows">
+    Location: `%APPDATA%\Claude\claude_desktop_config.json`
+
+    ```json
+    {
+      "mcpServers": {
+        "pluggedin": {
+          "command": "node",
+          "args": ["C:\\path\\to\\pluggedin-mcp\\dist\\index.js"],
+          "env": {
+            "PLUGGEDIN_API_KEY": "your-api-key"
+          }
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Other MCP Clients
+
+Most MCP clients support similar configuration. Key points:
+- **Command**: `node` or `npx`
+- **Script**: Path to `pluggedin-mcp/dist/index.js`
+- **API Key**: Your Plugged.in API key
+
+## Verification
+
+Verify your installation is working:
+
+<Steps>
+  <Step title="Check Web Interface">
+    Navigate to `http://localhost:12005` and verify the page loads
+  </Step>
+  <Step title="Test Database">
+    ```bash
+    cd pluggedin-app
+    pnpm db:migrate
+    ```
+  </Step>
+  <Step title="Verify MCP Proxy">
+    ```bash
+    curl http://localhost:3000/health
+    ```
+  </Step>
+  <Step title="Test MCP Connection">
+    Open your MCP client and verify it connects to Plugged.in
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Database Connection Issues">
+    - Verify PostgreSQL is running
+    - Check DATABASE_URL format
+    - Ensure database exists
+    - Check user permissions
+  </Accordion>
+
+  <Accordion title="Port Already in Use">
+    Change the port in `.env`:
+    ```bash
+    # Change web app port
+    PORT=3001
+
+    # Change MCP proxy port
+    MCP_PORT=3002
+    ```
+  </Accordion>
+
+  <Accordion title="Authentication Errors">
+    - Regenerate NEXTAUTH_SECRET
+    - Clear browser cookies
+    - Check NEXTAUTH_URL matches your domain
+  </Accordion>
+
+  <Accordion title="MCP Client Not Connecting">
+    - Verify API key is correct
+    - Check MCP proxy is running
+    - Review client configuration path
+    - Check firewall settings
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+- [Configure your installation](/quickstart/configuration)
+- [Add MCP servers](/platform/registry)
+- [Set up document library](/platform/overview)
+- [Review security settings](/security/overview)
+
+## Support
+
+Need help? We're here to assist:
+- [GitHub Issues](https://github.com/VeriTeknik/pluggedin-app/issues)
+- [Community Discord](https://discord.gg/pluggedin)
+- Email: support@plugged.in

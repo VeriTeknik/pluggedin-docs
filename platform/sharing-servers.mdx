@@ -1,0 +1,160 @@
+---
+title: Sharing MCP Servers
+description: How MCP server sharing works in Plugged.in with security best practices
+sidebarTitle: Server Sharing
+---
+
+# Sharing MCP Servers in Plugged.in
+
+This document explains how MCP server sharing works in Plugged.in, focusing on security practices and how sensitive information is handled.
+
+## Security Overview
+
+When you share an MCP server in Plugged.in, we prioritize security by ensuring that sensitive information like credentials, API keys, and private URLs are never exposed to other users.
+
+## What Information is Shared?
+
+When you share a server, the following information is shared:
+
+<CardGroup cols={2}>
+  <Card title="Shared Information" icon="share">
+    - Server title and description
+    - Server type (STDIO, SSE, or Streamable HTTP)
+    - Basic command and arguments structure
+    - URL structure (with credentials removed)
+  </Card>
+  <Card title="Protected Information" icon="lock">
+    - Passwords and API keys in database URLs
+    - Environment variables containing secrets
+    - Authentication tokens
+    - Private API keys
+    - Any other credentials
+  </Card>
+</CardGroup>
+
+## How Sanitization Works
+
+When you share an MCP server, Plugged.in automatically performs these security measures:
+
+<Steps>
+  <Step title="Template Creation">
+    We create a sanitized template of your server configuration
+  </Step>
+  <Step title="Credential Removal">
+    Any passwords in connection strings are replaced with placeholders
+  </Step>
+  <Step title="Environment Variable Protection">
+    Sensitive environment variables are replaced with descriptive placeholders
+  </Step>
+  <Step title="API Key Protection">
+    API keys in URLs or parameters are removed
+  </Step>
+</Steps>
+
+### Example of Sanitization
+
+<CodeGroup>
+```text Original
+postgresql://postgres:MySecretPassword123!@database.example.com:5432/my_database
+```
+
+```text Sanitized
+postgresql://postgres:<YOUR_PASSWORD>@database.example.com:5432/my_database
+```
+</CodeGroup>
+
+## When Importing Shared Servers
+
+When someone imports a server you've shared:
+
+1. **They receive the sanitized template** with placeholders
+2. **They must provide their own credentials** to make the server work
+3. **The template serves as a guide** for proper configuration
+4. **A note indicates** that the server was imported from a shared template
+
+<Note>
+Imported servers are marked with a special indicator showing they came from a shared template, helping users understand they need to configure their own credentials.
+</Note>
+
+## Best Practices
+
+Even with these protections in place, it's good practice to:
+
+<AccordionGroup>
+  <Accordion title="Review Before Sharing">
+    Always review what you're sharing before making it public. Check the server configuration preview to ensure no sensitive data is visible.
+  </Accordion>
+
+  <Accordion title="Use Descriptive Information">
+    Provide clear titles and descriptions to help others understand the purpose of the server and any specific requirements.
+  </Accordion>
+
+  <Accordion title="Add Setup Instructions">
+    Consider adding setup instructions in the description if there are specific requirements or configuration steps needed.
+  </Accordion>
+
+  <Accordion title="Test the Template">
+    If possible, test importing your own shared server to verify the sanitization worked correctly.
+  </Accordion>
+</AccordionGroup>
+
+## Sharing Process
+
+### Making a Server Public
+
+1. Navigate to your MCP Servers page
+2. Click on the server you want to share
+3. Toggle the "Share" option
+4. Review the sanitized configuration
+5. Add a description for other users
+6. Confirm sharing
+
+### Discovering Shared Servers
+
+Users can discover shared servers through:
+- **Search Page**: Browse all publicly shared servers at `/search`
+- **Search**: Find servers by name or description
+- **Trending**: View popular servers based on usage
+- **User Profiles**: See servers shared by specific users
+
+## Privacy Considerations
+
+<Info>
+**Your privacy is protected:**
+- Original configuration data never leaves your account
+- Sanitization happens server-side before sharing
+- You can unshare a server at any time
+- Usage statistics are anonymous
+</Info>
+
+## Troubleshooting
+
+### Common Issues
+
+<Tabs>
+  <Tab title="Credentials Not Working">
+    If an imported server isn't working:
+    - Verify you've replaced all placeholder values
+    - Check environment variable names match
+    - Ensure API keys are correctly formatted
+    - Test connection strings separately
+  </Tab>
+
+  <Tab title="Missing Configuration">
+    Some servers may require additional setup:
+    - Check the server description for requirements
+    - Look for documentation links
+    - Verify all dependencies are installed
+    - Check for required environment variables
+  </Tab>
+</Tabs>
+
+## Questions or Concerns
+
+If you have any questions or concerns about server sharing security, please contact us at support@plugged.in.
+
+## Related Documentation
+
+- [Security Overview](/security/overview)
+- [Platform Overview](/platform/overview)
+- [User Management](/platform/user-management)
