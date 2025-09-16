@@ -1,0 +1,346 @@
+---
+title: RAG Knowledge Base
+description: Learn how to build and manage a knowledge base with RAG (Retrieval-Augmented Generation) in Plugged.in
+icon: 'database'
+---
+
+# RAG Knowledge Base Tutorial
+
+Build a powerful knowledge base using Retrieval-Augmented Generation (RAG) to enhance your AI interactions with contextual information.
+
+## Overview
+
+The RAG (Retrieval-Augmented Generation) system in Plugged.in allows you to create project-specific knowledge bases that can be queried by AI models through MCP servers. This enables AI assistants to access your documentation, notes, and other text content to provide more accurate and contextual responses.
+
+### Key Features
+
+<CardGroup cols={2}>
+  <Card title="Document Management" icon="file">
+    Upload and organize documents in multiple formats (PDF, DOCX, TXT, Markdown)
+  </Card>
+
+  <Card title="Semantic Search" icon="search">
+    Advanced vector-based search for finding relevant information quickly
+  </Card>
+
+  <Card title="Project Isolation" icon="lock">
+    Complete data isolation between projects for security and privacy
+  </Card>
+
+  <Card title="AI Integration" icon="robot">
+    Seamless integration with MCP servers for AI-powered queries
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+Before setting up your RAG knowledge base, ensure you have:
+
+<Steps>
+  <Step title="Plugged.in Account">
+    An active account with at least one project created
+  </Step>
+
+  <Step title="API Key">
+    A valid API key for authentication (available in Settings → API Keys)
+  </Step>
+
+  <Step title="Documents">
+    Text-based documents you want to include in your knowledge base
+  </Step>
+</Steps>
+
+## Step 1: Enable RAG Features
+
+First, ensure RAG features are enabled for your project:
+
+1. Navigate to **Settings** → **Project Settings**
+2. Enable the "RAG Features" toggle
+3. Save your settings
+
+<Note>
+RAG features may require additional permissions or a specific subscription tier. Contact support if you don't see this option.
+</Note>
+
+## Step 2: Upload Documents
+
+### Using the Web Interface
+
+1. Go to **Library** in the sidebar
+2. Click **Upload Documents**
+3. Select your files (supported formats: PDF, DOCX, TXT, MD)
+4. Add optional metadata:
+   - Title
+   - Description
+   - Tags
+   - Category
+
+### Using the API
+
+```bash
+curl -X POST https://plugged.in/api/documents \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@document.pdf" \
+  -F "metadata={\"title\":\"My Document\",\"tags\":[\"tutorial\",\"rag\"]}"
+```
+
+### Supported File Types
+
+| Format | Extensions | Max Size |
+|--------|------------|----------|
+| PDF | .pdf | 10 MB |
+| Microsoft Word | .docx, .doc | 10 MB |
+| Text | .txt | 5 MB |
+| Markdown | .md, .mdx | 5 MB |
+| HTML | .html, .htm | 5 MB |
+
+## Step 3: Configure MCP Server
+
+Add the Plugged.in RAG MCP server to your configuration:
+
+```json
+{
+  "mcpServers": {
+    "pluggedin-rag": {
+      "command": "npx",
+      "args": ["-y", "@pluggedin/pluggedin-mcp-proxy"],
+      "env": {
+        "PLUGGEDIN_API_KEY": "YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+## Step 4: Query Your Knowledge Base
+
+Once configured, the RAG system provides several tools for querying:
+
+### Available Tools
+
+#### `pluggedin_rag_query`
+Search and retrieve relevant information from your knowledge base.
+
+**Parameters:**
+- `query` (required): Your search query
+- `max_results` (optional): Maximum number of results (default: 5)
+- `threshold` (optional): Relevance threshold 0-1 (default: 0.7)
+
+**Example:**
+```json
+{
+  "tool": "pluggedin_rag_query",
+  "parameters": {
+    "query": "How to configure authentication?",
+    "max_results": 3
+  }
+}
+```
+
+## Step 5: Managing Your Knowledge Base
+
+### Update Documents
+
+Documents can be updated through the web interface or API:
+
+```bash
+curl -X PUT https://plugged.in/api/documents/{document_id} \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Updated Title",
+    "content": "Updated content...",
+    "metadata": {"version": "2.0"}
+  }'
+```
+
+### Delete Documents
+
+Remove documents when they're no longer needed:
+
+```bash
+curl -X DELETE https://plugged.in/api/documents/{document_id} \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Search Documents
+
+Search your knowledge base programmatically:
+
+```bash
+curl -X POST https://plugged.in/api/documents/search \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "authentication setup",
+    "limit": 10,
+    "filters": {
+      "tags": ["security", "auth"]
+    }
+  }'
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Document Organization">
+    - Use clear, descriptive titles
+    - Apply consistent tagging taxonomy
+    - Group related documents by category
+    - Keep documents focused on single topics
+  </Accordion>
+
+  <Accordion title="Content Quality">
+    - Use plain text when possible for better indexing
+    - Break large documents into smaller, focused pieces
+    - Include relevant keywords naturally
+    - Update outdated information regularly
+  </Accordion>
+
+  <Accordion title="Query Optimization">
+    - Use specific, descriptive queries
+    - Include context in your questions
+    - Experiment with different phrasings
+    - Adjust relevance thresholds as needed
+  </Accordion>
+
+  <Accordion title="Security">
+    - Never upload sensitive credentials
+    - Use project isolation for different clients
+    - Regularly audit document access logs
+    - Remove obsolete documents promptly
+  </Accordion>
+</AccordionGroup>
+
+## Advanced Features
+
+### AI-Generated Documents
+
+Plugged.in supports AI-generated documents with full attribution tracking:
+
+```bash
+curl -X POST https://plugged.in/api/documents/ai \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "API Documentation",
+    "content": "# API Overview\n\n...",
+    "metadata": {
+      "model": {
+        "name": "Claude 3.5 Sonnet",
+        "provider": "Anthropic",
+        "version": "3.5"
+      }
+    }
+  }'
+```
+
+### Vector Search Configuration
+
+Customize vector search behavior:
+
+```json
+{
+  "search_config": {
+    "embedding_model": "text-embedding-ada-002",
+    "similarity_metric": "cosine",
+    "reranking": true,
+    "hybrid_search": true
+  }
+}
+```
+
+### Bulk Operations
+
+Import multiple documents at once:
+
+```bash
+curl -X POST https://plugged.in/api/documents/bulk \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "documents": [
+      {"title": "Doc 1", "content": "..."},
+      {"title": "Doc 2", "content": "..."}
+    ]
+  }'
+```
+
+## Troubleshooting
+
+<Warning>
+Common issues and their solutions:
+</Warning>
+
+### Documents Not Appearing in Search
+
+1. **Check indexing status**: Documents may take 1-2 minutes to index
+2. **Verify file format**: Ensure documents are in supported formats
+3. **Check file size**: Files over 10MB are rejected
+4. **Review content**: Very short documents may not index well
+
+### Low Relevance Scores
+
+- Improve document quality with more descriptive content
+- Use specific keywords that match likely queries
+- Break complex topics into focused documents
+- Consider adjusting the similarity threshold
+
+### API Rate Limits
+
+RAG operations have the following limits:
+- Document uploads: 100 per hour
+- Search queries: 1000 per hour
+- AI document creation: 10 per hour
+
+## Example Use Cases
+
+### Customer Support Knowledge Base
+
+Build a comprehensive support knowledge base:
+
+1. Upload product documentation
+2. Add FAQ documents
+3. Include troubleshooting guides
+4. Configure MCP server for support agents
+5. Query for instant answers during customer interactions
+
+### Development Documentation
+
+Create a technical knowledge base for your team:
+
+1. Upload API documentation
+2. Add architecture diagrams (as text descriptions)
+3. Include coding standards and best practices
+4. Enable for development MCP servers
+5. Query during code reviews and planning
+
+### Research Repository
+
+Organize research materials:
+
+1. Upload research papers and notes
+2. Tag by topic and date
+3. Add summaries and key findings
+4. Configure for research assistants
+5. Query for literature reviews and citations
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Integration" icon="code" href="/tutorials/api-integration">
+    Learn how to integrate RAG with your applications
+  </Card>
+
+  <Card title="Team Collaboration" icon="users" href="/tutorials/team-collaboration">
+    Share knowledge bases with your team
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+- [RAG API Reference](/api/reference#rag)
+- [Security Best Practices](/security/overview)
+- [Platform Overview](/platform/overview)
+- [MCP Proxy Documentation](/mcp-proxy/overview)

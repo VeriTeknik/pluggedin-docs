@@ -1,0 +1,724 @@
+---
+title: Building Custom MCP Servers
+description: Learn how to build, test, and deploy your own custom MCP servers for Plugged.in
+icon: 'code'
+---
+
+# Building Custom MCP Servers
+
+Learn how to create your own Model Context Protocol (MCP) servers to extend AI capabilities with custom tools, resources, and integrations.
+
+## Overview
+
+MCP servers are the building blocks that enable AI assistants to interact with external systems. By building custom MCP servers, you can:
+
+- Integrate proprietary systems and APIs
+- Create specialized tools for your domain
+- Expose custom data sources
+- Build workflow automations
+- Extend AI capabilities for your specific needs
+
+## MCP Server Architecture
+
+### Core Components
+
+Every MCP server consists of three main components:
+
+<CardGroup cols={3}>
+  <Card title="Transport Layer" icon="network-wired">
+    Handles communication between the client and server (STDIO, SSE, HTTP)
+  </Card>
+
+  <Card title="Protocol Handler" icon="exchange">
+    Implements the MCP specification for message exchange
+  </Card>
+
+  <Card title="Tool Implementation" icon="wrench">
+    Your custom logic for tools, resources, and prompts
+  </Card>
+</CardGroup>
+
+### Transport Types
+
+| Transport | Use Case | Pros | Cons |
+|-----------|----------|------|------|
+| **STDIO** | Local processes | Simple, secure | Single client only |
+| **SSE** | Web-based servers | Real-time updates | One-way communication |
+| **HTTP** | REST APIs | Scalable, standard | Higher latency |
+
+## Getting Started
+
+### Prerequisites
+
+<Steps>
+  <Step title="Development Environment">
+    - Node.js 18+ or Python 3.8+
+    - Git for version control
+    - Text editor or IDE
+  </Step>
+
+  <Step title="MCP SDK">
+    Install the MCP SDK for your language:
+    ```bash
+    # Node.js
+    npm install @modelcontextprotocol/sdk
+
+    # Python
+    pip install mcp
+    ```
+  </Step>
+
+  <Step title="Plugged.in Account">
+    Create an account to test and deploy your server
+  </Step>
+</Steps>
+
+## Building Your First Server
+
+### Node.js Example
+
+Let's build a simple weather MCP server:
+
+```javascript
+// weather-server.js
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import axios from 'axios';
+
+class WeatherServer {
+  constructor() {
+    this.server = new Server(
+      {
+        name: 'weather-server',
+        version: '1.0.0',
+      },
+      {
+        capabilities: {
+          tools: {},
+        },
+      }
+    );
+
+    this.setupHandlers();
+  }
+
+  setupHandlers() {
+    // List available tools
+    this.server.setRequestHandler('tools/list', async () => ({
+      tools: [
+        {
+          name: 'get_weather',
+          description: 'Get current weather for a location',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              location: {
+                type: 'string',
+                description: 'City name or coordinates',
+              },
+              units: {
+                type: 'string',
+                enum: ['celsius', 'fahrenheit'],
+                default: 'celsius',
+              },
+            },
+            required: ['location'],
+          },
+        },
+      ],
+    }));
+
+    // Handle tool execution
+    this.server.setRequestHandler('tools/call', async (request) => {
+      const { name, arguments: args } = request.params;
+
+      if (name === 'get_weather') {
+        return this.getWeather(args);
+      }
+
+      throw new Error(`Unknown tool: ${name}`);
+    });
+  }
+
+  async getWeather(args) {
+    const { location, units = 'celsius' } = args;
+
+    // Call weather API (replace with your API)
+    const response = await axios.get(`https://api.weather.com/current`, {
+      params: {
+        q: location,
+        units: units === 'celsius' ? 'metric' : 'imperial',
+      },
+    });
+
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Current weather in ${location}: ${response.data.temp}° with ${response.data.description}`,
+        },
+      ],
+    };
+  }
+
+  async run() {
+    const transport = new StdioServerTransport();
+    await this.server.connect(transport);
+    console.error('Weather MCP server running');
+  }
+}
+
+// Start the server
+const server = new WeatherServer();
+server.run().catch(console.error);
+```
+
+### Python Example
+
+The same server in Python:
+
+```python
+# weather_server.py
+import asyncio
+import json
+from mcp.server.models import InitializationOptions
+from mcp.server import NotificationOptions, Server
+from mcp.server.stdio import stdio_server
+import mcp.types as types
+import httpx
+
+server = Server("weather-server")
+
+@server.list_tools()
+async def handle_list_tools() -> list[types.Tool]:
+    """List available tools."""
+    return [
+        types.Tool(
+            name="get_weather",
+            description="Get current weather for a location",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "City name or coordinates",
+                    },
+                    "units": {
+                        "type": "string",
+                        "enum": ["celsius", "fahrenheit"],
+                        "default": "celsius",
+                    },
+                },
+                "required": ["location"],
+            },
+        )
+    ]
+
+@server.call_tool()
+async def handle_call_tool(
+    name: str, arguments: dict | None
+) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
+    """Handle tool execution."""
+    if name == "get_weather":
+        return await get_weather(arguments or {})
+
+    raise ValueError(f"Unknown tool: {name}")
+
+async def get_weather(args: dict):
+    """Fetch weather data."""
+    location = args.get("location")
+    units = args.get("units", "celsius")
+
+    # Call weather API
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            "https://api.weather.com/current",
+            params={
+                "q": location,
+                "units": "metric" if units == "celsius" else "imperial"
+            }
+        )
+        data = response.json()
+
+    return [
+        types.TextContent(
+            type="text",
+            text=f"Current weather in {location}: {data['temp']}° with {data['description']}"
+        )
+    ]
+
+async def main():
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(
+            read_stream,
+            write_stream,
+            InitializationOptions(
+                server_name="weather-server",
+                server_version="1.0.0",
+                capabilities=server.get_capabilities(
+                    notification_options=NotificationOptions(),
+                    experimental_capabilities={},
+                ),
+            ),
+        )
+
+if __name__ == "__main__":
+    asyncio.run(main())
+```
+
+## Advanced Features
+
+### Resources
+
+Expose data sources that AI can read:
+
+```javascript
+// Add resource support
+server.setRequestHandler('resources/list', async () => ({
+  resources: [
+    {
+      uri: 'weather://forecast/weekly',
+      name: 'Weekly Forecast',
+      description: 'Get 7-day weather forecast',
+      mimeType: 'application/json',
+    },
+  ],
+}));
+
+server.setRequestHandler('resources/read', async (request) => {
+  const { uri } = request.params;
+
+  if (uri === 'weather://forecast/weekly') {
+    const forecast = await getWeeklyForecast();
+    return {
+      contents: [
+        {
+          uri,
+          mimeType: 'application/json',
+          text: JSON.stringify(forecast),
+        },
+      ],
+    };
+  }
+});
+```
+
+### Prompts
+
+Provide reusable prompt templates:
+
+```javascript
+server.setRequestHandler('prompts/list', async () => ({
+  prompts: [
+    {
+      name: 'weather_report',
+      description: 'Generate a detailed weather report',
+      arguments: [
+        {
+          name: 'location',
+          description: 'Location for the report',
+          required: true,
+        },
+      ],
+    },
+  ],
+}));
+
+server.setRequestHandler('prompts/get', async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === 'weather_report') {
+    return {
+      description: 'Weather Report Template',
+      messages: [
+        {
+          role: 'user',
+          content: {
+            type: 'text',
+            text: `Generate a detailed weather report for ${args.location} including current conditions, forecast, and recommendations.`,
+          },
+        },
+      ],
+    };
+  }
+});
+```
+
+### Notifications
+
+Send real-time updates to clients:
+
+```javascript
+// Send notifications for severe weather
+async function checkSevereWeather() {
+  const alerts = await getWeatherAlerts();
+
+  if (alerts.length > 0) {
+    await server.sendNotification('notifications/resources/updated', {
+      uri: 'weather://alerts/current',
+    });
+  }
+}
+
+// Run periodic checks
+setInterval(checkSevereWeather, 60000);
+```
+
+## Testing Your Server
+
+### Local Testing
+
+Test your server locally using the MCP Inspector:
+
+```bash
+# Install MCP Inspector
+npm install -g @modelcontextprotocol/inspector
+
+# Run your server with the inspector
+mcp-inspector node weather-server.js
+```
+
+### Unit Testing
+
+Write tests for your server logic:
+
+```javascript
+// weather-server.test.js
+import { describe, it, expect } from 'vitest';
+import { WeatherServer } from './weather-server.js';
+
+describe('WeatherServer', () => {
+  it('should list available tools', async () => {
+    const server = new WeatherServer();
+    const response = await server.handleListTools();
+
+    expect(response.tools).toHaveLength(1);
+    expect(response.tools[0].name).toBe('get_weather');
+  });
+
+  it('should fetch weather data', async () => {
+    const server = new WeatherServer();
+    const result = await server.getWeather({
+      location: 'London',
+      units: 'celsius',
+    });
+
+    expect(result.content[0].text).toContain('London');
+  });
+});
+```
+
+### Integration Testing
+
+Test with Plugged.in platform:
+
+```bash
+# Configure your server in config
+cat > mcp-test-config.json << EOF
+{
+  "mcpServers": {
+    "weather-test": {
+      "command": "node",
+      "args": ["./weather-server.js"]
+    }
+  }
+}
+EOF
+
+# Test with Plugged.in CLI
+npx @pluggedin/cli test mcp-test-config.json
+```
+
+## Packaging and Distribution
+
+### Package Structure
+
+Organize your MCP server project:
+
+```
+weather-mcp-server/
+├── package.json
+├── README.md
+├── LICENSE
+├── src/
+│   ├── index.js
+│   ├── handlers/
+│   │   ├── tools.js
+│   │   ├── resources.js
+│   │   └── prompts.js
+│   └── utils/
+│       └── weather-api.js
+├── test/
+│   └── server.test.js
+└── examples/
+    └── config.json
+```
+
+### Package.json Configuration
+
+```json
+{
+  "name": "@yourorg/weather-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for weather information",
+  "main": "src/index.js",
+  "type": "module",
+  "bin": {
+    "weather-mcp": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "vitest",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "axios": "^1.6.0"
+  },
+  "keywords": ["mcp", "weather", "ai", "assistant"],
+  "author": "Your Name",
+  "license": "MIT"
+}
+```
+
+### Publishing to npm
+
+```bash
+# Build and test
+npm run test
+npm run lint
+
+# Login to npm
+npm login
+
+# Publish
+npm publish --access public
+```
+
+## Deployment Options
+
+### Docker Deployment
+
+Create a Dockerfile for containerized deployment:
+
+```dockerfile
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --production
+
+COPY src ./src
+
+EXPOSE 3000
+
+CMD ["node", "src/index.js"]
+```
+
+### Systemd Service
+
+Deploy as a system service:
+
+```ini
+[Unit]
+Description=Weather MCP Server
+After=network.target
+
+[Service]
+Type=simple
+User=mcp-user
+WorkingDirectory=/opt/weather-mcp-server
+ExecStart=/usr/bin/node src/index.js
+Restart=always
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Cloud Deployment
+
+Deploy to cloud platforms:
+
+<Tabs>
+  <Tab title="Vercel">
+    ```json
+    {
+      "functions": {
+        "api/mcp.js": {
+          "runtime": "nodejs20.x"
+        }
+      }
+    }
+    ```
+  </Tab>
+
+  <Tab title="AWS Lambda">
+    ```yaml
+    functions:
+      weather-mcp:
+        handler: src/lambda.handler
+        runtime: nodejs20.x
+        environment:
+          API_KEY: ${env:WEATHER_API_KEY}
+    ```
+  </Tab>
+
+  <Tab title="Google Cloud">
+    ```yaml
+    runtime: nodejs20
+    service: weather-mcp
+
+    handlers:
+    - url: /.*
+      script: auto
+    ```
+  </Tab>
+</Tabs>
+
+## Publishing to Plugged.in Registry
+
+### Prepare for Registry
+
+1. **Documentation**: Write comprehensive README
+2. **Examples**: Provide configuration examples
+3. **Testing**: Ensure all tests pass
+4. **Licensing**: Choose appropriate license
+
+### Submit to Registry
+
+```bash
+# Install Plugged.in CLI
+npm install -g @pluggedin/cli
+
+# Login
+pluggedin login
+
+# Submit server
+pluggedin submit \
+  --name "weather-server" \
+  --repo "https://github.com/yourorg/weather-mcp-server" \
+  --description "Get real-time weather information" \
+  --category "utilities"
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Error Handling">
+    - Always validate input parameters
+    - Return meaningful error messages
+    - Implement retry logic for external APIs
+    - Log errors for debugging
+  </Accordion>
+
+  <Accordion title="Performance">
+    - Cache frequently accessed data
+    - Implement rate limiting
+    - Use connection pooling
+    - Optimize response sizes
+  </Accordion>
+
+  <Accordion title="Security">
+    - Never expose API keys in code
+    - Validate and sanitize all inputs
+    - Use HTTPS for external requests
+    - Implement authentication if needed
+  </Accordion>
+
+  <Accordion title="Documentation">
+    - Document all tools and parameters
+    - Provide usage examples
+    - Include troubleshooting guide
+    - Maintain changelog
+  </Accordion>
+</AccordionGroup>
+
+## Common Patterns
+
+### Database Integration
+
+```javascript
+import { createPool } from 'mysql2/promise';
+
+class DatabaseMCPServer {
+  constructor() {
+    this.pool = createPool({
+      host: process.env.DB_HOST,
+      user: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+      waitForConnections: true,
+      connectionLimit: 10,
+    });
+  }
+
+  async queryDatabase(sql, params) {
+    const [rows] = await this.pool.execute(sql, params);
+    return rows;
+  }
+}
+```
+
+### API Gateway
+
+```javascript
+class APIGatewayServer {
+  constructor() {
+    this.endpoints = new Map();
+    this.registerEndpoints();
+  }
+
+  registerEndpoints() {
+    this.endpoints.set('users', 'https://api.example.com/users');
+    this.endpoints.set('posts', 'https://api.example.com/posts');
+  }
+
+  async callAPI(endpoint, method, data) {
+    const url = this.endpoints.get(endpoint);
+
+    const response = await fetch(url, {
+      method,
+      headers: {
+        'Authorization': `Bearer ${process.env.API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    });
+
+    return response.json();
+  }
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| Server not responding | Check transport configuration and logs |
+| Tools not appearing | Verify tool schema and registration |
+| Authentication errors | Confirm API keys and credentials |
+| Performance issues | Implement caching and rate limiting |
+| Connection timeouts | Increase timeout values and add retry logic |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Self-Hosting" icon="server" href="/tutorials/self-hosting">
+    Deploy Plugged.in with your custom servers
+  </Card>
+
+  <Card title="MCP Proxy" icon="network-wired" href="/mcp-proxy/overview">
+    Learn about the MCP proxy architecture
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+- [MCP Specification](https://modelcontextprotocol.io/specification)
+- [SDK Documentation](https://github.com/modelcontextprotocol/sdk)
+- [Example Servers](https://github.com/modelcontextprotocol/servers)
+- [Community Support](https://github.com/orgs/VeriTeknik/discussions)

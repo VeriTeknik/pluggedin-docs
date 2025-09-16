@@ -63,6 +63,16 @@
       ]
     },
     {
+      "group": "Tutorials",
+      "pages": [
+        "tutorials/rag-knowledge-base",
+        "tutorials/api-integration",
+        "tutorials/team-collaboration",
+        "tutorials/custom-mcp-server",
+        "tutorials/self-hosting"
+      ]
+    },
+    {
       "group": "Security",
       "pages": [
         "security/overview",

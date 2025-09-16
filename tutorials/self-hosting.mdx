@@ -1,0 +1,792 @@
+---
+title: Self-Hosting Guide
+description: Complete guide to deploying Plugged.in on your own infrastructure
+icon: 'server'
+---
+
+# Self-Hosting Plugged.in
+
+Deploy Plugged.in on your own infrastructure for complete control over your MCP server management platform.
+
+## Overview
+
+Self-hosting Plugged.in gives you:
+
+- **Complete Data Control**: All data stays on your infrastructure
+- **Custom Configuration**: Tailor the platform to your needs
+- **Network Isolation**: Run in air-gapped environments
+- **Compliance**: Meet specific regulatory requirements
+- **Cost Control**: Optimize for your usage patterns
+
+## System Requirements
+
+### Minimum Requirements
+
+| Component | Specification |
+|-----------|--------------|
+| CPU | 2 cores |
+| RAM | 4 GB |
+| Storage | 20 GB SSD |
+| OS | Ubuntu 20.04+ / Debian 11+ |
+| Database | PostgreSQL 15+ |
+| Node.js | 20.x LTS |
+
+### Recommended Production Setup
+
+| Component | Specification |
+|-----------|--------------|
+| CPU | 4+ cores |
+| RAM | 8+ GB |
+| Storage | 100 GB SSD |
+| Load Balancer | Nginx/HAProxy |
+| Cache | Redis 7+ |
+| Monitoring | Prometheus + Grafana |
+
+## Deployment Options
+
+### Docker Deployment (Recommended)
+
+The easiest way to deploy Plugged.in is using Docker:
+
+<Steps>
+  <Step title="Clone Repository">
+    ```bash
+    git clone https://github.com/VeriTeknik/pluggedin-app.git
+    cd pluggedin-app
+    ```
+  </Step>
+
+  <Step title="Configure Environment">
+    ```bash
+    cp .env.example .env
+
+    # Edit .env with your configuration
+    nano .env
+    ```
+  </Step>
+
+  <Step title="Start Services">
+    ```bash
+    # Production deployment
+    docker-compose -f docker-compose.production.yml up -d
+
+    # Check status
+    docker-compose ps
+    ```
+  </Step>
+
+  <Step title="Run Migrations">
+    ```bash
+    docker-compose exec pluggedin-app pnpm db:migrate
+    ```
+  </Step>
+</Steps>
+
+#### Docker Compose Configuration
+
+```yaml
+version: '3.8'
+
+services:
+  pluggedin-app:
+    image: veriteknik/pluggedin:latest
+    container_name: pluggedin-app
+    restart: always
+    ports:
+      - '3000:3000'
+    volumes:
+      - mcp-cache:/app/.cache
+      - app-uploads:/app/uploads
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://user:pass@postgres:5432/pluggedin
+      - NEXTAUTH_URL=https://your-domain.com
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - PLUGGEDIN_API_KEY=${PLUGGEDIN_API_KEY}
+      # Sandboxing configuration
+      - MCP_ISOLATION_TYPE=bubblewrap
+      - MCP_ISOLATION_FALLBACK=firejail
+      - MCP_ENABLE_NETWORK_ISOLATION=false
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - pluggedin-network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: pluggedin-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: pluggedin
+      POSTGRES_USER: pluggedin
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - pluggedin-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: pluggedin-redis
+    restart: always
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - pluggedin-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: pluggedin-nginx
+    restart: always
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - pluggedin-app
+    networks:
+      - pluggedin-network
+
+volumes:
+  postgres-data:
+  redis-data:
+  mcp-cache:
+  app-uploads:
+
+networks:
+  pluggedin-network:
+    driver: bridge
+```
+
+### Manual Installation
+
+For more control, install manually:
+
+<Steps>
+  <Step title="Install Dependencies">
+    ```bash
+    # Update system
+    sudo apt update && sudo apt upgrade -y
+
+    # Install Node.js 20
+    curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+    sudo apt install -y nodejs
+
+    # Install PostgreSQL
+    sudo apt install -y postgresql postgresql-contrib
+
+    # Install Redis
+    sudo apt install -y redis-server
+
+    # Install pnpm
+    npm install -g pnpm
+
+    # Install sandboxing tools
+    sudo apt install -y bubblewrap firejail
+    ```
+  </Step>
+
+  <Step title="Setup Database">
+    ```bash
+    # Create database and user
+    sudo -u postgres psql << EOF
+    CREATE USER pluggedin WITH PASSWORD 'your-secure-password';
+    CREATE DATABASE pluggedin OWNER pluggedin;
+    GRANT ALL PRIVILEGES ON DATABASE pluggedin TO pluggedin;
+    EOF
+    ```
+  </Step>
+
+  <Step title="Clone and Configure">
+    ```bash
+    # Clone repository
+    git clone https://github.com/VeriTeknik/pluggedin-app.git
+    cd pluggedin-app
+
+    # Install dependencies
+    pnpm install
+
+    # Configure environment
+    cp .env.example .env
+    nano .env
+    ```
+  </Step>
+
+  <Step title="Build and Deploy">
+    ```bash
+    # Build application
+    pnpm build
+
+    # Run database migrations
+    pnpm db:migrate
+
+    # Start production server
+    NODE_ENV=production pnpm start
+    ```
+  </Step>
+</Steps>
+
+### Kubernetes Deployment
+
+Deploy to Kubernetes for scalability:
+
+```yaml
+# pluggedin-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pluggedin-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: pluggedin
+  template:
+    metadata:
+      labels:
+        app: pluggedin
+    spec:
+      containers:
+      - name: pluggedin
+        image: veriteknik/pluggedin:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: pluggedin-secret
+              key: database-url
+        - name: NEXTAUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: pluggedin-secret
+              key: nextauth-secret
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pluggedin-service
+spec:
+  selector:
+    app: pluggedin
+  ports:
+  - port: 80
+    targetPort: 3000
+  type: LoadBalancer
+```
+
+Apply the configuration:
+
+```bash
+kubectl apply -f pluggedin-deployment.yaml
+kubectl apply -f pluggedin-service.yaml
+kubectl apply -f pluggedin-ingress.yaml
+```
+
+## Configuration
+
+### Environment Variables
+
+<Warning>
+Never commit `.env` files to version control. Use secrets management for production.
+</Warning>
+
+#### Required Variables
+
+```bash
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/pluggedin
+
+# Authentication
+NEXTAUTH_URL=https://your-domain.com
+NEXTAUTH_SECRET=generate-with-openssl-rand-base64-32
+
+# API
+PLUGGEDIN_API_KEY=your-secure-api-key
+
+# MCP Proxy
+MCP_PROXY_BASE_URL=http://localhost:3001
+```
+
+#### Optional Variables
+
+```bash
+# Redis (for sessions and caching)
+REDIS_URL=redis://localhost:6379
+
+# Email (for notifications)
+EMAIL_SERVER_HOST=smtp.gmail.com
+EMAIL_SERVER_PORT=587
+EMAIL_SERVER_USER=your-email@gmail.com
+EMAIL_SERVER_PASSWORD=your-app-password
+EMAIL_FROM=noreply@your-domain.com
+
+# OAuth Providers
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# RAG Features
+ENABLE_RAG=true
+RAG_API_URL=http://localhost:8000
+
+# Monitoring
+SENTRY_DSN=your-sentry-dsn
+PROMETHEUS_PORT=9090
+```
+
+### Nginx Configuration
+
+Configure Nginx as reverse proxy:
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name your-domain.com;
+
+    ssl_certificate /etc/nginx/ssl/cert.pem;
+    ssl_certificate_key /etc/nginx/ssl/key.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    client_max_body_size 10M;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location /api {
+        proxy_pass http://localhost:3000/api;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 75s;
+    }
+}
+```
+
+### Systemd Service
+
+Create a systemd service for automatic startup:
+
+```ini
+# /etc/systemd/system/pluggedin.service
+[Unit]
+Description=Plugged.in MCP Platform
+After=network.target postgresql.service redis.service
+
+[Service]
+Type=simple
+User=pluggedin
+Group=pluggedin
+WorkingDirectory=/opt/pluggedin
+ExecStart=/usr/bin/node .next/standalone/server.js
+Restart=always
+RestartSec=10
+
+# Environment
+Environment="NODE_ENV=production"
+Environment="PORT=3000"
+EnvironmentFile=/opt/pluggedin/.env
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/pluggedin/uploads /opt/pluggedin/.cache
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start the service:
+
+```bash
+sudo systemctl enable pluggedin
+sudo systemctl start pluggedin
+sudo systemctl status pluggedin
+```
+
+## Security Hardening
+
+### SSL/TLS Configuration
+
+Generate SSL certificates:
+
+```bash
+# Using Let's Encrypt
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.com
+
+# Or generate self-signed for testing
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /etc/ssl/private/pluggedin.key \
+  -out /etc/ssl/certs/pluggedin.crt
+```
+
+### Firewall Configuration
+
+```bash
+# Allow only necessary ports
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow ssh
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+```
+
+### Database Security
+
+```sql
+-- Restrict database access
+REVOKE ALL ON DATABASE pluggedin FROM PUBLIC;
+GRANT CONNECT ON DATABASE pluggedin TO pluggedin;
+GRANT USAGE ON SCHEMA public TO pluggedin;
+GRANT CREATE ON SCHEMA public TO pluggedin;
+
+-- Enable SSL for database connections
+ALTER SYSTEM SET ssl = on;
+```
+
+### Application Security
+
+<AccordionGroup>
+  <Accordion title="Authentication">
+    - Enforce strong passwords
+    - Enable 2FA for admin accounts
+    - Configure session timeouts
+    - Use secure session cookies
+  </Accordion>
+
+  <Accordion title="API Security">
+    - Implement rate limiting
+    - Use API key rotation
+    - Enable CORS restrictions
+    - Log all API access
+  </Accordion>
+
+  <Accordion title="Network Security">
+    - Use VPN for admin access
+    - Implement IP whitelisting
+    - Enable DDoS protection
+    - Monitor network traffic
+  </Accordion>
+
+  <Accordion title="Data Security">
+    - Encrypt data at rest
+    - Backup encryption keys
+    - Regular security audits
+    - Implement data retention policies
+  </Accordion>
+</AccordionGroup>
+
+## Monitoring and Maintenance
+
+### Health Checks
+
+Set up health monitoring endpoints:
+
+```javascript
+// pages/api/health.js
+export default function handler(req, res) {
+  // Check database
+  const dbHealthy = await checkDatabase();
+
+  // Check Redis
+  const redisHealthy = await checkRedis();
+
+  // Check disk space
+  const diskHealthy = await checkDiskSpace();
+
+  if (dbHealthy && redisHealthy && diskHealthy) {
+    res.status(200).json({ status: 'healthy' });
+  } else {
+    res.status(503).json({
+      status: 'unhealthy',
+      checks: { db: dbHealthy, redis: redisHealthy, disk: diskHealthy }
+    });
+  }
+}
+```
+
+### Prometheus Metrics
+
+Export metrics for monitoring:
+
+```yaml
+# prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'pluggedin'
+    static_configs:
+      - targets: ['localhost:3000']
+    metrics_path: '/api/metrics'
+```
+
+### Backup Strategy
+
+Implement regular backups:
+
+```bash
+#!/bin/bash
+# backup.sh
+
+# Variables
+BACKUP_DIR="/backup/pluggedin"
+DATE=$(date +%Y%m%d_%H%M%S)
+DB_NAME="pluggedin"
+
+# Create backup directory
+mkdir -p $BACKUP_DIR
+
+# Backup database
+pg_dump -h localhost -U pluggedin -d $DB_NAME | gzip > $BACKUP_DIR/db_$DATE.sql.gz
+
+# Backup uploads
+tar -czf $BACKUP_DIR/uploads_$DATE.tar.gz /opt/pluggedin/uploads
+
+# Backup configuration
+tar -czf $BACKUP_DIR/config_$DATE.tar.gz /opt/pluggedin/.env /opt/pluggedin/config
+
+# Remove old backups (keep 30 days)
+find $BACKUP_DIR -type f -mtime +30 -delete
+
+# Upload to S3 (optional)
+aws s3 sync $BACKUP_DIR s3://your-backup-bucket/pluggedin/
+```
+
+Add to crontab:
+
+```bash
+# Run backup daily at 2 AM
+0 2 * * * /opt/pluggedin/scripts/backup.sh
+```
+
+### Log Management
+
+Configure centralized logging:
+
+```javascript
+// lib/logger.js
+import pino from 'pino';
+
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'info',
+  transport: {
+    targets: [
+      {
+        target: 'pino-pretty',
+        options: { destination: 1 } // stdout
+      },
+      {
+        target: 'pino/file',
+        options: { destination: '/var/log/pluggedin/app.log' }
+      },
+      {
+        target: '@logtail/pino',
+        options: { sourceToken: process.env.LOGTAIL_TOKEN }
+      }
+    ]
+  }
+});
+
+export default logger;
+```
+
+## Scaling Strategies
+
+### Horizontal Scaling
+
+Deploy multiple instances behind a load balancer:
+
+```nginx
+upstream pluggedin_backend {
+    least_conn;
+    server app1.internal:3000;
+    server app2.internal:3000;
+    server app3.internal:3000;
+    keepalive 32;
+}
+
+server {
+    location / {
+        proxy_pass http://pluggedin_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+    }
+}
+```
+
+### Database Scaling
+
+Implement read replicas:
+
+```javascript
+// db/config.js
+const writeDb = new Pool({
+  connectionString: process.env.DATABASE_URL
+});
+
+const readDb = new Pool({
+  connectionString: process.env.DATABASE_READ_URL
+});
+
+export { writeDb, readDb };
+```
+
+### Caching Strategy
+
+Implement multi-level caching:
+
+```javascript
+// lib/cache.js
+import Redis from 'ioredis';
+import LRU from 'lru-cache';
+
+// L1: In-memory cache
+const memCache = new LRU({
+  max: 500,
+  ttl: 1000 * 60 * 5 // 5 minutes
+});
+
+// L2: Redis cache
+const redis = new Redis(process.env.REDIS_URL);
+
+export async function getCached(key, fetcher) {
+  // Check L1
+  if (memCache.has(key)) {
+    return memCache.get(key);
+  }
+
+  // Check L2
+  const cached = await redis.get(key);
+  if (cached) {
+    const value = JSON.parse(cached);
+    memCache.set(key, value);
+    return value;
+  }
+
+  // Fetch and cache
+  const value = await fetcher();
+  memCache.set(key, value);
+  await redis.setex(key, 3600, JSON.stringify(value));
+  return value;
+}
+```
+
+## Troubleshooting
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| Database connection errors | Check PostgreSQL status and credentials |
+| High memory usage | Adjust Node.js heap size with `--max-old-space-size` |
+| Slow performance | Enable Redis caching and optimize database queries |
+| SSL errors | Verify certificate paths and permissions |
+| MCP server failures | Check sandboxing configuration and permissions |
+
+### Debug Mode
+
+Enable debug logging:
+
+```bash
+# Set debug environment variables
+export DEBUG=pluggedin:*
+export LOG_LEVEL=debug
+export NODE_ENV=development
+
+# Start with debugging
+node --inspect=0.0.0.0:9229 .next/standalone/server.js
+```
+
+### Performance Tuning
+
+Optimize Node.js settings:
+
+```bash
+# Increase memory limit
+node --max-old-space-size=4096 server.js
+
+# Enable cluster mode
+pm2 start server.js -i max
+
+# Optimize garbage collection
+node --optimize-for-size --max-old-space-size=2048 server.js
+```
+
+## Migration from Cloud
+
+### Export Data
+
+Export data from cloud instance:
+
+```bash
+# Export from cloud
+pg_dump $CLOUD_DATABASE_URL > cloud-backup.sql
+
+# Export files
+rsync -avz cloud-server:/uploads/ ./uploads/
+```
+
+### Import to Self-Hosted
+
+```bash
+# Import database
+psql $LOCAL_DATABASE_URL < cloud-backup.sql
+
+# Copy files
+cp -r ./uploads/* /opt/pluggedin/uploads/
+
+# Update configurations
+pnpm db:migrate
+```
+
+## Support and Resources
+
+<CardGroup cols={2}>
+  <Card title="Docker Documentation" icon="docker" href="/deployment/docker">
+    Detailed Docker deployment guide
+  </Card>
+
+  <Card title="Ubuntu Setup" icon="ubuntu" href="/deployment/ubuntu-setup">
+    Ubuntu-specific configuration
+  </Card>
+</CardGroup>
+
+## Additional Resources
+
+- [System Requirements](/platform/overview#requirements)
+- [Security Best Practices](/security/overview)
+- [API Documentation](/api/reference)
+- [Community Support](https://github.com/orgs/VeriTeknik/discussions)
+- [Enterprise Support](mailto:api-support@plugged.in)
