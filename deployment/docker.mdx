@@ -33,6 +33,68 @@ Deploy Plugged.in using Docker for consistent, scalable, and portable deployment
   </Step>
 </Steps>
 
+## Docker Hub Deployment
+
+### Using Pre-built Image
+
+<Steps>
+  <Step title="Pull Image">
+    ```bash
+    docker pull veriteknik/pluggedin:latest
+    ```
+  </Step>
+  <Step title="Run with Docker Compose">
+    ```bash
+    # Download production compose file
+    curl -O https://raw.githubusercontent.com/VeriTeknik/pluggedin-app/main/docker-compose.production.yml
+
+    # Create .env file with your configuration
+    cat > .env <<EOF
+    DATABASE_URL=postgresql://user:pass@host:5432/db
+    NEXTAUTH_URL=https://your-domain.com
+    NEXTAUTH_SECRET=$(openssl rand -base64 32)
+    PLUGGEDIN_API_KEY=$(openssl rand -base64 32)
+    EOF
+
+    # Start services
+    docker-compose -f docker-compose.production.yml up -d
+    ```
+  </Step>
+</Steps>
+
+### Publishing to Docker Hub
+
+<Steps>
+  <Step title="Build Production Image">
+    ```bash
+    # Build with production Dockerfile
+    docker build -f Dockerfile.production -t pluggedin:latest .
+
+    # Or use standard Dockerfile
+    docker build -t pluggedin:latest .
+    ```
+  </Step>
+  <Step title="Tag for Docker Hub">
+    ```bash
+    # Tag with your Docker Hub username
+    docker tag pluggedin:latest yourusername/pluggedin:latest
+    docker tag pluggedin:latest yourusername/pluggedin:v2.10.3
+    ```
+  </Step>
+  <Step title="Login to Docker Hub">
+    ```bash
+    docker login
+    # Enter your Docker Hub credentials
+    ```
+  </Step>
+  <Step title="Push to Registry">
+    ```bash
+    docker push yourusername/pluggedin:latest
+    docker push yourusername/pluggedin:v2.10.3
+    ```
+  </Step>
+</Steps>
+
 ## Docker Architecture
 
 <CardGroup cols={2}>
@@ -64,17 +126,25 @@ Deploy Plugged.in using Docker for consistent, scalable, and portable deployment
 
 ## Production Dockerfile
 
-Create optimized multi-stage Dockerfile:
+The project includes two Dockerfiles:
+
+1. **Dockerfile** - Standard build with sandboxing support
+2. **Dockerfile.production** - Optimized production build
+
+Both include sandboxing tools (bubblewrap, firejail, fuse3) for secure MCP server execution.
+
+### Standard Dockerfile Features
 
 ```dockerfile
-# Build stage
+# Multi-stage build with sandboxing
 FROM node:20-alpine AS builder
 
-# Install dependencies for native modules
-RUN apk add --no-cache python3 make g++ curl
-
-# Install pnpm
-RUN npm install -g pnpm
+# Sandboxing tools included in runner stage
+RUN apk add --no-cache \
+    bubblewrap \
+    firejail \
+    fuse3 \
+    libfuse3-3
 
 # Set working directory
 WORKDIR /app
@@ -94,14 +164,13 @@ RUN pnpm build
 # Production stage
 FROM node:20-alpine AS runner
 
-# Install runtime dependencies and sandboxing tools
+# Sandboxing tools are pre-installed
 RUN apk add --no-cache \
-    python3 \
     curl \
     bubblewrap \
     firejail \
     fuse3 \
-    && npm install -g pnpm
+    libfuse3-3
 
 # Create app user
 RUN addgroup -g 1001 nodejs \
