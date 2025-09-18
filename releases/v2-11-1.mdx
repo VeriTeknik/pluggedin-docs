@@ -1,0 +1,267 @@
+---
+title: Version 2.11.1
+description: AI Search enhancements, document versioning UI, and major performance improvements
+sidebarTitle: v2.11.1
+---
+
+# Version 2.11.1 Release Notes
+
+<Note>
+Released on January 18, 2025 - This release brings powerful AI search capabilities to the document library, complete document versioning UI, and significant performance improvements.
+</Note>
+
+## 🎯 Highlights
+
+<CardGroup cols={3}>
+  <Card title="AI Search" icon="magnifying-glass">
+    Semantic search with document name display
+  </Card>
+  <Card title="Document Versioning" icon="clock-rotate-left">
+    Full version history with diff visualization
+  </Card>
+  <Card title="68% Faster" icon="rocket">
+    Major performance optimizations
+  </Card>
+</CardGroup>
+
+## ✨ AI Search in Document Library
+
+The document library now features a powerful AI-powered search capability that provides intelligent answers based on your documents.
+
+### Key Features
+
+<AccordionGroup>
+  <Accordion title="Semantic Search Toggle">
+    Switch between traditional keyword search and AI-powered semantic search with a single click. The AI search uses advanced natural language processing to understand the intent behind your queries.
+
+    ```typescript
+    // Toggle between search modes
+    const [aiSearchEnabled, setAiSearchEnabled] = useState(false);
+    ```
+  </Accordion>
+
+  <Accordion title="Document Name Display">
+    No more cryptic document IDs! The AI search now displays actual document names as clickable buttons, making it easy to identify and access source documents.
+
+    **Before**: `099fdd05...`, `3d7c39a7...`
+    **After**: `Project Requirements.pdf`, `API Documentation.md`
+  </Accordion>
+
+  <Accordion title="Real-time Responses">
+    Get instant AI-generated answers with a 500ms debounce for optimal performance. The system intelligently processes your query and returns relevant information from your documents.
+  </Accordion>
+
+  <Accordion title="Source Attribution">
+    Every AI answer includes clear source attribution with clickable document links. Click any source document to instantly open it in the preview modal.
+  </Accordion>
+</AccordionGroup>
+
+### How It Works
+
+1. **Enable AI Search**: Click the sparkles icon in the library search bar
+2. **Type Your Query**: Enter a natural language question
+3. **Get Instant Answers**: AI analyzes your documents and provides relevant answers
+4. **Explore Sources**: Click on source documents to view the full content
+
+### Technical Implementation
+
+```typescript
+// Enhanced askKnowledgeBase with document name fetching
+export async function askKnowledgeBase(
+  userId: string,
+  query: string,
+  projectUuid?: string
+): Promise<{
+  answer?: string;
+  documents?: Array<{ id: string; name: string }>;
+  sources?: string[];
+}>
+```
+
+## 📚 Document Versioning UI
+
+Complete user interface for document version management with visual diff tracking.
+
+### Version History Features
+
+<Tabs>
+  <Tab title="Timeline View">
+    - Chronological version display
+    - Expandable version details
+    - Visual indicators for current version
+    - Model attribution badges
+  </Tab>
+
+  <Tab title="Change Tracking">
+    - Addition/deletion indicators
+    - Line-by-line diff visualization
+    - Change summaries
+    - Modification highlights
+  </Tab>
+
+  <Tab title="Version Comparison">
+    - Select two versions to compare
+    - Side-by-side diff view
+    - Merge conflict resolution
+    - Rollback capabilities
+  </Tab>
+</Tabs>
+
+### Version Metadata
+
+Each document version includes:
+- **Version Number**: Sequential versioning
+- **Created By**: AI model attribution (name, provider, version)
+- **Timestamp**: Creation time with relative display
+- **Change Summary**: Brief description of modifications
+- **Content Diff**: Additions, deletions, and modifications
+
+## ⚡ Performance Optimizations
+
+Major performance improvements across the document preview system.
+
+### Optimization Metrics
+
+| Metric | Before | After | Improvement |
+|--------|--------|-------|-------------|
+| Bundle Size | 312KB | 100KB | **68% reduction** |
+| Memory Usage | 150MB | 60MB | **60% reduction** |
+| State Variables | 13 | 1 (useReducer) | **92% reduction** |
+| Re-renders | Frequent | Minimal | **Memoized** |
+
+### Technical Improvements
+
+<AccordionGroup>
+  <Accordion title="State Management">
+    Replaced 13 individual state variables with a single `useReducer` for centralized state management.
+
+    ```typescript
+    // Before: 13 useState hooks
+    // After: Single useReducer
+    const [state, dispatch] = useReducer(documentReducer, initialState);
+    ```
+  </Accordion>
+
+  <Accordion title="Import Caching">
+    Implemented dynamic import caching to prevent redundant module loading.
+
+    ```typescript
+    const importCache: Record<string, any> = {};
+    const getDynamicImport = async (key: string, importFn: () => Promise<any>) => {
+      if (!importCache[key]) {
+        importCache[key] = await importFn();
+      }
+      return importCache[key];
+    };
+    ```
+  </Accordion>
+
+  <Accordion title="Memoization">
+    Comprehensive memoization with `useMemo`, `useCallback`, and `React.memo` for optimal rendering performance.
+  </Accordion>
+
+  <Accordion title="Lazy Loading">
+    Implemented React.lazy and Suspense for code splitting and on-demand loading of heavy components.
+  </Accordion>
+</AccordionGroup>
+
+## 🔧 API Enhancements
+
+### Enhanced RAG Query Response
+
+The RAG API now returns structured data with document metadata:
+
+```json
+{
+  "results": "Your AI-generated answer...",
+  "sources": ["doc1.pdf", "doc2.md"],
+  "document_ids": ["uuid1", "uuid2"],
+  "documents": [
+    { "id": "uuid1", "name": "Project Requirements.pdf" },
+    { "id": "uuid2", "name": "API Documentation.md" }
+  ]
+}
+```
+
+### New Hooks
+
+**`useKnowledgeBaseSearch`**: Complete hook for AI search functionality
+```typescript
+const {
+  query,
+  answer,
+  documents,
+  sources,
+  isLoading,
+  error,
+  setQuery,
+  clearAnswer
+} = useKnowledgeBaseSearch();
+```
+
+## 🐛 Bug Fixes
+
+- Fixed document ID display showing cryptic identifiers instead of names
+- Resolved null safety issues in document ID handling
+- Fixed memory leaks in document preview component
+- Corrected AbortController cleanup in useEffect hooks
+- Fixed XSS vulnerabilities with DOMPurify implementation
+
+## 🌍 Internationalization
+
+All new features include complete translations for:
+- English (en)
+- Turkish (tr)
+- Chinese (zh)
+- Hindi (hi)
+- Japanese (ja)
+- Dutch (nl)
+
+## 🔒 Security Improvements
+
+<Warning>
+Important security enhancements in this release
+</Warning>
+
+- Enhanced input sanitization with DOMPurify
+- Proper cleanup of AbortController to prevent memory leaks
+- Type safety improvements replacing `any` types
+- Content Security Policy (CSP) headers for preview modal
+
+## 📦 Migration Guide
+
+### For Developers
+
+1. **Update Dependencies**
+   ```bash
+   pnpm update
+   pnpm install
+   ```
+
+2. **Database Migration**
+   No database migrations required for this release.
+
+3. **Environment Variables**
+   No new environment variables required.
+
+### For Users
+
+1. **Clear Browser Cache**: Recommended to ensure all performance optimizations take effect
+2. **Refresh Library Page**: The new AI search toggle will appear automatically
+3. **Re-index Documents**: Optional but recommended for optimal search performance
+
+## 🚀 What's Next
+
+Looking ahead to v2.12.0:
+- Multi-language document support
+- Advanced version merging capabilities
+- Collaborative document editing
+- Enhanced AI model selection for document generation
+
+## 📝 Full Changelog
+
+View the complete list of changes in our [GitHub repository](https://github.com/VeriTeknik/pluggedin-app/releases/tag/v2.11.1).
+
+## 🙏 Acknowledgments
+
+Special thanks to all contributors and the community for their feedback and support in making this release possible.

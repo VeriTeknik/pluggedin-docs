@@ -11,9 +11,9 @@ All notable changes to the Plugged.in platform are documented here. The project 
 ## Latest Releases
 
 <CardGroup cols={3}>
-  <Card title="v2.10.3" icon="shield-check">
+  <Card title="v2.11.1" icon="magnifying-glass">
     **Current Stable**
-    Security & Performance
+    AI Search & Versioning
   </Card>
   <Card title="v2.8.0" icon="robot">
     AI Document Exchange
@@ -25,10 +25,47 @@ All notable changes to the Plugged.in platform are documented here. The project 
   </Card>
 </CardGroup>
 
+## Version 2.11.x Series
+
+### [2.11.1] - 2025-01-18
+<Badge variant="success">Current Version</Badge>
+
+#### Added
+- **AI Search in Document Library**
+  - Semantic search with natural language queries
+  - Document names displayed instead of cryptic IDs
+  - Clickable source documents for instant navigation
+  - 500ms smart debounce for optimal performance
+  - Comprehensive answers synthesized from multiple documents
+
+- **Document Versioning UI**
+  - Complete version history timeline
+  - Visual diff tracking with additions/deletions
+  - Model attribution badges for each version
+  - Version comparison and rollback capabilities
+  - Change summaries and metadata display
+
+- **Performance Optimizations**
+  - 68% reduction in bundle size
+  - 60% reduction in memory usage
+  - Single useReducer pattern replacing 13 state variables
+  - Dynamic import caching for heavy components
+  - Comprehensive memoization with React hooks
+
+#### Fixed
+- Document IDs showing instead of human-readable names
+- Memory leaks in document preview component
+- XSS vulnerabilities with proper DOMPurify implementation
+- Null safety issues in document ID handling
+
+#### Changed
+- Enhanced RAG service to return document metadata
+- Improved useKnowledgeBaseSearch hook with documents array
+- Updated AiSearchAnswer component for better UX
+
 ## Version 2.10.x Series
 
 ### [2.10.3] - 2025-01-28
-<Badge variant="success">Current Version</Badge>
 
 #### Security
 - Additional security patches

@@ -1,0 +1,493 @@
+---
+title: Document Library
+description: Comprehensive document management with AI search, versioning, and advanced preview capabilities
+sidebarTitle: Document Library
+icon: 'folder-open'
+---
+
+# Document Library
+
+The Document Library is your centralized hub for managing, searching, and leveraging documents within the Plugged.in platform. With advanced AI capabilities, version control, and rich preview features, it transforms how you interact with your knowledge base.
+
+## Overview
+
+<CardGroup cols={2}>
+  <Card title="AI-Powered Search" icon="brain">
+    Semantic search that understands context and intent, providing intelligent answers from your documents
+  </Card>
+
+  <Card title="Version Control" icon="code-branch">
+    Complete version history with diff tracking, model attribution, and rollback capabilities
+  </Card>
+
+  <Card title="Rich Previews" icon="eye">
+    Native viewing for PDFs, images, code files, and markdown with zoom and navigation controls
+  </Card>
+
+  <Card title="Multi-Source" icon="layer-group">
+    Support for uploaded files, AI-generated content, and API-created documents
+  </Card>
+</CardGroup>
+
+## 🔍 AI Search Features
+
+Transform how you find information with our intelligent search capabilities.
+
+### Semantic Search vs. Traditional Search
+
+<Tabs>
+  <Tab title="AI Search (Semantic)">
+    **How it works**: Uses natural language processing to understand the meaning and context of your query.
+
+    **Example Query**: "How do I authenticate users in my application?"
+
+    **Returns**: Comprehensive answer synthesized from multiple documents with source attribution.
+
+    **Best for**:
+    - Complex questions requiring context
+    - Finding information across multiple documents
+    - Getting synthesized answers
+    - Natural language queries
+  </Tab>
+
+  <Tab title="Traditional Search">
+    **How it works**: Keyword matching and full-text search across document content.
+
+    **Example Query**: "authentication OAuth2"
+
+    **Returns**: List of documents containing these exact keywords.
+
+    **Best for**:
+    - Finding specific documents
+    - Exact phrase matching
+    - Quick document lookup
+    - Known keyword searches
+  </Tab>
+</Tabs>
+
+### Using AI Search
+
+<Steps>
+  <Step title="Enable AI Search">
+    Click the sparkles icon (✨) in the search bar to toggle AI mode
+  </Step>
+
+  <Step title="Enter Your Query">
+    Type a natural language question or description of what you're looking for
+  </Step>
+
+  <Step title="Review the Answer">
+    The AI will provide a comprehensive answer based on your documents
+  </Step>
+
+  <Step title="Explore Sources">
+    Click on any source document name to open it in the preview modal
+  </Step>
+</Steps>
+
+### AI Search Interface
+
+```typescript
+interface AiSearchResult {
+  answer: string;                            // AI-generated answer
+  documents: Array<{                         // Source documents
+    id: string;
+    name: string;                           // Human-readable name
+  }>;
+  sources: string[];                        // Document excerpts
+  confidence: number;                       // Answer confidence score
+}
+```
+
+<Note>
+AI Search uses a 500ms debounce to optimize performance and reduce unnecessary API calls while you type.
+</Note>
+
+## 📄 Document Management
+
+### Supported Formats
+
+| Category | Formats | Features |
+|----------|---------|----------|
+| **Documents** | PDF, DOCX, TXT, RTF | Full-text extraction, searchable |
+| **Code** | 20+ languages | Syntax highlighting, line numbers |
+| **Images** | PNG, JPG, SVG, GIF | Zoom controls, pan navigation |
+| **Markdown** | MD, MDX | Live rendering, table support |
+| **Data** | JSON, YAML, XML | Structured view, collapsible sections |
+
+### Upload Documents
+
+#### Via Web Interface
+
+1. Navigate to **Library** in the sidebar
+2. Click **Upload Documents** button
+3. Drag and drop or select files
+4. Add metadata (optional):
+   - **Title**: Display name for the document
+   - **Description**: Brief summary
+   - **Tags**: Comma-separated keywords
+   - **Category**: Document classification
+
+#### Via API
+
+```bash
+curl -X POST https://plugged.in/api/documents \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@document.pdf" \
+  -F "name=Project Documentation" \
+  -F "description=Complete project specs" \
+  -F "tags=project,specs,requirements"
+```
+
+### Document Sources
+
+<AccordionGroup>
+  <Accordion title="Uploaded Documents">
+    Traditional file uploads from your local system.
+
+    **Metadata**:
+    - Upload timestamp
+    - File size and type
+    - User attribution
+  </Accordion>
+
+  <Accordion title="AI-Generated Documents">
+    Documents created by AI models with full attribution tracking.
+
+    **Metadata**:
+    - Model name and provider
+    - Generation timestamp
+    - Token usage
+    - Context used
+  </Accordion>
+
+  <Accordion title="API-Created Documents">
+    Programmatically created documents via REST API.
+
+    **Metadata**:
+    - API client identification
+    - Creation method
+    - Integration source
+  </Accordion>
+</AccordionGroup>
+
+## 🔄 Document Versioning
+
+Track changes and maintain history for all your documents.
+
+### Version History Features
+
+<CardGroup cols={2}>
+  <Card title="Timeline View" icon="timeline">
+    Visual timeline of all document versions with timestamps
+  </Card>
+
+  <Card title="Diff Visualization" icon="code-compare">
+    Line-by-line comparison showing additions and deletions
+  </Card>
+
+  <Card title="Model Attribution" icon="robot">
+    Track which AI models created or modified each version
+  </Card>
+
+  <Card title="Rollback" icon="rotate-left">
+    Restore any previous version with one click
+  </Card>
+</CardGroup>
+
+### Version Metadata Structure
+
+```typescript
+interface DocumentVersion {
+  id: string;
+  version_number: number;
+  created_by_model: {
+    name: string;           // e.g., "Claude 3.5 Sonnet"
+    provider: string;       // e.g., "Anthropic"
+    version?: string;       // e.g., "3.5"
+  };
+  created_at: Date;
+  change_summary?: string;
+  content_diff?: {
+    additions: number;      // Lines added
+    deletions: number;      // Lines removed
+    changes: Array<{
+      type: 'addition' | 'deletion' | 'modification';
+      content: string;
+    }>;
+  };
+}
+```
+
+### Comparing Versions
+
+<Steps>
+  <Step title="Open Version History">
+    Click the version badge or history icon on any document
+  </Step>
+
+  <Step title="Enable Compare Mode">
+    Click the "Compare" button in the version history panel
+  </Step>
+
+  <Step title="Select Versions">
+    Choose two versions to compare (checkboxes appear in compare mode)
+  </Step>
+
+  <Step title="View Differences">
+    Click "Compare Selected" to see a detailed diff view
+  </Step>
+</Steps>
+
+## 👁️ Document Preview
+
+Rich preview capabilities for all document types with advanced controls.
+
+### Preview Features by Type
+
+<Tabs>
+  <Tab title="PDF Documents">
+    - **Page Navigation**: Previous/Next buttons and page counter
+    - **Zoom Controls**: Fit to width, fit to page, custom zoom
+    - **Search**: Find text within the PDF
+    - **Download**: Original file download
+    - **Fullscreen**: Immersive reading mode
+  </Tab>
+
+  <Tab title="Images">
+    - **Zoom Levels**: 10% to 500% with preset options
+    - **Pan Navigation**: Click and drag to navigate
+    - **Reset View**: Return to original size and position
+    - **Fullscreen**: View images without distractions
+  </Tab>
+
+  <Tab title="Code Files">
+    - **Syntax Highlighting**: Support for 20+ languages
+    - **Line Numbers**: For easy reference
+    - **Copy Code**: One-click copy to clipboard
+    - **Theme**: Dark/Light mode support
+  </Tab>
+
+  <Tab title="Markdown">
+    - **Live Rendering**: Real-time markdown preview
+    - **Table Support**: Formatted tables
+    - **Code Blocks**: Syntax highlighted snippets
+    - **Links**: Clickable external links
+  </Tab>
+</Tabs>
+
+### Preview Modal Structure
+
+```typescript
+interface DocumentPreview {
+  document: Doc;
+  isOpen: boolean;
+  viewMode: 'preview' | 'metadata' | 'versions';
+  zoomLevel: number;        // 10-500
+  currentPage?: number;      // For PDFs
+  fullscreen: boolean;
+}
+```
+
+## 🎯 Advanced Features
+
+### Bulk Operations
+
+Perform actions on multiple documents simultaneously:
+
+```bash
+# Bulk upload
+curl -X POST https://plugged.in/api/documents/bulk \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "documents": [
+      {"name": "Doc1", "content": "..."},
+      {"name": "Doc2", "content": "..."}
+    ]
+  }'
+
+# Bulk delete
+curl -X DELETE https://plugged.in/api/documents/bulk \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"ids": ["uuid1", "uuid2", "uuid3"]}'
+```
+
+### Smart Filters
+
+<CardGroup cols={2}>
+  <Card title="By Source" icon="filter">
+    Filter by upload source (Upload, AI, API)
+  </Card>
+
+  <Card title="By Date" icon="calendar">
+    Date range filtering with presets
+  </Card>
+
+  <Card title="By Model" icon="microchip">
+    Filter by AI model that created/modified
+  </Card>
+
+  <Card title="By Tags" icon="tags">
+    Multi-tag filtering with AND/OR logic
+  </Card>
+</CardGroup>
+
+### Keyboard Shortcuts
+
+| Action | Shortcut |
+|--------|----------|
+| Toggle AI Search | `Cmd/Ctrl + K` |
+| Open Preview | `Space` |
+| Close Preview | `Esc` |
+| Next Document | `→` |
+| Previous Document | `←` |
+| Toggle Fullscreen | `F` |
+| Zoom In | `+` |
+| Zoom Out | `-` |
+
+## 🔐 Security & Permissions
+
+### Access Control
+
+Documents respect project and profile isolation:
+
+- **Project Level**: Documents are isolated per project
+- **Profile Level**: Further isolation within project workspaces
+- **Visibility Levels**:
+  - `private`: Only accessible to document owner
+  - `workspace`: Shared within the profile/project
+  - `public`: Accessible via public API (with authentication)
+
+### Data Protection
+
+<Warning>
+All documents are encrypted at rest and in transit
+</Warning>
+
+- **Encryption**: AES-256-GCM for document content
+- **Sanitization**: HTML/Markdown content sanitized before display
+- **Path Protection**: Prevention of directory traversal attacks
+- **Rate Limiting**:
+  - Uploads: 100 per hour
+  - Searches: 1000 per hour
+  - AI generation: 10 per hour
+
+## 📊 Usage Analytics
+
+Track how your documents are being used:
+
+```typescript
+interface DocumentAnalytics {
+  views: number;
+  searches: number;
+  ai_queries: number;
+  last_accessed: Date;
+  popular_queries: string[];
+  access_patterns: {
+    hourly: number[];
+    daily: number[];
+  };
+}
+```
+
+## 🚀 Performance Optimization
+
+The Document Library is optimized for speed and efficiency:
+
+### Recent Improvements (v2.11.1)
+
+- **68% reduction** in bundle size
+- **60% reduction** in memory usage
+- **Dynamic import caching** for heavy components
+- **Comprehensive memoization** with React optimization hooks
+- **Single useReducer pattern** replacing multiple state variables
+
+### Best Practices
+
+<AccordionGroup>
+  <Accordion title="Document Organization">
+    - Keep documents under 10MB for optimal performance
+    - Use descriptive titles and tags
+    - Group related documents in categories
+    - Regular cleanup of obsolete documents
+  </Accordion>
+
+  <Accordion title="Search Optimization">
+    - Use specific, descriptive queries
+    - Leverage tags for faster filtering
+    - Enable AI search for complex questions
+    - Use traditional search for known keywords
+  </Accordion>
+
+  <Accordion title="Version Management">
+    - Add meaningful change summaries
+    - Regularly review version history
+    - Clean up unnecessary versions
+    - Use comparison before major changes
+  </Accordion>
+</AccordionGroup>
+
+## 🔧 API Reference
+
+### Core Endpoints
+
+```typescript
+// Upload document
+POST /api/documents
+
+// Get document
+GET /api/documents/:id
+
+// Update document
+PUT /api/documents/:id
+
+// Delete document
+DELETE /api/documents/:id
+
+// Search documents
+POST /api/documents/search
+
+// AI query
+POST /api/documents/ai-search
+
+// Get versions
+GET /api/documents/:id/versions
+
+// Compare versions
+GET /api/documents/:id/compare?v1=1&v2=2
+```
+
+### Response Format
+
+```json
+{
+  "document": {
+    "id": "uuid",
+    "name": "Document Name",
+    "content": "...",
+    "metadata": {
+      "source": "upload|ai_generated|api",
+      "model": { "name": "...", "provider": "..." },
+      "version": 1,
+      "created_at": "2025-01-18T..."
+    }
+  },
+  "versions": [...],
+  "analytics": {...}
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="RAG Tutorial" icon="graduation-cap" href="/tutorials/rag-knowledge-base">
+    Learn to build a knowledge base with RAG
+  </Card>
+
+  <Card title="API Integration" icon="code" href="/tutorials/api-integration">
+    Integrate document library with your apps
+  </Card>
+</CardGroup>

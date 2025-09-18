@@ -181,11 +181,91 @@ curl -X POST https://plugged.in/api/documents/search \
   }'
 ```
 
+## AI Search in Document Library (New in v2.11.1)
+
+The Document Library now features an integrated AI search that provides intelligent answers directly in the web interface.
+
+### Key Improvements
+
+<CardGroup cols={2}>
+  <Card title="Document Names" icon="file-lines">
+    No more cryptic IDs - see actual document names
+  </Card>
+
+  <Card title="Clickable Sources" icon="hand-pointer">
+    Click any source document to open it instantly
+  </Card>
+
+  <Card title="Smart Debounce" icon="gauge-high">
+    500ms debounce for optimal performance
+  </Card>
+
+  <Card title="Semantic Understanding" icon="brain">
+    Natural language queries with context awareness
+  </Card>
+</CardGroup>
+
+### Using AI Search in the Library
+
+<Steps>
+  <Step title="Navigate to Library">
+    Open the Document Library from the sidebar
+  </Step>
+
+  <Step title="Enable AI Search">
+    Click the sparkles icon (✨) in the search bar to toggle AI mode
+  </Step>
+
+  <Step title="Type Your Question">
+    Enter a natural language query like "How do I configure authentication?"
+  </Step>
+
+  <Step title="Review Results">
+    The AI provides a comprehensive answer with source documents displayed as clickable buttons
+  </Step>
+
+  <Step title="Explore Sources">
+    Click any document name to open it in the preview modal
+  </Step>
+</Steps>
+
+### Example Queries
+
+| Query Type | Example | What It Returns |
+|------------|---------|-----------------|
+| **How-to** | "How do I set up OAuth?" | Step-by-step guide from your docs |
+| **Conceptual** | "What is the architecture?" | Overview synthesized from multiple sources |
+| **Troubleshooting** | "Why is authentication failing?" | Potential causes and solutions |
+| **Reference** | "List all API endpoints" | Comprehensive endpoint documentation |
+
+### AI Search Response Structure
+
+```typescript
+interface AiSearchResponse {
+  answer: string;                    // AI-generated comprehensive answer
+  documents: Array<{                 // Source documents with names
+    id: string;                      // Document UUID
+    name: string;                    // Human-readable name (e.g., "API Guide.pdf")
+  }>;
+  sources: string[];                 // Relevant excerpts from documents
+  confidence: number;                // Answer confidence score (0-1)
+}
+```
+
+### Performance Optimizations
+
+The AI search system includes several performance enhancements:
+
+- **Smart Debouncing**: 500ms delay prevents excessive API calls while typing
+- **Result Caching**: Recent queries are cached for instant retrieval
+- **Progressive Loading**: Results stream in as they become available
+- **Optimized Rendering**: Virtual scrolling for large result sets
+
 ## Best Practices
 
 <AccordionGroup>
   <Accordion title="Document Organization">
-    - Use clear, descriptive titles
+    - Use clear, descriptive titles that appear in AI search results
     - Apply consistent tagging taxonomy
     - Group related documents by category
     - Keep documents focused on single topics
@@ -203,6 +283,13 @@ curl -X POST https://plugged.in/api/documents/search \
     - Include context in your questions
     - Experiment with different phrasings
     - Adjust relevance thresholds as needed
+  </Accordion>
+
+  <Accordion title="AI Search Tips">
+    - Ask complete questions for better context
+    - Use natural language, not keywords
+    - Reference specific topics or technologies
+    - Try rephrasing if results aren't satisfactory
   </Accordion>
 
   <Accordion title="Security">
@@ -235,6 +322,66 @@ curl -X POST https://plugged.in/api/documents/ai \
     }
   }'
 ```
+
+### Document Versioning (New in v2.11.1)
+
+Track changes and maintain complete history for all documents:
+
+<AccordionGroup>
+  <Accordion title="Version History UI">
+    Every document now includes a comprehensive version history interface:
+
+    - **Timeline View**: Visual representation of all versions
+    - **Diff Visualization**: See what changed between versions
+    - **Model Attribution**: Track which AI model made each change
+    - **Change Summary**: Brief description of modifications
+  </Accordion>
+
+  <Accordion title="Version Comparison">
+    Compare any two versions side-by-side:
+
+    ```typescript
+    // Version metadata structure
+    interface DocumentVersion {
+      version_number: number;
+      created_by_model: {
+        name: string;
+        provider: string;
+        version?: string;
+      };
+      content_diff: {
+        additions: number;
+        deletions: number;
+        changes: Array<{
+          type: 'addition' | 'deletion' | 'modification';
+          content: string;
+        }>;
+      };
+      change_summary: string;
+      created_at: Date;
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Version Management API">
+    Programmatically manage document versions:
+
+    ```bash
+    # Get version history
+    curl -X GET https://plugged.in/api/documents/{id}/versions \
+      -H "Authorization: Bearer YOUR_API_KEY"
+
+    # Compare two versions
+    curl -X GET https://plugged.in/api/documents/{id}/compare?v1=1&v2=2 \
+      -H "Authorization: Bearer YOUR_API_KEY"
+
+    # Rollback to previous version
+    curl -X POST https://plugged.in/api/documents/{id}/rollback \
+      -H "Authorization: Bearer YOUR_API_KEY" \
+      -d '{"version": 3}'
+    ```
+  </Accordion>
+</AccordionGroup>
 
 ### Vector Search Configuration
 
