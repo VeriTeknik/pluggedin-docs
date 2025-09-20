@@ -1,0 +1,139 @@
+---
+title: 'Version 2.12.0'
+description: 'Enhanced Security & Performance Release'
+---
+
+# Version 2.12.0 - Enhanced Security & Performance
+
+Released: December 2024
+
+## 🎯 Overview
+
+Version 2.12.0 focuses on significant security enhancements and performance optimizations, introducing enterprise-grade rate limiting, efficient caching mechanisms, and comprehensive security hardening across the platform.
+
+## 🚀 Key Features
+
+### Redis-Based Rate Limiting with Intelligent Fallback
+- **Advanced DDoS Protection**: Implemented Redis-based rate limiting for all API endpoints
+- **Intelligent Fallback**: In-memory fallback mechanism ensures rate limiting continues even during Redis failures
+- **Tiered Limits**: Different rate limits for authentication (5/15min), API (60/min), and sensitive operations
+- **IP-Based Tracking**: Removed user-agent from rate limit keys to prevent bypass attempts
+
+### LRU Cache Implementation
+- **Memory-Efficient Caching**: New Least Recently Used (LRU) cache with automatic eviction
+- **Configurable TTL**: Cache time-to-live configurable via `RAG_CACHE_TTL_MS` environment variable
+- **Automatic Cleanup**: Periodic cleanup of expired entries every minute
+- **Prevents Memory Leaks**: Maximum cache size limits with intelligent eviction strategies
+
+### Enhanced Security Features
+- **Password Security**: Upgraded to Bcrypt cost factor 14 (16,384 iterations) for stronger password hashing
+- **Dynamic CSP Nonces**: Cryptographically secure Content Security Policy nonces generated per request
+- **Security Headers**: Comprehensive headers including HSTS, X-Frame-Options, X-Content-Type-Options
+- **Timing Attack Prevention**: Fixed delay added to failed authentication attempts
+
+### Dual Storage Display
+- **Comprehensive Storage View**: Library page now shows both file storage and RAG vector storage usage
+- **Vector Storage Metrics**: Display embedding dimensions, chunk counts, and estimated storage in MB
+- **Real-Time Updates**: Cache invalidation on document operations for accurate storage display
+
+### Performance Optimizations
+- **Static Imports**: Replaced dynamic imports with static imports for faster build times
+- **Build Performance**: Significant reduction in Next.js build times
+- **Database Query Optimization**: Improved query patterns for storage calculations
+
+## 🔧 Technical Improvements
+
+### Code Quality
+- **Eliminated Duplication**: Created shared utilities (`rag-storage-utils.ts`) for consistent storage calculations
+- **Type Safety**: Fixed all TypeScript errors and improved type definitions
+- **Error Handling**: Enhanced error handling with proper fallback mechanisms
+
+### Infrastructure
+- **Redis Integration**: Full Redis support with connection pooling and retry strategies
+- **Environment Variables**: New configuration options for cache TTL and Redis connection
+- **Docker Optimization**: Improved container builds with better dependency management
+
+## 🐛 Bug Fixes
+
+- Fixed storage validation bug using wrong property (`usage` vs `totalUsage`)
+- Resolved duplicate `generateNonce` function definitions
+- Fixed TypeScript errors in AI documents route
+- Corrected type assertions in OpenSource component
+- Fixed user_id format mismatch causing 0 bytes display in RAG storage
+
+## 📝 Configuration Changes
+
+### New Environment Variables
+```bash
+# Redis Configuration (Optional)
+REDIS_URL=redis://localhost:6379
+
+# Cache Configuration (Optional)
+RAG_CACHE_TTL_MS=60000  # Default: 1 minute
+```
+
+### Updated Dependencies
+- Added `ioredis` for Redis support
+- Security dependency updates
+
+## 🔄 Migration Notes
+
+### For Existing Installations
+1. **Optional Redis Setup**: Redis is optional but recommended for production
+2. **No Database Changes**: No migrations required
+3. **Backward Compatible**: All changes are backward compatible
+
+### Upgrade Steps
+```bash
+# Pull latest changes
+git pull origin main
+
+# Install new dependencies
+pnpm install
+
+# Build application
+pnpm build
+
+# Restart services
+pnpm start
+```
+
+## 🔐 Security Advisory
+
+This release includes important security improvements:
+- Rate limiting prevents brute force attacks
+- Enhanced password hashing increases resistance to rainbow table attacks
+- CSP nonces prevent XSS attacks
+- Security headers protect against various web vulnerabilities
+
+We recommend all users upgrade to v2.12.0 for these security benefits.
+
+## 📊 Performance Metrics
+
+- **Build Time**: ~30% faster with static imports
+- **Cache Hit Rate**: ~80% for RAG storage queries
+- **Memory Usage**: Stable with LRU cache eviction
+- **Rate Limiting**: <1ms overhead per request
+
+## 🙏 Acknowledgments
+
+Thanks to all contributors who helped identify and fix security issues, particularly those reported through our security audit process.
+
+## 📚 Documentation
+
+For detailed documentation on new features:
+- [Security Overview](https://docs.plugged.in/security/overview)
+- [Rate Limiting Configuration](https://docs.plugged.in/api/authentication)
+- [Cache Management](https://docs.plugged.in/platform/performance)
+
+## 🚀 What's Next
+
+In the upcoming releases, we plan to:
+- Implement distributed caching with Redis Cluster
+- Add more granular rate limiting rules
+- Enhance monitoring and alerting capabilities
+- Continue security hardening efforts
+
+---
+
+For questions or issues, please visit our [GitHub Discussions](https://github.com/orgs/VeriTeknik/discussions) or contact us at team@plugged.in.

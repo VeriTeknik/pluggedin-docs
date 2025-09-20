@@ -11,24 +11,69 @@ All notable changes to the Plugged.in platform are documented here. The project 
 ## Latest Releases
 
 <CardGroup cols={3}>
-  <Card title="v2.11.1" icon="magnifying-glass">
+  <Card title="v2.12.0" icon="shield-halved">
     **Current Stable**
+    Enhanced Security & Performance
+  </Card>
+  <Card title="v2.11.1" icon="magnifying-glass">
     AI Search & Versioning
+    Performance Optimizations
   </Card>
   <Card title="v2.8.0" icon="robot">
     AI Document Exchange
     RAG v2 System
   </Card>
-  <Card title="v2.7.0" icon="wand-magic-sparkles">
-    Smart Server Wizard
-    OAuth Integration
-  </Card>
 </CardGroup>
+
+## Version 2.12.x Series
+
+### [2.12.0] - 2024-12-21
+<Badge variant="success">Current Version</Badge>
+
+#### Added
+- **Redis-Based Rate Limiting**
+  - Advanced DDoS protection with Redis
+  - Intelligent in-memory fallback for Redis failures
+  - Tiered rate limits for different endpoint types
+  - IP-based tracking without user-agent to prevent bypasses
+
+- **LRU Cache Implementation**
+  - Memory-efficient caching with automatic eviction
+  - Configurable TTL via environment variables
+  - Periodic cleanup of expired entries
+  - Prevention of memory leaks with size limits
+
+- **Enhanced Security Features**
+  - Bcrypt cost factor 14 (16,384 iterations)
+  - Dynamic CSP nonces per request
+  - Comprehensive security headers (HSTS, X-Frame-Options, etc.)
+  - Timing attack prevention with fixed delays
+
+- **Dual Storage Display**
+  - Library shows both file and RAG vector storage
+  - Real-time storage metrics with cache invalidation
+  - Vector embedding dimensions and chunk counts
+
+#### Changed
+- Replaced dynamic imports with static imports for faster builds
+- Optimized database queries for storage calculations
+- Improved error handling with proper fallback mechanisms
+
+#### Fixed
+- Storage validation bug (usage vs totalUsage)
+- Duplicate generateNonce function definitions
+- TypeScript errors in AI documents route
+- User_id format mismatch in RAG storage display
+
+#### Security
+- Rate limiting prevents brute force attacks
+- Enhanced password hashing for rainbow table resistance
+- CSP nonces prevent XSS attacks
+- Security headers protect against web vulnerabilities
 
 ## Version 2.11.x Series
 
 ### [2.11.1] - 2025-01-18
-<Badge variant="success">Current Version</Badge>
 
 #### Added
 - **AI Search in Document Library**

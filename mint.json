@@ -113,6 +113,7 @@
       "group": "Release Notes",
       "pages": [
         "releases/changelog",
+        "releases/v2-12-0",
         "releases/v2-11-1",
         "releases/v2-10-0",
         "releases/v2-8-0",
