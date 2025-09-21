@@ -1,0 +1,709 @@
+---
+title: Python SDK
+description: Official Python SDK for the Plugged.in Library API with sync and async support
+sidebarTitle: Python
+---
+
+# Python SDK
+
+[![PyPI version](https://badge.fury.io/py/pluggedinkit.svg)](https://pypi.org/project/pluggedinkit/)
+[![Python Support](https://img.shields.io/pypi/pyversions/pluggedinkit.svg)](https://pypi.org/project/pluggedinkit/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+The official Python SDK for interacting with Plugged.in's Library API. Features both synchronous and asynchronous clients with comprehensive type hints using Pydantic models.
+
+<CardGroup cols={2}>
+  <Card title="PyPI Package" icon="python" href="https://pypi.org/project/pluggedinkit/">
+    View on PyPI Registry
+  </Card>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/VeriTeknik/pluggedinkit-python">
+    Source code and examples
+  </Card>
+</CardGroup>
+
+## Installation
+
+```bash
+pip install pluggedinkit
+```
+
+### Requirements
+- Python 3.8 or higher
+- httpx for HTTP client
+- pydantic for data validation
+- typing-extensions for Python < 3.11
+
+## Quick Start
+
+### Synchronous Client
+
+```python
+from pluggedinkit import PluggedInClient
+
+# Initialize the client
+client = PluggedInClient(
+    api_key="your-api-key",
+    # base_url defaults to https://plugged.in
+)
+
+# List documents
+documents = client.documents.list()
+print(f"Found {documents.total} documents")
+
+# Search documents
+results = client.documents.search("machine learning")
+for result in results.results:
+    print(f"{result.title} - Relevance: {result.relevance_score}")
+
+# Query knowledge base
+answer = client.rag.ask_question("What are the main features?")
+print(answer)
+```
+
+### Asynchronous Client
+
+```python
+import asyncio
+from pluggedinkit import AsyncPluggedInClient
+
+async def main():
+    # Initialize async client
+    async with AsyncPluggedInClient(api_key="your-api-key") as client:
+        # List documents
+        documents = await client.documents.list()
+        print(f"Found {documents.total} documents")
+
+        # Query RAG
+        answer = await client.rag.ask_question("What's new in the project?")
+        print(answer)
+
+asyncio.run(main())
+```
+
+## Authentication
+
+Get your API key from your [Plugged.in Profile](https://plugged.in/profile/settings):
+
+```python
+import os
+from pluggedinkit import PluggedInClient
+
+# Using environment variables (recommended)
+client = PluggedInClient(
+    api_key=os.environ["PLUGGEDIN_API_KEY"],
+    base_url=os.environ.get("PLUGGEDIN_BASE_URL", "https://plugged.in"),
+    timeout=60.0,  # 60 seconds
+    max_retries=5,
+    debug=True  # Enable debug logging
+)
+
+# Update API key at runtime
+client.set_api_key("new-api-key")
+```
+
+## Core Features
+
+### Document Management
+
+#### List Documents
+
+```python
+from pluggedinkit.types import DocumentFilters, DocumentSource
+
+filters = DocumentFilters(
+    source=DocumentSource.AI_GENERATED,
+    tags=["report", "analysis"],
+    category="documentation",
+    date_from="2024-01-01T00:00:00Z",
+    date_to="2024-12-31T23:59:59Z",
+    model_provider="anthropic",
+    sort="date_desc",
+    limit=20,
+    offset=0
+)
+
+response = client.documents.list(filters)
+for doc in response.documents:
+    print(f"{doc.title} ({doc.file_size} bytes)")
+    print(f"  Created: {doc.created_at}")
+    print(f"  Tags: {', '.join(doc.tags)}")
+```
+
+#### Get Document
+
+```python
+# Get document metadata only
+doc = client.documents.get("document-id")
+print(f"Title: {doc.title}")
+print(f"Version: {doc.version}")
+
+# Get document with content and version history
+doc_with_content = client.documents.get(
+    "document-id",
+    include_content=True,
+    include_versions=True
+)
+print(doc_with_content.content)
+
+# Access version history
+for version in doc_with_content.versions:
+    print(f"Version {version.number}: {version.created_at}")
+```
+
+#### Search Documents
+
+```python
+from pluggedinkit.types import SearchFilters
+
+filters = SearchFilters(
+    model_provider="anthropic",
+    date_from="2024-01-01T00:00:00Z",
+    tags=["finance", "q4"]
+)
+
+results = client.documents.search(
+    "quarterly report",
+    filters=filters,
+    limit=10,
+    offset=0
+)
+
+for result in results.results:
+    print(f"{result.title}")
+    print(f"  Relevance: {result.relevance_score:.2f}")
+    print(f"  Snippet: {result.snippet}")
+    print(f"  Tags: {', '.join(result.tags)}")
+```
+
+#### Create AI-Generated Document
+
+```python
+metadata = {
+    "format": "md",
+    "category": "documentation",
+    "tags": ["api", "guide"],
+    "model": {
+        "name": "claude-3-opus",
+        "provider": "anthropic",
+        "version": "20240229"
+    },
+    "prompt": "Create an API integration guide",
+    "visibility": "workspace"
+}
+
+doc = client.documents.create(
+    title="API Integration Guide",
+    content="# API Integration Guide\n\n## Introduction\n\n...",
+    metadata=metadata
+)
+
+print(f"Created document: {doc.id}")
+print(f"Version: {doc.version}")
+```
+
+#### Update Document
+
+```python
+from pluggedinkit.types import UpdateDocumentRequest, UpdateOperation
+
+request = UpdateDocumentRequest(
+    operation=UpdateOperation.APPEND,
+    content="\n\n## New Section\n\nAdditional content here.",
+    metadata={
+        "changeSummary": "Added implementation details",
+        "model": {
+            "name": "gpt-4",
+            "provider": "openai",
+            "version": "0613"
+        }
+    }
+)
+
+response = client.documents.update("document-id", request)
+print(f"Updated to version {response.version}")
+print(f"Updated at: {response.updated_at}")
+```
+
+### RAG Operations
+
+#### Simple Query
+
+```python
+# Basic question answering
+answer = client.rag.ask_question("What are the deployment procedures?")
+print(answer)
+
+# Get storage statistics
+stats = client.rag.get_storage_stats()
+print(f"Documents: {stats['document_count']}")
+print(f"Total size: {stats['total_size']} bytes")
+```
+
+#### Query with Sources
+
+```python
+result = client.rag.query_with_sources(
+    "Explain the authentication flow",
+    project_uuid="project-uuid"  # Optional project scope
+)
+
+print(f"Answer: {result['answer']}")
+print("\nSources:")
+for source in result["sources"]:
+    print(f"- {source.name} (relevance: {source.relevance}%)")
+    if source.model:
+        print(f"  Created by: {source.model.provider}/{source.model.name}")
+```
+
+#### Find Relevant Documents
+
+```python
+documents = client.rag.find_relevant_documents(
+    "user authentication",
+    project_uuid="project-uuid",
+    limit=5  # Top 5 documents
+)
+
+for doc in documents:
+    print(f"- {doc.name}")
+    print(f"  Type: {doc.type}")
+    if doc.model:
+        print(f"  Model: {doc.model.provider}/{doc.model.name}")
+    print(f"  Relevance: {doc.relevance}%")
+```
+
+### File Uploads
+
+#### Upload Single File
+
+```python
+from pathlib import Path
+
+# Upload from file path
+file_path = Path("./report.pdf")
+metadata = {
+    "name": "Q4 Report.pdf",
+    "description": "Quarterly financial report",
+    "tags": ["finance", "q4", "2024"],
+    "purpose": "Financial documentation",
+    "relatedTo": "PROJECT-123"
+}
+
+def on_progress(percent):
+    print(f"Upload progress: {percent}%")
+
+response = client.uploads.upload_file(
+    file_path,
+    metadata,
+    on_progress=on_progress
+)
+
+if response.success:
+    print(f"Uploaded: {response.document_id}")
+
+    # Track processing if applicable
+    if response.upload_id:
+        def on_update(status):
+            print(f"Status: {status.status} - {status.message}")
+
+        client.uploads.track_upload(
+            response.upload_id,
+            on_update
+        )
+else:
+    print(f"Upload failed: {response.error}")
+```
+
+#### Upload from Memory
+
+```python
+# Upload bytes directly
+content = b"File content here..."
+metadata = {
+    "name": "data.txt",
+    "description": "Data file",
+    "tags": ["data"]
+}
+
+response = client.uploads.upload_file(content, metadata)
+if response.success:
+    print(f"Document ID: {response.document_id}")
+```
+
+#### Batch Upload
+
+```python
+files = [
+    {
+        "file": Path("doc1.pdf"),
+        "metadata": {"name": "doc1.pdf", "tags": ["batch"]}
+    },
+    {
+        "file": Path("doc2.txt"),
+        "metadata": {"name": "doc2.txt", "tags": ["batch"]}
+    }
+]
+
+def on_batch_progress(current, total):
+    print(f"Uploaded {current}/{total} files")
+
+results = client.uploads.upload_batch(
+    files,
+    on_progress=on_batch_progress
+)
+
+for i, result in enumerate(results):
+    if result.success:
+        print(f"✓ {files[i]['metadata']['name']}: {result.document_id}")
+    else:
+        print(f"✗ {files[i]['metadata']['name']}: {result.error}")
+```
+
+## Async Operations
+
+### Concurrent Operations
+
+```python
+import asyncio
+from pluggedinkit import AsyncPluggedInClient
+
+async def document_operations():
+    async with AsyncPluggedInClient(api_key="your-key") as client:
+        # Concurrent document searches
+        search_tasks = [
+            client.documents.search("api"),
+            client.documents.search("guide"),
+            client.documents.search("tutorial")
+        ]
+        results = await asyncio.gather(*search_tasks)
+
+        for result in results:
+            print(f"Found {result.total} matches")
+```
+
+### Async RAG Queries
+
+```python
+async def rag_operations():
+    async with AsyncPluggedInClient(api_key="your-key") as client:
+        # Multiple queries concurrently
+        questions = [
+            "What is the authentication process?",
+            "How do I deploy the application?",
+            "What are the API rate limits?"
+        ]
+
+        tasks = [client.rag.ask_question(q) for q in questions]
+        answers = await asyncio.gather(*tasks)
+
+        for q, a in zip(questions, answers):
+            print(f"Q: {q}")
+            print(f"A: {a}\n")
+
+asyncio.run(rag_operations())
+```
+
+### Async File Upload
+
+```python
+async def upload_files():
+    async with AsyncPluggedInClient(api_key="your-key") as client:
+        files = [Path(f"file{i}.txt") for i in range(10)]
+
+        upload_tasks = []
+        for file in files:
+            metadata = {"name": file.name, "tags": ["async-batch"]}
+            task = client.uploads.upload_file(file, metadata)
+            upload_tasks.append(task)
+
+        results = await asyncio.gather(*upload_tasks)
+
+        success_count = sum(1 for r in results if r.success)
+        print(f"Successfully uploaded {success_count}/{len(files)} files")
+
+asyncio.run(upload_files())
+```
+
+## Error Handling
+
+The SDK provides typed exceptions for better error handling:
+
+```python
+from pluggedinkit import (
+    PluggedInError,
+    AuthenticationError,
+    RateLimitError,
+    NotFoundError,
+    ValidationError
+)
+
+try:
+    doc = client.documents.get("invalid-id")
+except AuthenticationError as e:
+    print("Invalid API key - please check your credentials")
+    # Refresh API key logic
+except RateLimitError as e:
+    print(f"Rate limited. Retry after {e.retry_after} seconds")
+    # Implement exponential backoff
+    time.sleep(e.retry_after)
+except NotFoundError as e:
+    print(f"Document not found: {e.resource_id}")
+except ValidationError as e:
+    print(f"Validation error: {e.details}")
+    # Fix validation issues
+except PluggedInError as e:
+    print(f"API error: {e}")
+    # Generic error handling
+```
+
+## Type Safety with Pydantic
+
+The SDK uses Pydantic models for comprehensive type safety:
+
+```python
+from pluggedinkit.types import (
+    Document,
+    DocumentFilters,
+    DocumentSource,
+    DocumentVisibility,
+    DocumentCategory,
+    UpdateOperation,
+    ModelInfo
+)
+
+# All types are validated
+filters = DocumentFilters(
+    source=DocumentSource.AI_GENERATED,
+    limit=10  # Validated: must be > 0 and <= 100
+)
+
+# IDE autocomplete and type checking
+doc: Document = client.documents.get("id")
+print(doc.title)  # Type-safe attribute access
+
+# Pydantic validation
+try:
+    invalid_filters = DocumentFilters(
+        limit=-1  # Will raise ValidationError
+    )
+except ValidationError as e:
+    print(f"Validation failed: {e}")
+```
+
+## Advanced Configuration
+
+### Custom HTTP Client
+
+```python
+import httpx
+from pluggedinkit import PluggedInClient
+
+# Custom httpx client with proxy
+http_client = httpx.Client(
+    proxies="http://proxy.example.com:8080",
+    verify=False,  # Disable SSL verification (not recommended)
+    timeout=httpx.Timeout(30.0)
+)
+
+client = PluggedInClient(
+    api_key="your-api-key",
+    base_url="https://plugged.in",
+    http_client=http_client
+)
+```
+
+### Retry Configuration
+
+```python
+client = PluggedInClient(
+    api_key="your-api-key",
+    max_retries=10,
+    retry_delay=1.0,  # Initial delay in seconds
+    retry_backoff=2.0  # Exponential backoff factor
+)
+```
+
+### Logging Configuration
+
+```python
+import logging
+
+# Enable debug logging
+logging.basicConfig(level=logging.DEBUG)
+
+client = PluggedInClient(
+    api_key="your-api-key",
+    debug=True
+)
+
+# SDK will log requests, responses, and errors
+```
+
+## Environment Variables
+
+Store your API key securely using environment variables:
+
+```bash
+# .env file
+PLUGGEDIN_API_KEY=your-api-key
+PLUGGEDIN_BASE_URL=https://plugged.in
+```
+
+```python
+import os
+from dotenv import load_dotenv
+from pluggedinkit import PluggedInClient
+
+load_dotenv()
+
+client = PluggedInClient(
+    api_key=os.environ["PLUGGEDIN_API_KEY"],
+    base_url=os.environ.get("PLUGGEDIN_BASE_URL")
+)
+```
+
+## Rate Limiting
+
+The SDK automatically handles rate limiting with exponential backoff:
+
+- **API Endpoints**: 60 requests per minute
+- **Document Search**: 10 requests per hour for AI documents
+- **RAG Queries**: Subject to plan limits
+
+```python
+# The SDK will automatically retry with backoff
+for i in range(100):
+    try:
+        doc = client.documents.get(f"doc-{i}")
+    except RateLimitError as e:
+        print(f"Rate limited, waiting {e.retry_after} seconds")
+        time.sleep(e.retry_after)
+```
+
+## Testing
+
+### Unit Testing with Mock
+
+```python
+import unittest
+from unittest.mock import Mock, patch
+from pluggedinkit import PluggedInClient
+
+class TestDocuments(unittest.TestCase):
+    def setUp(self):
+        self.client = PluggedInClient(api_key="test-key")
+
+    @patch('pluggedinkit.client.httpx.Client')
+    def test_list_documents(self, mock_http):
+        # Mock response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "documents": [],
+            "total": 0
+        }
+        mock_http.return_value.request.return_value = mock_response
+
+        # Test
+        result = self.client.documents.list()
+        self.assertEqual(result.total, 0)
+```
+
+### Integration Testing
+
+```python
+import pytest
+from pluggedinkit import PluggedInClient
+
+@pytest.fixture
+def client():
+    return PluggedInClient(api_key="test-api-key")
+
+def test_document_lifecycle(client):
+    # Create document
+    doc = client.documents.create(
+        "Test Document",
+        "Test content",
+        {"tags": ["test"]}
+    )
+    assert doc.id is not None
+
+    # Update document
+    update_result = client.documents.update(
+        doc.id,
+        UpdateDocumentRequest(
+            operation=UpdateOperation.APPEND,
+            content="\nUpdated content"
+        )
+    )
+    assert update_result.version > doc.version
+
+    # Delete document
+    client.documents.delete(doc.id)
+```
+
+## Examples
+
+Complete working examples are available in the [GitHub repository](https://github.com/VeriTeknik/pluggedinkit-python/tree/main/examples):
+
+- [Basic Usage](https://github.com/VeriTeknik/pluggedinkit-python/blob/main/examples/basic.py)
+- [Document Management](https://github.com/VeriTeknik/pluggedinkit-python/blob/main/examples/documents.py)
+- [RAG Queries](https://github.com/VeriTeknik/pluggedinkit-python/blob/main/examples/rag.py)
+- [File Upload](https://github.com/VeriTeknik/pluggedinkit-python/blob/main/examples/upload.py)
+- [Async Operations](https://github.com/VeriTeknik/pluggedinkit-python/blob/main/examples/async_example.py)
+- [Error Handling](https://github.com/VeriTeknik/pluggedinkit-python/blob/main/examples/errors.py)
+
+## API Reference
+
+### Client Classes
+
+| Class | Description |
+|-------|-------------|
+| `PluggedInClient` | Synchronous API client |
+| `AsyncPluggedInClient` | Asynchronous API client |
+
+### Configuration Options
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `api_key` | str | required | Your Plugged.in API key |
+| `base_url` | str | `https://plugged.in` | API base URL |
+| `timeout` | float | `60.0` | Request timeout in seconds |
+| `max_retries` | int | `5` | Maximum retry attempts |
+| `debug` | bool | `False` | Enable debug logging |
+
+### Document Methods
+
+| Method | Description |
+|--------|-------------|
+| `list(filters)` | List documents with optional filters |
+| `get(id, include_content, include_versions)` | Get a specific document |
+| `search(query, filters, limit, offset)` | Search documents semantically |
+| `create(title, content, metadata)` | Create a new document |
+| `update(id, request)` | Update an existing document |
+| `delete(id)` | Delete a document |
+
+### RAG Methods
+
+| Method | Description |
+|--------|-------------|
+| `ask_question(query)` | Simple RAG query |
+| `query_with_sources(query, project_uuid)` | Query with source documents |
+| `find_relevant_documents(query, project_uuid, limit)` | Find relevant documents |
+| `check_availability()` | Check RAG service availability |
+| `get_storage_stats()` | Get storage statistics |
+
+### Upload Methods
+
+| Method | Description |
+|--------|-------------|
+| `upload_file(file, metadata, on_progress)` | Upload a single file |
+| `upload_batch(files, on_progress)` | Upload multiple files |
+| `track_upload(upload_id, on_update)` | Track upload processing |
+
+## Support
+
+- **PyPI Package**: [https://pypi.org/project/pluggedinkit/](https://pypi.org/project/pluggedinkit/)
+- **GitHub Issues**: [Report bugs and request features](https://github.com/VeriTeknik/pluggedinkit-python/issues)
+- **Documentation**: [https://docs.plugged.in](https://docs.plugged.in)
+- **Discord**: [Join our community](https://discord.gg/pluggedin)

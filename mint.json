@@ -32,6 +32,10 @@
   },
   "tabs": [
     {
+      "name": "SDKs",
+      "url": "sdks"
+    },
+    {
       "name": "API Reference",
       "url": "api"
     },
@@ -61,6 +65,14 @@
         "platform/registry",
         "platform/sharing-servers",
         "platform/user-management"
+      ]
+    },
+    {
+      "group": "SDKs",
+      "pages": [
+        "sdks/javascript",
+        "sdks/python",
+        "sdks/go"
       ]
     },
     {

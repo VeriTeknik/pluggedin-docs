@@ -1,0 +1,832 @@
+---
+title: Go SDK
+description: Official Go SDK for the Plugged.in Library API with context support
+sidebarTitle: Go
+---
+
+# Go SDK
+
+[![Go Reference](https://pkg.go.dev/badge/github.com/veriteknik/pluggedinkit-go.svg)](https://pkg.go.dev/github.com/veriteknik/pluggedinkit-go)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+The official Go SDK for interacting with Plugged.in's Library API. Features context-aware operations, comprehensive error handling, and full type safety.
+
+<CardGroup cols={2}>
+  <Card title="Go Package" icon="golang" href="https://pkg.go.dev/github.com/veriteknik/pluggedinkit-go">
+    View on pkg.go.dev
+  </Card>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/VeriTeknik/pluggedinkit-go">
+    Source code and examples
+  </Card>
+</CardGroup>
+
+## Installation
+
+```bash
+go get github.com/veriteknik/pluggedinkit-go
+```
+
+### Requirements
+- Go 1.18 or higher
+- No external dependencies beyond the standard library
+
+## Quick Start
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    pluggedin "github.com/veriteknik/pluggedinkit-go"
+)
+
+func main() {
+    // Initialize client
+    client := pluggedin.NewClient("your-api-key")
+    // For local development:
+    // client := pluggedin.NewClientWithOptions("your-api-key", "http://localhost:12005", nil)
+
+    ctx := context.Background()
+
+    // List documents
+    docs, err := client.Documents.List(ctx, &pluggedin.DocumentFilters{
+        Source: pluggedin.SourceAll,
+        Limit:  10,
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Printf("Found %d documents\n", docs.Total)
+
+    // Search documents
+    results, err := client.Documents.Search(ctx, "machine learning", nil, 10, 0)
+    if err != nil {
+        log.Fatal(err)
+    }
+    for _, result := range results.Results {
+        fmt.Printf("%s - Relevance: %.2f\n", result.Title, result.RelevanceScore)
+    }
+
+    // Query RAG
+    answer, err := client.RAG.AskQuestion(ctx, "What are the main features?")
+    if err != nil {
+        log.Fatal(err)
+    }
+    fmt.Println(answer)
+}
+```
+
+## Authentication
+
+Get your API key from your [Plugged.in Profile](https://plugged.in/profile/settings):
+
+```go
+import (
+    "os"
+    pluggedin "github.com/veriteknik/pluggedinkit-go"
+)
+
+// Using environment variables (recommended)
+client := pluggedin.NewClient(os.Getenv("PLUGGEDIN_API_KEY"))
+
+// With custom configuration
+import (
+    "net/http"
+    "time"
+)
+
+httpClient := &http.Client{
+    Timeout: 120 * time.Second,
+}
+
+client := pluggedin.NewClientWithOptions(
+    os.Getenv("PLUGGEDIN_API_KEY"),
+    os.Getenv("PLUGGEDIN_BASE_URL"),
+    httpClient,
+)
+
+// Update API key at runtime
+client.SetAPIKey("new-api-key")
+
+// Change base URL
+client.SetBaseURL("http://localhost:12005")
+```
+
+## Core Features
+
+### Document Management
+
+#### List Documents
+
+```go
+filters := &pluggedin.DocumentFilters{
+    Source:        pluggedin.SourceAIGenerated,
+    Tags:          []string{"report", "analysis"},
+    Category:      pluggedin.CategoryDocumentation,
+    Sort:          pluggedin.SortDateDesc,
+    Limit:         20,
+    Offset:        0,
+    ModelProvider: "anthropic",
+}
+
+// Time filters
+from := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+to := time.Date(2024, 12, 31, 23, 59, 59, 0, time.UTC)
+filters.DateFrom = &from
+filters.DateTo = &to
+
+response, err := client.Documents.List(ctx, filters)
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, doc := range response.Documents {
+    fmt.Printf("%s (%d bytes)\n", doc.Title, doc.FileSize)
+    fmt.Printf("  Created: %s\n", doc.CreatedAt)
+    fmt.Printf("  Tags: %v\n", doc.Tags)
+}
+```
+
+#### Get Document
+
+```go
+// Get document metadata only
+doc, err := client.Documents.Get(ctx, "document-id", false, false)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Title: %s\n", doc.Title)
+fmt.Printf("Version: %d\n", doc.Version)
+
+// Get document with content and version history
+docWithContent, err := client.Documents.Get(ctx, "document-id", true, true)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(docWithContent.Content)
+
+// Check last access time
+if docWithContent.LastAccessAt != nil {
+    fmt.Printf("Last accessed: %s\n", *docWithContent.LastAccessAt)
+}
+```
+
+#### Search Documents
+
+```go
+filters := map[string]interface{}{
+    "modelProvider": "anthropic",
+    "dateFrom":      "2024-01-01T00:00:00Z",
+    "tags":          "finance,q4",
+}
+
+results, err := client.Documents.Search(ctx, "quarterly report", filters, 10, 0)
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Found %d results for query: %s\n", results.Total, results.Query)
+
+for _, result := range results.Results {
+    fmt.Printf("\n%s\n", result.Title)
+    fmt.Printf("  Document ID: %s\n", result.DocumentID)
+    fmt.Printf("  Relevance: %.2f\n", result.RelevanceScore)
+    fmt.Printf("  Snippet: %s\n", result.Snippet)
+    fmt.Printf("  Tags: %v\n", result.Tags)
+}
+```
+
+#### Create AI-Generated Document
+
+```go
+request := &pluggedin.CreateDocumentRequest{
+    Title:   "API Integration Guide",
+    Content: "# API Integration Guide\n\n## Introduction\n\n...",
+    Metadata: map[string]interface{}{
+        "format":   "md",
+        "category": "documentation",
+        "tags":     []string{"api", "guide"},
+        "model": map[string]string{
+            "name":     "claude-3-opus",
+            "provider": "anthropic",
+            "version":  "20240229",
+        },
+        "prompt":     "Create an API integration guide",
+        "visibility": "workspace",
+    },
+}
+
+doc, err := client.Documents.Create(ctx, request)
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Created document: %s\n", doc.ID)
+fmt.Printf("Version: %d\n", doc.Version)
+```
+
+#### Update Document
+
+```go
+request := &pluggedin.UpdateDocumentRequest{
+    Operation: pluggedin.OpAppend,
+    Content:   "\n\n## New Section\n\nAdditional content here.",
+    Metadata: map[string]interface{}{
+        "changeSummary": "Added implementation details section",
+        "model": map[string]string{
+            "name":     "gpt-4",
+            "provider": "openai",
+            "version":  "0613",
+        },
+    },
+}
+
+response, err := client.Documents.Update(ctx, "document-id", request)
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Updated to version %d\n", response.Version)
+fmt.Printf("Updated at: %s\n", response.UpdatedAt)
+```
+
+#### Delete Document
+
+```go
+err := client.Documents.Delete(ctx, "document-id")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println("Document deleted successfully")
+```
+
+### RAG Operations
+
+#### Simple Query
+
+```go
+// Basic question answering
+answer, err := client.RAG.AskQuestion(ctx, "What are the deployment procedures?")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println("Answer:", answer)
+
+// Check availability
+status, err := client.RAG.CheckAvailability(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("RAG Available: %v\n", status["available"])
+
+// Get storage statistics
+stats, err := client.RAG.GetStorageStats(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Documents: %v\n", stats["document_count"])
+fmt.Printf("Total size: %v bytes\n", stats["total_size"])
+```
+
+#### Query with Sources
+
+```go
+result, err := client.RAG.QueryWithSources(
+    ctx,
+    "Explain the authentication flow",
+    "project-uuid", // Optional project scope
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Answer: %s\n", result.Answer)
+fmt.Println("\nSources:")
+for _, source := range result.Sources {
+    fmt.Printf("- %s (relevance: %.0f%%)\n", source.Name, source.Relevance)
+    if source.Model != nil {
+        fmt.Printf("  Created by: %s/%s\n", source.Model.Provider, source.Model.Name)
+    }
+}
+```
+
+#### Find Relevant Documents
+
+```go
+documents, err := client.RAG.FindRelevantDocuments(
+    ctx,
+    "user authentication",
+    "project-uuid",
+    5, // Top 5 documents
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, doc := range documents {
+    fmt.Printf("- %s\n", doc.Name)
+    fmt.Printf("  Type: %s\n", doc.Type)
+    if doc.Model != nil {
+        fmt.Printf("  Model: %s/%s\n", doc.Model.Provider, doc.Model.Name)
+    }
+    fmt.Printf("  Relevance: %.0f%%\n", doc.Relevance)
+}
+```
+
+### File Uploads
+
+#### Upload Single File
+
+```go
+metadata := &pluggedin.UploadMetadata{
+    Name:        "Q4 Report.pdf",
+    Description: "Quarterly financial report",
+    Tags:        []string{"finance", "q4", "2024"},
+    Purpose:     "Financial documentation",
+    RelatedTo:   "PROJECT-123",
+}
+
+// Progress callback
+onProgress := func(percent int) {
+    fmt.Printf("Upload progress: %d%%\n", percent)
+}
+
+response, err := client.Uploads.UploadFile(
+    ctx,
+    "./report.pdf",
+    metadata,
+    onProgress,
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+if response.Success {
+    fmt.Printf("File uploaded successfully: %s\n", response.DocumentID)
+
+    // Track RAG processing if applicable
+    if response.UploadID != "" {
+        onUpdate := func(status *pluggedin.UploadStatus) {
+            fmt.Printf("Processing: %s - %s (%d%%)\n",
+                status.Status, status.Message, status.Progress)
+        }
+
+        err := client.Uploads.TrackUpload(ctx, response.UploadID, onUpdate)
+        if err != nil {
+            log.Printf("Error tracking upload: %v", err)
+        }
+    }
+} else {
+    fmt.Printf("Upload failed: %s\n", response.Error)
+}
+```
+
+#### Upload from Reader
+
+```go
+file, err := os.Open("document.txt")
+if err != nil {
+    log.Fatal(err)
+}
+defer file.Close()
+
+fileInfo, err := file.Stat()
+if err != nil {
+    log.Fatal(err)
+}
+
+metadata := &pluggedin.UploadMetadata{
+    Name:        fileInfo.Name(),
+    Description: "Text document",
+    Tags:        []string{"text"},
+}
+
+response, err := client.Uploads.UploadReader(
+    ctx,
+    file,
+    fileInfo.Size(),
+    metadata,
+    nil, // No progress callback
+)
+if err != nil {
+    log.Fatal(err)
+}
+
+if response.Success {
+    fmt.Printf("Document ID: %s\n", response.DocumentID)
+}
+```
+
+#### Batch Upload
+
+```go
+files := []pluggedin.FileUpload{
+    {
+        Path: "doc1.pdf",
+        Metadata: &pluggedin.UploadMetadata{
+            Name: "doc1.pdf",
+            Tags: []string{"batch"},
+        },
+    },
+    {
+        Path: "doc2.txt",
+        Metadata: &pluggedin.UploadMetadata{
+            Name: "doc2.txt",
+            Tags: []string{"batch"},
+        },
+    },
+    {
+        Path: "doc3.md",
+        Metadata: &pluggedin.UploadMetadata{
+            Name: "doc3.md",
+            Tags: []string{"batch"},
+        },
+    },
+}
+
+onProgress := func(current, total int) {
+    fmt.Printf("Uploaded %d/%d files\n", current, total)
+}
+
+results, err := client.Uploads.UploadBatch(ctx, files, onProgress)
+if err != nil {
+    log.Fatal(err)
+}
+
+for i, result := range results {
+    if result.Success {
+        fmt.Printf("✓ %s uploaded: %s\n",
+            files[i].Metadata.Name, result.DocumentID)
+    } else {
+        fmt.Printf("✗ %s failed: %s\n",
+            files[i].Metadata.Name, result.Error)
+    }
+}
+```
+
+## Error Handling
+
+The SDK provides typed error structs for comprehensive error handling:
+
+```go
+doc, err := client.Documents.Get(ctx, "invalid-id", false, false)
+if err != nil {
+    switch e := err.(type) {
+    case *pluggedin.AuthenticationError:
+        fmt.Println("Invalid API key - please check your credentials")
+        // Refresh API key logic
+
+    case *pluggedin.RateLimitError:
+        fmt.Printf("Rate limited. Retry after %d seconds\n", e.RetryAfter)
+        // Implement retry with backoff
+        time.Sleep(time.Duration(e.RetryAfter) * time.Second)
+
+    case *pluggedin.NotFoundError:
+        fmt.Printf("Document not found: %s\n", e.ID)
+        // Handle missing document
+
+    case *pluggedin.ValidationError:
+        fmt.Printf("Validation error on field '%s': %s\n", e.Field, e.Message)
+        // Fix validation issues
+
+    case *pluggedin.APIError:
+        fmt.Printf("API error (%d): %s\n", e.StatusCode, e.Message)
+        if e.Details != nil {
+            fmt.Printf("Details: %v\n", e.Details)
+        }
+
+    default:
+        fmt.Printf("Unexpected error: %v\n", err)
+    }
+}
+```
+
+## Context and Cancellation
+
+All SDK methods accept a context for cancellation and timeout control:
+
+```go
+// With timeout
+ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+defer cancel()
+
+docs, err := client.Documents.List(ctx, nil)
+if err != nil {
+    if errors.Is(err, context.DeadlineExceeded) {
+        fmt.Println("Request timed out")
+    }
+}
+
+// With cancellation
+ctx, cancel := context.WithCancel(context.Background())
+
+// Cancel from another goroutine
+go func() {
+    time.Sleep(5 * time.Second)
+    cancel()
+}()
+
+// This will be cancelled after 5 seconds
+answer, err := client.RAG.AskQuestion(ctx, "Long running query")
+if err != nil {
+    if errors.Is(err, context.Canceled) {
+        fmt.Println("Request was cancelled")
+    }
+}
+```
+
+## Concurrent Operations
+
+Leverage Go's concurrency for parallel operations:
+
+```go
+func fetchDocumentsConcurrently(client *pluggedin.Client) {
+    ctx := context.Background()
+    documentIDs := []string{"doc1", "doc2", "doc3", "doc4", "doc5"}
+
+    type result struct {
+        doc *pluggedin.Document
+        err error
+    }
+
+    results := make(chan result, len(documentIDs))
+
+    // Fetch documents concurrently
+    for _, id := range documentIDs {
+        go func(docID string) {
+            doc, err := client.Documents.Get(ctx, docID, true, false)
+            results <- result{doc, err}
+        }(id)
+    }
+
+    // Collect results
+    for i := 0; i < len(documentIDs); i++ {
+        r := <-results
+        if r.err != nil {
+            fmt.Printf("Error fetching document: %v\n", r.err)
+        } else {
+            fmt.Printf("Fetched: %s\n", r.doc.Title)
+        }
+    }
+}
+```
+
+## Testing
+
+### Unit Testing with Interfaces
+
+```go
+// Define interface for testing
+type DocumentService interface {
+    List(ctx context.Context, filters *DocumentFilters) (*ListDocumentsResponse, error)
+    Get(ctx context.Context, id string, includeContent, includeVersions bool) (*Document, error)
+}
+
+// Test function
+func TestDocumentList(t *testing.T) {
+    // Mock implementation
+    mockService := &MockDocumentService{
+        ListFunc: func(ctx context.Context, filters *DocumentFilters) (*ListDocumentsResponse, error) {
+            return &ListDocumentsResponse{
+                Documents: []Document{{Title: "Test Doc"}},
+                Total:     1,
+            }, nil
+        },
+    }
+
+    // Test
+    response, err := mockService.List(context.Background(), nil)
+    if err != nil {
+        t.Fatalf("unexpected error: %v", err)
+    }
+
+    if response.Total != 1 {
+        t.Errorf("expected 1 document, got %d", response.Total)
+    }
+}
+```
+
+### Integration Testing
+
+```go
+func TestDocumentLifecycle(t *testing.T) {
+    if testing.Short() {
+        t.Skip("skipping integration test")
+    }
+
+    client := pluggedin.NewClient(os.Getenv("PLUGGEDIN_API_KEY"))
+    ctx := context.Background()
+
+    // Create document
+    doc, err := client.Documents.Create(ctx, &CreateDocumentRequest{
+        Title:   "Test Document",
+        Content: "Test content",
+        Metadata: map[string]interface{}{
+            "tags": []string{"test"},
+        },
+    })
+    if err != nil {
+        t.Fatalf("failed to create document: %v", err)
+    }
+
+    // Cleanup
+    defer func() {
+        _ = client.Documents.Delete(ctx, doc.ID)
+    }()
+
+    // Update document
+    updateResp, err := client.Documents.Update(ctx, doc.ID, &UpdateDocumentRequest{
+        Operation: OpAppend,
+        Content:   "\nUpdated content",
+    })
+    if err != nil {
+        t.Fatalf("failed to update document: %v", err)
+    }
+
+    if updateResp.Version <= doc.Version {
+        t.Errorf("expected version to increase, got %d", updateResp.Version)
+    }
+}
+```
+
+### Benchmarking
+
+```go
+func BenchmarkDocumentSearch(b *testing.B) {
+    client := pluggedin.NewClient(os.Getenv("PLUGGEDIN_API_KEY"))
+    ctx := context.Background()
+
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        _, err := client.Documents.Search(ctx, "test query", nil, 10, 0)
+        if err != nil {
+            b.Fatalf("search failed: %v", err)
+        }
+    }
+}
+```
+
+## Advanced Configuration
+
+### Custom HTTP Transport
+
+```go
+import (
+    "net/http"
+    "net/url"
+    "time"
+)
+
+// Custom transport with proxy
+proxyURL, _ := url.Parse("http://proxy.example.com:8080")
+transport := &http.Transport{
+    Proxy:           http.ProxyURL(proxyURL),
+    MaxIdleConns:    100,
+    IdleConnTimeout: 90 * time.Second,
+}
+
+httpClient := &http.Client{
+    Transport: transport,
+    Timeout:   2 * time.Minute,
+}
+
+client := pluggedin.NewClientWithOptions(
+    "your-api-key",
+    "https://plugged.in",
+    httpClient,
+)
+```
+
+### Environment Variables
+
+```go
+// Load from environment
+type Config struct {
+    APIKey  string
+    BaseURL string
+    Timeout time.Duration
+}
+
+func LoadConfig() *Config {
+    timeout, _ := time.ParseDuration(os.Getenv("PLUGGEDIN_TIMEOUT"))
+    if timeout == 0 {
+        timeout = 60 * time.Second
+    }
+
+    return &Config{
+        APIKey:  os.Getenv("PLUGGEDIN_API_KEY"),
+        BaseURL: os.Getenv("PLUGGEDIN_BASE_URL"),
+        Timeout: timeout,
+    }
+}
+
+// Use configuration
+config := LoadConfig()
+httpClient := &http.Client{Timeout: config.Timeout}
+client := pluggedin.NewClientWithOptions(config.APIKey, config.BaseURL, httpClient)
+```
+
+## Rate Limiting
+
+The SDK handles rate limiting automatically:
+
+- **API Endpoints**: 60 requests per minute
+- **Document Search**: 10 requests per hour for AI documents
+- **RAG Queries**: Subject to plan limits
+
+```go
+// Implement retry with exponential backoff
+func retryWithBackoff(ctx context.Context, fn func() error) error {
+    maxRetries := 5
+    baseDelay := 1 * time.Second
+
+    for i := 0; i < maxRetries; i++ {
+        err := fn()
+        if err == nil {
+            return nil
+        }
+
+        // Check if it's a rate limit error
+        if rateLimitErr, ok := err.(*pluggedin.RateLimitError); ok {
+            delay := time.Duration(rateLimitErr.RetryAfter) * time.Second
+            fmt.Printf("Rate limited, waiting %v\n", delay)
+            time.Sleep(delay)
+            continue
+        }
+
+        // Exponential backoff for other errors
+        delay := baseDelay * time.Duration(1<<i)
+        fmt.Printf("Error: %v, retrying in %v\n", err, delay)
+        time.Sleep(delay)
+    }
+
+    return fmt.Errorf("max retries exceeded")
+}
+```
+
+## Examples
+
+Complete working examples are available in the [GitHub repository](https://github.com/VeriTeknik/pluggedinkit-go/tree/main/examples):
+
+- [Basic Usage](https://github.com/VeriTeknik/pluggedinkit-go/blob/main/examples/basic/main.go)
+- [Document Management](https://github.com/VeriTeknik/pluggedinkit-go/blob/main/examples/documents/main.go)
+- [RAG Queries](https://github.com/VeriTeknik/pluggedinkit-go/blob/main/examples/rag/main.go)
+- [File Upload](https://github.com/VeriTeknik/pluggedinkit-go/blob/main/examples/upload/main.go)
+- [Error Handling](https://github.com/VeriTeknik/pluggedinkit-go/blob/main/examples/errors/main.go)
+- [Concurrent Operations](https://github.com/VeriTeknik/pluggedinkit-go/blob/main/examples/concurrent/main.go)
+
+## API Reference
+
+### Client Functions
+
+| Function | Description |
+|----------|-------------|
+| `NewClient(apiKey)` | Create a new client with default settings |
+| `NewClientWithOptions(apiKey, baseURL, httpClient)` | Create a client with custom options |
+
+### Client Methods
+
+| Method | Description |
+|--------|-------------|
+| `SetAPIKey(apiKey)` | Update the API key |
+| `SetBaseURL(baseURL)` | Update the base URL |
+
+### Document Service Methods
+
+| Method | Description |
+|--------|-------------|
+| `List(ctx, filters)` | List documents with optional filters |
+| `Get(ctx, id, includeContent, includeVersions)` | Get a specific document |
+| `Search(ctx, query, filters, limit, offset)` | Search documents |
+| `Create(ctx, request)` | Create a new document |
+| `Update(ctx, id, request)` | Update an existing document |
+| `Delete(ctx, id)` | Delete a document |
+
+### RAG Service Methods
+
+| Method | Description |
+|--------|-------------|
+| `AskQuestion(ctx, query)` | Simple RAG query |
+| `QueryWithSources(ctx, query, projectUUID)` | Query with source documents |
+| `FindRelevantDocuments(ctx, query, projectUUID, limit)` | Find relevant documents |
+| `CheckAvailability(ctx)` | Check RAG service availability |
+| `GetStorageStats(ctx)` | Get storage statistics |
+
+### Upload Service Methods
+
+| Method | Description |
+|--------|-------------|
+| `UploadFile(ctx, path, metadata, onProgress)` | Upload file from path |
+| `UploadReader(ctx, reader, size, metadata, onProgress)` | Upload from io.Reader |
+| `UploadBatch(ctx, files, onProgress)` | Upload multiple files |
+| `TrackUpload(ctx, uploadID, onUpdate)` | Track upload processing |
+
+## Support
+
+- **Go Package**: [https://pkg.go.dev/github.com/veriteknik/pluggedinkit-go](https://pkg.go.dev/github.com/veriteknik/pluggedinkit-go)
+- **GitHub Issues**: [Report bugs and request features](https://github.com/VeriTeknik/pluggedinkit-go/issues)
+- **Documentation**: [https://docs.plugged.in](https://docs.plugged.in)
+- **Discord**: [Join our community](https://discord.gg/pluggedin)

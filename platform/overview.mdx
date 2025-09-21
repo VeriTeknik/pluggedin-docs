@@ -140,11 +140,18 @@ graph TB
         Cline[Cline]
     end
 
+    subgraph "SDKs"
+        JS[JavaScript SDK]
+        PY[Python SDK]
+        GO[Go SDK]
+    end
+
     subgraph "Plugged.in Platform"
         Proxy[MCP Proxy]
         App[Web Application]
         DB[(PostgreSQL)]
         RAG[RAG Service]
+        API[Library API]
     end
 
     subgraph "MCP Servers"
@@ -157,14 +164,55 @@ graph TB
     Cursor --> Proxy
     Cline --> Proxy
 
+    JS --> API
+    PY --> API
+    GO --> API
+
     Proxy --> App
     App --> DB
     App --> RAG
+    API --> DB
+    API --> RAG
 
     Proxy --> STDIO
     Proxy --> SSE
     Proxy --> HTTP
 ```
+
+### 🚀 Official SDKs
+
+<Info>
+Programmatically interact with Plugged.in's Library API using our official SDKs for JavaScript, Python, and Go.
+</Info>
+
+<CardGroup cols={3}>
+  <Card title="JavaScript/TypeScript" icon="js" href="/sdks/javascript">
+    ```bash
+    npm install pluggedinkit-js
+    ```
+    Full TypeScript support with async/await
+  </Card>
+  <Card title="Python" icon="python" href="/sdks/python">
+    ```bash
+    pip install pluggedinkit
+    ```
+    Sync & async clients with type hints
+  </Card>
+  <Card title="Go" icon="golang" href="/sdks/go">
+    ```bash
+    go get github.com/veriteknik/pluggedinkit-go
+    ```
+    Native Go implementation with contexts
+  </Card>
+</CardGroup>
+
+#### SDK Features
+- **Document Management**: Full CRUD operations with versioning
+- **RAG Integration**: Query your knowledge base programmatically
+- **File Uploads**: Upload documents with progress tracking
+- **Type Safety**: Complete type definitions in all languages
+- **Authentication**: Secure API key authentication
+- **Rate Limiting**: Built-in retry logic with exponential backoff
 
 ## Key Features by Version
 

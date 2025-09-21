@@ -1,0 +1,484 @@
+---
+title: JavaScript/TypeScript SDK
+description: Official JavaScript/TypeScript SDK for the Plugged.in Library API
+sidebarTitle: JavaScript
+---
+
+# JavaScript/TypeScript SDK
+
+[![npm version](https://badge.fury.io/js/pluggedinkit-js.svg)](https://www.npmjs.com/package/pluggedinkit-js)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+The official JavaScript/TypeScript SDK for interacting with Plugged.in's Library API. Easily manage documents, perform RAG queries, and upload files with full type safety.
+
+<CardGroup cols={2}>
+  <Card title="NPM Package" icon="npm" href="https://www.npmjs.com/package/pluggedinkit-js">
+    View on NPM Registry
+  </Card>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/VeriTeknik/pluggedinkit-js">
+    Source code and examples
+  </Card>
+</CardGroup>
+
+## Installation
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install pluggedinkit-js
+    ```
+  </Tab>
+  <Tab title="yarn">
+    ```bash
+    yarn add pluggedinkit-js
+    ```
+  </Tab>
+  <Tab title="pnpm">
+    ```bash
+    pnpm add pluggedinkit-js
+    ```
+  </Tab>
+</Tabs>
+
+## Quick Start
+
+```typescript
+import { PluggedInClient } from 'pluggedinkit-js';
+
+// Initialize the client
+const client = new PluggedInClient({
+  apiKey: 'your-api-key',
+  // baseUrl defaults to https://plugged.in
+});
+
+// List documents
+const documents = await client.documents.list({
+  limit: 10,
+  source: 'all'
+});
+
+// Search documents
+const results = await client.documents.search('machine learning', {
+  tags: ['ai', 'ml']
+});
+
+// Query RAG
+const answer = await client.rag.query('What are the latest updates?');
+console.log(answer);
+```
+
+## Authentication
+
+Get your API key from your [Plugged.in Profile](https://plugged.in/profile/settings) and configure the client:
+
+```typescript
+const client = new PluggedInClient({
+  apiKey: process.env.PLUGGEDIN_API_KEY,
+  baseUrl: process.env.PLUGGEDIN_BASE_URL || 'https://plugged.in',
+  timeout: 60000, // 60 seconds
+  maxRetries: 5,
+  debug: true // Enable debug logging
+});
+
+// Update API key at runtime
+client.setApiKey('new-api-key');
+```
+
+## Core Features
+
+### Document Management
+
+#### List Documents
+
+```typescript
+import { DocumentFilters, DocumentSource, SortOrder } from 'pluggedinkit-js';
+
+const filters: DocumentFilters = {
+  source: 'ai_generated',
+  tags: ['report', 'analysis'],
+  sort: 'date_desc',
+  limit: 20,
+  offset: 0,
+  category: 'documentation',
+  dateFrom: '2024-01-01T00:00:00Z',
+  modelProvider: 'anthropic'
+};
+
+const response = await client.documents.list(filters);
+
+console.log(`Found ${response.total} documents`);
+response.documents.forEach(doc => {
+  console.log(`- ${doc.title} (${doc.fileSize} bytes)`);
+});
+```
+
+#### Get Document
+
+```typescript
+// Get metadata only
+const doc = await client.documents.get('document-id');
+
+// Get document with content and version history
+const fullDoc = await client.documents.get('document-id', {
+  includeContent: true,
+  includeVersions: true
+});
+
+console.log(fullDoc.content);
+console.log(`Version: ${fullDoc.version}`);
+```
+
+#### Search Documents
+
+```typescript
+const searchResults = await client.documents.search('quarterly report', {
+  modelProvider: 'anthropic',
+  dateFrom: '2024-01-01T00:00:00Z',
+  tags: ['finance', 'q4']
+}, 10, 0);
+
+searchResults.results.forEach(result => {
+  console.log(`${result.title}`);
+  console.log(`  Relevance: ${result.relevanceScore}`);
+  console.log(`  Snippet: ${result.snippet}`);
+});
+```
+
+#### Create AI-Generated Document
+
+```typescript
+const newDoc = await client.documents.create(
+  'API Integration Guide',
+  '# API Integration Guide\n\n## Introduction\n\n...',
+  {
+    format: 'md',
+    category: 'documentation',
+    tags: ['api', 'integration', 'guide'],
+    model: {
+      name: 'claude-3-opus',
+      provider: 'anthropic',
+      version: '20240229'
+    },
+    prompt: 'Create a comprehensive API integration guide',
+    visibility: 'workspace'
+  }
+);
+
+console.log(`Created document: ${newDoc.id}`);
+```
+
+#### Update Document
+
+```typescript
+const updateResult = await client.documents.update('document-id', {
+  operation: 'append',
+  content: '\n\n## New Section\n\nAdditional content here.',
+  metadata: {
+    changeSummary: 'Added implementation details section',
+    model: {
+      name: 'gpt-4',
+      provider: 'openai',
+      version: '0613'
+    }
+  }
+});
+
+console.log(`Document updated to version ${updateResult.version}`);
+```
+
+### RAG Operations
+
+#### Simple Query
+
+```typescript
+const answer = await client.rag.query('What are our deployment procedures?');
+console.log(answer);
+```
+
+#### Query with Sources
+
+```typescript
+const { answer, sources } = await client.rag.queryWithSources(
+  'Explain the authentication flow',
+  'project-uuid' // Optional project scope
+);
+
+console.log('Answer:', answer);
+console.log('Sources:');
+sources.forEach(source => {
+  console.log(`- ${source.name} (relevance: ${source.relevance}%)`);
+});
+```
+
+#### Find Relevant Documents
+
+```typescript
+const relevantDocs = await client.rag.findRelevantDocuments(
+  'user authentication',
+  'project-uuid',
+  5 // Return top 5 documents
+);
+
+relevantDocs.forEach(doc => {
+  console.log(`- ${doc.name}`);
+  if (doc.model) {
+    console.log(`  Created by: ${doc.model.provider}/${doc.model.name}`);
+  }
+});
+```
+
+### File Uploads
+
+#### Upload File (Node.js)
+
+```typescript
+import fs from 'fs';
+
+const fileBuffer = fs.readFileSync('./report.pdf');
+
+const uploadResult = await client.uploads.uploadFile(
+  fileBuffer,
+  {
+    name: 'Q4 Report.pdf',
+    description: 'Quarterly financial report',
+    tags: ['finance', 'q4', '2024'],
+    purpose: 'Financial documentation',
+    relatedTo: 'PROJECT-123'
+  },
+  (progress) => {
+    console.log(`Upload progress: ${progress}%`);
+  }
+);
+
+if (uploadResult.success) {
+  console.log(`File uploaded: ${uploadResult.documentId}`);
+
+  // Track RAG processing
+  if (uploadResult.uploadId) {
+    await client.uploads.trackUpload(
+      uploadResult.uploadId,
+      (status) => {
+        console.log(`Processing: ${status.status} - ${status.message}`);
+      }
+    );
+  }
+}
+```
+
+#### Upload File (Browser)
+
+```typescript
+// HTML: <input type="file" id="file-input" />
+
+const fileInput = document.getElementById('file-input') as HTMLInputElement;
+const file = fileInput.files[0];
+
+const result = await client.uploads.uploadFile(
+  file,
+  {
+    name: file.name,
+    description: 'User uploaded document',
+    tags: ['user-upload']
+  },
+  (progress) => {
+    updateProgressBar(progress);
+  }
+);
+```
+
+#### Batch Upload
+
+```typescript
+const files = [
+  { file: file1, metadata: { name: 'doc1.pdf', tags: ['batch'] }},
+  { file: file2, metadata: { name: 'doc2.txt', tags: ['batch'] }},
+  { file: file3, metadata: { name: 'doc3.md', tags: ['batch'] }}
+];
+
+const results = await client.uploads.uploadBatch(
+  files,
+  (current, total) => {
+    console.log(`Uploaded ${current}/${total} files`);
+  }
+);
+
+results.forEach((result, index) => {
+  if (result.success) {
+    console.log(`✓ ${files[index].metadata.name} uploaded`);
+  } else {
+    console.log(`✗ ${files[index].metadata.name} failed: ${result.error}`);
+  }
+});
+```
+
+## Error Handling
+
+The SDK provides typed error classes for better error handling:
+
+```typescript
+import {
+  PluggedInError,
+  AuthenticationError,
+  RateLimitError,
+  NotFoundError,
+  ValidationError
+} from 'pluggedinkit-js';
+
+try {
+  const doc = await client.documents.get('invalid-id');
+} catch (error) {
+  if (error instanceof AuthenticationError) {
+    console.error('Invalid API key - please check your credentials');
+  } else if (error instanceof RateLimitError) {
+    console.error(`Rate limited. Retry after ${error.retryAfter} seconds`);
+    // Implement retry logic
+  } else if (error instanceof NotFoundError) {
+    console.error('Document not found');
+  } else if (error instanceof ValidationError) {
+    console.error('Validation error:', error.details);
+  } else if (error instanceof PluggedInError) {
+    console.error(`API error: ${error.message}`);
+  }
+}
+```
+
+## TypeScript Support
+
+The SDK is written in TypeScript and provides comprehensive type definitions:
+
+```typescript
+import type {
+  Document,
+  DocumentFilters,
+  DocumentSource,
+  DocumentVisibility,
+  DocumentCategory,
+  RagResponse,
+  UploadMetadata,
+  ModelInfo,
+  UpdateOperation
+} from 'pluggedinkit-js';
+
+// All types are fully documented with JSDoc comments
+const filters: DocumentFilters = {
+  source: 'ai_generated',
+  tags: ['important'],
+  sort: 'date_desc',
+  limit: 10
+};
+
+// TypeScript will provide autocompletion and type checking
+const doc: Document = await client.documents.get('id');
+console.log(doc.title); // Type-safe property access
+```
+
+## Advanced Configuration
+
+### Environment Variables
+
+```bash
+# .env
+PLUGGEDIN_API_KEY=your-api-key
+PLUGGEDIN_BASE_URL=https://plugged.in
+```
+
+```typescript
+const client = new PluggedInClient({
+  apiKey: process.env.PLUGGEDIN_API_KEY!,
+  baseUrl: process.env.PLUGGEDIN_BASE_URL
+});
+```
+
+### Custom HTTP Client
+
+```typescript
+const client = new PluggedInClient({
+  apiKey: 'your-api-key',
+  baseUrl: 'https://plugged.in',
+  timeout: 120000, // 2 minutes
+  maxRetries: 10,
+  debug: process.env.NODE_ENV === 'development',
+  headers: {
+    'X-Custom-Header': 'value'
+  }
+});
+```
+
+## Rate Limiting
+
+The SDK automatically handles rate limiting with exponential backoff:
+
+- **API Endpoints**: 60 requests per minute
+- **Document Search**: 10 requests per hour for AI document creation
+- **RAG Queries**: Subject to plan limits
+
+## Browser Support
+
+The SDK works in both Node.js and browser environments:
+
+```html
+<!-- Browser usage with CDN -->
+<script src="https://unpkg.com/pluggedinkit-js/dist/browser.js"></script>
+<script>
+  const client = new PluggedInKit.PluggedInClient({
+    apiKey: 'your-api-key'
+  });
+</script>
+```
+
+## Examples
+
+Complete working examples are available in the [GitHub repository](https://github.com/VeriTeknik/pluggedinkit-js/tree/main/examples):
+
+- [Basic Usage](https://github.com/VeriTeknik/pluggedinkit-js/blob/main/examples/basic.ts)
+- [Document Management](https://github.com/VeriTeknik/pluggedinkit-js/blob/main/examples/documents.ts)
+- [RAG Queries](https://github.com/VeriTeknik/pluggedinkit-js/blob/main/examples/rag.ts)
+- [File Upload](https://github.com/VeriTeknik/pluggedinkit-js/blob/main/examples/upload.ts)
+- [Error Handling](https://github.com/VeriTeknik/pluggedinkit-js/blob/main/examples/errors.ts)
+- [Browser Usage](https://github.com/VeriTeknik/pluggedinkit-js/blob/main/examples/browser.html)
+
+## API Reference
+
+### Client Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `apiKey` | string | required | Your Plugged.in API key |
+| `baseUrl` | string | `https://plugged.in` | API base URL |
+| `timeout` | number | `60000` | Request timeout in milliseconds |
+| `maxRetries` | number | `5` | Maximum retry attempts |
+| `debug` | boolean | `false` | Enable debug logging |
+
+### Document Methods
+
+| Method | Description |
+|--------|-------------|
+| `list(filters)` | List documents with optional filters |
+| `get(id, options)` | Get a specific document |
+| `search(query, filters, limit, offset)` | Search documents |
+| `create(title, content, metadata)` | Create a new document |
+| `update(id, request)` | Update an existing document |
+| `delete(id)` | Delete a document |
+
+### RAG Methods
+
+| Method | Description |
+|--------|-------------|
+| `query(question)` | Simple RAG query |
+| `queryWithSources(question, projectId)` | Query with source documents |
+| `findRelevantDocuments(query, projectId, limit)` | Find relevant documents |
+
+### Upload Methods
+
+| Method | Description |
+|--------|-------------|
+| `uploadFile(file, metadata, onProgress)` | Upload a single file |
+| `uploadBatch(files, onProgress)` | Upload multiple files |
+| `trackUpload(uploadId, onUpdate)` | Track upload processing |
+
+## Support
+
+- **NPM Package**: [https://www.npmjs.com/package/pluggedinkit-js](https://www.npmjs.com/package/pluggedinkit-js)
+- **GitHub Issues**: [Report bugs and request features](https://github.com/VeriTeknik/pluggedinkit-js/issues)
+- **Documentation**: [https://docs.plugged.in](https://docs.plugged.in)
+- **Discord**: [Join our community](https://discord.gg/pluggedin)
