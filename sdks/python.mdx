@@ -187,8 +187,29 @@ metadata = {
         "provider": "anthropic",
         "version": "20240229"
     },
-    "prompt": "Create an API integration guide",
-    "visibility": "workspace"
+    "prompt": "Create a comprehensive API integration guide",
+    "context": "User requested comprehensive API documentation",
+    "updateReason": "Initial creation",
+    "changesFromPrompt": "Created new guide as requested",
+    "changeSummary": "New comprehensive API integration guide",
+    "conversationContext": [
+        {"role": "user", "content": "Create an API guide"},
+        {"role": "assistant", "content": "I'll create a comprehensive guide..."}
+    ],
+    "sourceDocuments": ["doc-123", "doc-456"],
+    "visibility": "workspace",
+    "sessionId": "session-789",
+    "generationParams": {
+        "temperature": 0.7,
+        "maxTokens": 4000,
+        "topP": 0.9
+    },
+    # Dynamic fields - add any custom metadata
+    "customField": "Any custom value",
+    "projectMetadata": {
+        "team": "engineering",
+        "version": "1.0.0"
+    }
 }
 
 doc = client.documents.create(
@@ -199,6 +220,8 @@ doc = client.documents.create(
 
 print(f"Created document: {doc.id}")
 print(f"Version: {doc.version}")
+# Access all metadata including custom fields
+print(f"All metadata: {doc.ai_metadata.__dict__}")
 ```
 
 #### Update Document
@@ -215,6 +238,24 @@ request = UpdateDocumentRequest(
             "name": "gpt-4",
             "provider": "openai",
             "version": "0613"
+        },
+        "updateReason": "Added new section on authentication",
+        "changesFromPrompt": "User requested additional auth details",
+        "prompt": "Add a section about OAuth 2.0 authentication",
+        "lastUpdatedBy": {
+            "name": "gpt-4",
+            "provider": "openai",
+            "version": "0613"
+        },
+        "lastUpdateTimestamp": "2024-01-15T10:30:00Z",
+        "conversationContext": [
+            {"role": "user", "content": "Add OAuth 2.0 section"},
+            {"role": "assistant", "content": "Adding authentication details..."}
+        ],
+        # Custom metadata fields
+        "customUpdateMetadata": {
+            "reviewedBy": "security-team",
+            "complianceCheck": "passed"
         }
     }
 )

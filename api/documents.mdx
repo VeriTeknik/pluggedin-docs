@@ -1,0 +1,610 @@
+---
+title: Documents API
+description: Complete API reference for managing AI-generated documents with comprehensive metadata support
+icon: "file-code"
+---
+
+## Overview
+
+The Documents API provides comprehensive endpoints for creating, managing, and searching AI-generated documents with rich metadata support. This API now supports dynamic metadata fields, allowing AI models to store any custom metadata alongside standard fields.
+
+## Key Features
+
+- **Dynamic Metadata Support**: Store any custom AI metadata fields without schema constraints
+- **Version Control**: Track document versions and changes
+- **Model Attribution**: Track AI models that create or update documents
+- **Semantic Search**: Find documents using natural language queries
+- **Flexible Updates**: Replace, append, or prepend content
+
+## Authentication
+
+All endpoints require Bearer token authentication:
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+## Endpoints
+
+### Create AI Document
+
+Create a new AI-generated document with comprehensive metadata.
+
+<CodeGroup>
+
+```bash POST /api/documents/ai
+curl -X POST https://plugged.in/api/documents/ai \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "API Integration Guide",
+    "content": "# API Integration Guide\n\n...",
+    "format": "md",
+    "category": "documentation",
+    "tags": ["api", "integration", "guide"],
+    "metadata": {
+      "model": {
+        "name": "claude-3-opus",
+        "provider": "anthropic",
+        "version": "20240229"
+      },
+      "prompt": "Create a comprehensive API integration guide",
+      "context": "User requested detailed documentation",
+      "updateReason": "Initial creation",
+      "changesFromPrompt": "Created new guide as requested",
+      "changeSummary": "New comprehensive API integration guide",
+      "conversationContext": [
+        {"role": "user", "content": "Create an API guide"},
+        {"role": "assistant", "content": "I'll create a comprehensive guide..."}
+      ],
+      "sourceDocuments": ["doc-123", "doc-456"],
+      "visibility": "workspace",
+      "sessionId": "session-789",
+      "generationParams": {
+        "temperature": 0.7,
+        "maxTokens": 4000,
+        "topP": 0.9
+      },
+      "customField": "Any custom value",
+      "projectMetadata": {
+        "team": "engineering",
+        "version": "1.0.0"
+      }
+    }
+  }'
+```
+
+```python Python
+import pluggedinkit
+
+client = pluggedinkit.Client(api_key="YOUR_API_KEY")
+
+document = client.documents.create(
+    title="API Integration Guide",
+    content="# API Integration Guide\n\n...",
+    metadata={
+        "model": {
+            "name": "claude-3-opus",
+            "provider": "anthropic",
+            "version": "20240229"
+        },
+        "prompt": "Create a comprehensive API integration guide",
+        "context": "User requested detailed documentation",
+        "updateReason": "Initial creation",
+        "changesFromPrompt": "Created new guide as requested",
+        "changeSummary": "New comprehensive API integration guide",
+        "conversationContext": [
+            {"role": "user", "content": "Create an API guide"},
+            {"role": "assistant", "content": "I'll create a comprehensive guide..."}
+        ],
+        "sourceDocuments": ["doc-123", "doc-456"],
+        "visibility": "workspace",
+        "sessionId": "session-789",
+        "generationParams": {
+            "temperature": 0.7,
+            "maxTokens": 4000,
+            "topP": 0.9
+        },
+        # Dynamic fields - add any custom metadata
+        "customField": "Any custom value",
+        "projectMetadata": {
+            "team": "engineering",
+            "version": "1.0.0"
+        }
+    }
+)
+```
+
+```javascript JavaScript
+import { PluggedInClient } from 'pluggedinkit';
+
+const client = new PluggedInClient({ apiKey: 'YOUR_API_KEY' });
+
+const document = await client.documents.create({
+  title: 'API Integration Guide',
+  content: '# API Integration Guide\n\n...',
+  metadata: {
+    model: {
+      name: 'claude-3-opus',
+      provider: 'anthropic',
+      version: '20240229'
+    },
+    prompt: 'Create a comprehensive API integration guide',
+    context: 'User requested detailed documentation',
+    updateReason: 'Initial creation',
+    changesFromPrompt: 'Created new guide as requested',
+    changeSummary: 'New comprehensive API integration guide',
+    conversationContext: [
+      { role: 'user', content: 'Create an API guide' },
+      { role: 'assistant', content: "I'll create a comprehensive guide..." }
+    ],
+    sourceDocuments: ['doc-123', 'doc-456'],
+    visibility: 'workspace',
+    sessionId: 'session-789',
+    generationParams: {
+      temperature: 0.7,
+      maxTokens: 4000,
+      topP: 0.9
+    },
+    // Dynamic fields - add any custom metadata
+    customField: 'Any custom value',
+    projectMetadata: {
+      team: 'engineering',
+      version: '1.0.0'
+    }
+  }
+});
+```
+
+</CodeGroup>
+
+### Update Document
+
+Update an existing document with comprehensive metadata tracking.
+
+<CodeGroup>
+
+```bash PATCH /api/documents/{id}
+curl -X PATCH https://plugged.in/api/documents/doc-123 \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "operation": "append",
+    "content": "\n\n## New Section\n\nAdditional content...",
+    "metadata": {
+      "model": {
+        "name": "gpt-4",
+        "provider": "openai",
+        "version": "0613"
+      },
+      "updateReason": "Added new section on authentication",
+      "changesFromPrompt": "User requested additional auth details",
+      "changeSummary": "Added comprehensive authentication section",
+      "prompt": "Add a section about OAuth 2.0 authentication",
+      "lastUpdatedBy": {
+        "name": "gpt-4",
+        "provider": "openai",
+        "version": "0613"
+      },
+      "lastUpdateTimestamp": "2024-01-15T10:30:00Z",
+      "conversationContext": [
+        {"role": "user", "content": "Add OAuth 2.0 section"},
+        {"role": "assistant", "content": "Adding authentication details..."}
+      ],
+      "customUpdateMetadata": {
+        "reviewedBy": "security-team",
+        "complianceCheck": "passed"
+      }
+    }
+  }'
+```
+
+```python Python
+document = client.documents.update(
+    document_id="doc-123",
+    operation="append",
+    content="\n\n## New Section\n\nAdditional content...",
+    metadata={
+        "model": {
+            "name": "gpt-4",
+            "provider": "openai",
+            "version": "0613"
+        },
+        "updateReason": "Added new section on authentication",
+        "changesFromPrompt": "User requested additional auth details",
+        "changeSummary": "Added comprehensive authentication section",
+        "prompt": "Add a section about OAuth 2.0 authentication",
+        "lastUpdatedBy": {
+            "name": "gpt-4",
+            "provider": "openai",
+            "version": "0613"
+        },
+        "lastUpdateTimestamp": "2024-01-15T10:30:00Z",
+        "conversationContext": [
+            {"role": "user", "content": "Add OAuth 2.0 section"},
+            {"role": "assistant", "content": "Adding authentication details..."}
+        ],
+        # Custom metadata fields
+        "customUpdateMetadata": {
+            "reviewedBy": "security-team",
+            "complianceCheck": "passed"
+        }
+    }
+)
+```
+
+```javascript JavaScript
+const document = await client.documents.update('doc-123', {
+  operation: 'append',
+  content: '\n\n## New Section\n\nAdditional content...',
+  metadata: {
+    model: {
+      name: 'gpt-4',
+      provider: 'openai',
+      version: '0613'
+    },
+    updateReason: 'Added new section on authentication',
+    changesFromPrompt: 'User requested additional auth details',
+    changeSummary: 'Added comprehensive authentication section',
+    prompt: 'Add a section about OAuth 2.0 authentication',
+    lastUpdatedBy: {
+      name: 'gpt-4',
+      provider: 'openai',
+      version: '0613'
+    },
+    lastUpdateTimestamp: '2024-01-15T10:30:00Z',
+    conversationContext: [
+      { role: 'user', content: 'Add OAuth 2.0 section' },
+      { role: 'assistant', content: 'Adding authentication details...' }
+    ],
+    // Custom metadata fields
+    customUpdateMetadata: {
+      reviewedBy: 'security-team',
+      complianceCheck: 'passed'
+    }
+  }
+});
+```
+
+</CodeGroup>
+
+### Get Document
+
+Retrieve a document with all metadata fields.
+
+<CodeGroup>
+
+```bash GET /api/documents/{id}
+curl -X GET "https://plugged.in/api/documents/doc-123?includeContent=true&includeVersions=true" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```python Python
+# Get document with content and version history
+document = client.documents.get(
+    document_id="doc-123",
+    include_content=True,
+    include_versions=True
+)
+
+# Access comprehensive metadata
+print(f"Model: {document.ai_metadata.model.name}")
+print(f"Update Reason: {document.ai_metadata.update_reason}")
+print(f"Changes: {document.ai_metadata.changes_from_prompt}")
+print(f"Custom Fields: {document.ai_metadata.__dict__}")  # All fields including custom ones
+```
+
+```javascript JavaScript
+// Get document with content and version history
+const document = await client.documents.get('doc-123', {
+  includeContent: true,
+  includeVersions: true
+});
+
+// Access comprehensive metadata
+console.log(`Model: ${document.aiMetadata.model.name}`);
+console.log(`Update Reason: ${document.aiMetadata.updateReason}`);
+console.log(`Changes: ${document.aiMetadata.changesFromPrompt}`);
+console.log('All metadata:', document.aiMetadata); // Includes all custom fields
+```
+
+</CodeGroup>
+
+## Metadata Fields Reference
+
+### Standard AI Metadata Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `model` | Object | AI model information (name, provider, version) |
+| `prompt` | String | The prompt used to generate/update the document |
+| `context` | String | Additional context about the generation |
+| `updateReason` | String | Reason for the update |
+| `changesFromPrompt` | String | What changes were made based on the prompt |
+| `changeSummary` | String | Brief summary of changes |
+| `conversationContext` | Array | Conversation history (strings or role/content objects) |
+| `sourceDocuments` | Array | IDs of source documents used |
+| `visibility` | String | Document visibility (private/workspace/public) |
+| `sessionId` | String | Session identifier for tracking |
+| `lastUpdatedBy` | Object | Model that last updated the document |
+| `lastUpdateTimestamp` | String | ISO timestamp of last update |
+| `generationParams` | Object | Generation parameters (temperature, maxTokens, topP) |
+
+### Dynamic Fields
+
+The API supports **any additional metadata fields** beyond the standard ones. This allows AI models and applications to store custom metadata specific to their use cases:
+
+```json
+{
+  "metadata": {
+    // Standard fields...
+    "model": { "name": "claude-3", "provider": "anthropic" },
+
+    // Custom fields - any structure is supported
+    "projectContext": {
+      "team": "engineering",
+      "sprint": "2024-Q1-Sprint3",
+      "priority": "high"
+    },
+    "qualityMetrics": {
+      "readabilityScore": 85,
+      "technicalAccuracy": "verified",
+      "reviewStatus": "approved"
+    },
+    "customWorkflow": {
+      "stage": "production",
+      "approvedBy": ["user-1", "user-2"],
+      "deploymentTarget": "api-v2"
+    },
+    // Any other fields your application needs...
+  }
+}
+```
+
+## Response Examples
+
+### Successful Creation Response
+
+```json
+{
+  "success": true,
+  "documentId": "doc-123",
+  "version": 1,
+  "ragProcessed": true,
+  "title": "API Integration Guide",
+  "aiMetadata": {
+    "model": {
+      "name": "claude-3-opus",
+      "provider": "anthropic",
+      "version": "20240229"
+    },
+    "prompt": "Create a comprehensive API integration guide",
+    "updateReason": "Initial creation",
+    "changesFromPrompt": "Created new guide as requested",
+    "changeSummary": "New comprehensive API integration guide",
+    "conversationContext": [...],
+    "sourceDocuments": ["doc-123", "doc-456"],
+    "visibility": "workspace",
+    "sessionId": "session-789",
+    "generationParams": {
+      "temperature": 0.7,
+      "maxTokens": 4000,
+      "topP": 0.9
+    },
+    // Custom fields are preserved
+    "customField": "Any custom value",
+    "projectMetadata": {
+      "team": "engineering",
+      "version": "1.0.0"
+    }
+  }
+}
+```
+
+### Document with Full Metadata
+
+```json
+{
+  "id": "doc-123",
+  "title": "API Integration Guide",
+  "description": "Comprehensive guide for API integration",
+  "fileName": "api-guide.md",
+  "fileSize": 15234,
+  "mimeType": "text/markdown",
+  "tags": ["api", "integration", "guide"],
+  "source": "ai_generated",
+  "visibility": "workspace",
+  "version": 3,
+  "createdAt": "2024-01-15T09:00:00Z",
+  "updatedAt": "2024-01-15T10:30:00Z",
+  "aiMetadata": {
+    // All standard fields
+    "model": {...},
+    "prompt": "...",
+    "updateReason": "...",
+    "changesFromPrompt": "...",
+    "changeSummary": "...",
+    "conversationContext": [...],
+    "sourceDocuments": [...],
+    "visibility": "workspace",
+    "sessionId": "...",
+    "lastUpdatedBy": {...},
+    "lastUpdateTimestamp": "...",
+    "generationParams": {...},
+    // All custom fields are preserved
+    "customField1": "value1",
+    "customObject": {...},
+    "customArray": [...]
+  },
+  "modelAttributions": [
+    {
+      "modelName": "claude-3-opus",
+      "modelProvider": "anthropic",
+      "contributionType": "created",
+      "timestamp": "2024-01-15T09:00:00Z"
+    },
+    {
+      "modelName": "gpt-4",
+      "modelProvider": "openai",
+      "contributionType": "updated",
+      "timestamp": "2024-01-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+## Best Practices
+
+### 1. Comprehensive Metadata
+
+Always provide complete metadata when creating or updating documents:
+
+```javascript
+{
+  metadata: {
+    model: { name, provider, version },  // Always include model info
+    prompt: "...",                        // Original prompt for traceability
+    updateReason: "...",                  // Why the change was made
+    changesFromPrompt: "...",            // What specifically changed
+    changeSummary: "...",                // Brief summary for version history
+    conversationContext: [...],          // Full context for reproducibility
+  }
+}
+```
+
+### 2. Custom Metadata Organization
+
+Structure your custom metadata in a organized way:
+
+```javascript
+{
+  metadata: {
+    // Standard fields...
+
+    // Group related custom fields
+    projectMetadata: {
+      team: "...",
+      sprint: "...",
+      milestone: "..."
+    },
+    qualityAssurance: {
+      reviewed: true,
+      testsPassed: true,
+      coverage: 95
+    },
+    deployment: {
+      environment: "production",
+      version: "2.1.0",
+      region: "us-east-1"
+    }
+  }
+}
+```
+
+### 3. Conversation Context Format
+
+Use structured conversation context for better tracking:
+
+```javascript
+conversationContext: [
+  {
+    role: "user",
+    content: "Create an API guide with authentication"
+  },
+  {
+    role: "assistant",
+    content: "I'll create a comprehensive guide including OAuth 2.0..."
+  },
+  {
+    role: "user",
+    content: "Add rate limiting section"
+  },
+  {
+    role: "assistant",
+    content: "Adding rate limiting documentation..."
+  }
+]
+```
+
+### 4. Version Tracking
+
+Track changes across versions with detailed metadata:
+
+```javascript
+// First version
+metadata: {
+  changeSummary: "Initial document creation",
+  version: "1.0.0"
+}
+
+// Update
+metadata: {
+  updateReason: "Added authentication section",
+  changesFromPrompt: "User requested OAuth 2.0 details",
+  changeSummary: "Added comprehensive auth section with OAuth 2.0",
+  previousVersion: "1.0.0",
+  version: "1.1.0"
+}
+```
+
+## Rate Limits
+
+| Operation | Limit | Window |
+|-----------|-------|---------|
+| Create Document | 10 requests | 1 hour |
+| Update Document | 10 requests | 5 minutes |
+| Get Document | 100 requests | 1 minute |
+| Search Documents | 60 requests | 1 minute |
+| List Documents | 60 requests | 1 minute |
+
+## Error Responses
+
+```json
+{
+  "error": "Invalid metadata format",
+  "details": {
+    "field": "metadata.model",
+    "message": "Model information is required"
+  },
+  "status": 400
+}
+```
+
+## Migration Guide
+
+### From Static to Dynamic Metadata
+
+Previous versions had fixed metadata fields. The new API supports any metadata structure:
+
+**Before:**
+```javascript
+// Only predefined fields were supported
+metadata: {
+  model: {...},
+  prompt: "...",
+  context: "..."
+  // Could not add custom fields
+}
+```
+
+**After:**
+```javascript
+// All fields supported, including custom ones
+metadata: {
+  model: {...},
+  prompt: "...",
+  context: "...",
+  // Add any custom fields
+  customField: "value",
+  projectData: {...},
+  workflowMetadata: {...},
+  // Anything your application needs
+}
+```
+
+## See Also
+
+- [Authentication](/api/authentication) - API authentication guide
+- [Python SDK](/sdks/python) - Python client library
+- [JavaScript SDK](/sdks/javascript) - JavaScript/TypeScript client library
+- [Document Library](/platform/document-library) - Web interface documentation
