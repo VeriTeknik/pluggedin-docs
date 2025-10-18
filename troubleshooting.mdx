@@ -1,0 +1,610 @@
+---
+title: Troubleshooting Guide
+description: Common issues and solutions for the Plugged.in platform
+sidebarTitle: Troubleshooting
+---
+
+# Troubleshooting Guide
+
+This guide covers common issues and their solutions for the Plugged.in platform. Use this as a reference when encountering problems.
+
+## Quick Diagnostics
+
+### Health Check Commands
+
+```bash
+# Check if services are running
+systemctl status pluggedin-app pluggedin-mcp
+
+# Check logs for errors
+journalctl -u pluggedin-app -f
+tail -f /var/log/pluggedin/app.log
+
+# Test database connectivity
+pnpm db:check
+
+# Verify MCP proxy health
+curl http://localhost:12005/health
+```
+
+### Common Status Codes
+
+- **200**: Success
+- **400**: Bad Request - Check your parameters
+- **401**: Unauthorized - Check API key
+- **403**: Forbidden - Insufficient permissions
+- **404**: Not Found - Check endpoint URL
+- **429**: Rate Limited - Too many requests
+- **500**: Server Error - Check server logs
+
+## MCP Server Issues
+
+### "Session not found" Errors
+
+**Symptoms:**
+- MCP tools return "Session not found"
+- Server appears offline in web interface
+
+**Solutions:**
+
+1. **Check MCP Proxy Status**
+   ```bash
+   # Verify proxy is running
+   systemctl status pluggedin-mcp
+
+   # Check proxy logs
+   journalctl -u pluggedin-mcp -n 50
+   ```
+
+2. **Restart MCP Proxy**
+   ```bash
+   # Restart the proxy service
+   systemctl restart pluggedin-mcp
+
+   # Or manually restart
+   cd pluggedin-mcp && pnpm start
+   ```
+
+3. **Clear Browser Cache**
+   ```bash
+   # Hard refresh in browser
+   Ctrl+Shift+R (Linux/Windows)
+   Cmd+Shift+R (Mac)
+   ```
+
+### Tool Name Collisions
+
+**Symptoms:**
+- Tools from different servers have same names
+- Some tools not appearing in client
+
+**Solutions:**
+
+1. **Enable UUID Prefixing** (v2.9.0+)
+   ```bash
+   # Check if UUID prefixing is enabled
+   grep UUID_PREFIX pluggedin-app/.env
+
+   # Enable if not set
+   echo "UUID_PREFIX_ENABLED=true" >> pluggedin-app/.env
+   ```
+
+2. **Manual Server Restart**
+   ```bash
+   # Restart app to apply changes
+   pm2 restart pluggedin-app
+   ```
+
+### Sandboxing Issues
+
+**Symptoms:**
+- STDIO servers fail to start
+- Permission denied errors
+- Sandbox-related failures
+
+**Solutions:**
+
+1. **Check Sandbox Configuration**
+   ```bash
+   # Verify sandbox settings
+   grep MCP_ISOLATION pluggedin-app/.env
+
+   # Required settings
+   echo "MCP_ISOLATION_TYPE=bubblewrap" >> pluggedin-app/.env
+   echo "MCP_ISOLATION_FALLBACK=firejail" >> pluggedin-app/.env
+   ```
+
+2. **Install Dependencies**
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install bubblewrap firejail fuse3
+
+   # CentOS/RHEL
+   sudo yum install bubblewrap firejail fuse3
+
+   # Arch Linux
+   sudo pacman -S bubblewrap firejail fuse3
+   ```
+
+3. **Test Sandbox**
+   ```bash
+   # Test bubblewrap
+   bwrap --ro-bind / / --proc /proc --dev /dev --tmpfs /tmp echo "Sandbox works"
+
+   # Test firejail
+   firejail --version
+   ```
+
+## Database Issues
+
+### Connection Failures
+
+**Symptoms:**
+- "Connection refused" errors
+- Database timeout issues
+- Migration failures
+
+**Solutions:**
+
+1. **Check Database Status**
+   ```bash
+   # PostgreSQL status
+   systemctl status postgresql
+
+   # Test connection
+   psql -h localhost -U pluggedin_user pluggedin_db
+   ```
+
+2. **Verify Connection String**
+   ```bash
+   # Check environment variables
+   grep DATABASE_URL pluggedin-app/.env
+
+   # Test connection string
+   psql "$DATABASE_URL" -c "SELECT 1"
+   ```
+
+3. **Common Fixes**
+   ```bash
+   # Restart PostgreSQL
+   systemctl restart postgresql
+
+   # Check available connections
+   psql -c "SELECT count(*) FROM pg_stat_activity WHERE datname = 'pluggedin_db'"
+   ```
+
+### Migration Issues
+
+**Symptoms:**
+- Migration command fails
+- Schema inconsistencies
+- Data corruption
+
+**Solutions:**
+
+1. **Safe Migration Process**
+   ```bash
+   # Always backup first
+   pg_dump pluggedin_db > backup_$(date +%Y%m%d_%H%M%S).sql
+
+   # Run migration in transaction
+   pnpm db:migrate
+
+   # Verify migration
+   pnpm db:verify
+   ```
+
+2. **Rollback Migration**
+   ```bash
+   # Rollback last migration
+   pnpm db:migrate:down
+
+   # Restore from backup if needed
+   psql pluggedin_db < backup_file.sql
+   ```
+
+## Authentication Issues
+
+### API Key Problems
+
+**Symptoms:**
+- 401 Unauthorized errors
+- API requests failing
+- Cannot access protected endpoints
+
+**Solutions:**
+
+1. **Verify API Key**
+   ```bash
+   # Check if key exists
+   grep PLUGGEDIN_API_KEY pluggedin-app/.env
+
+   # Test API key
+   curl -H "Authorization: Bearer $PLUGGEDIN_API_KEY" \
+        https://plugged.in/api/profile
+   ```
+
+2. **Generate New Key**
+   ```bash
+   # Generate new API key
+   openssl rand -hex 32
+
+   # Update environment
+   echo "PLUGGEDIN_API_KEY=new_key_here" >> pluggedin-app/.env
+   ```
+
+### OAuth Issues
+
+**Symptoms:**
+- Cannot authenticate with GitHub/Linear
+- OAuth callbacks failing
+- Token refresh issues
+
+**Solutions:**
+
+1. **Check OAuth Configuration**
+   ```bash
+   # Verify OAuth settings
+   grep GITHUB_CLIENT_ID pluggedin-app/.env
+   grep LINEAR_CLIENT_ID pluggedin-app/.env
+
+   # Check OAuth URLs
+   grep NEXTAUTH_URL pluggedin-app/.env
+   ```
+
+2. **Clear OAuth Sessions**
+   ```bash
+   # Clear corrupted sessions
+   pnpm db:query "DELETE FROM oauth_sessions WHERE expires_at < NOW()"
+   ```
+
+## Performance Issues
+
+### Slow Response Times
+
+**Symptoms:**
+- API calls taking >5 seconds
+- Web interface slow to load
+- High memory usage
+
+**Solutions:**
+
+1. **Check Resource Usage**
+   ```bash
+   # Memory usage
+   free -h
+
+   # Disk usage
+   df -h
+
+   # Top processes
+   top -p $(pgrep -f pluggedin)
+   ```
+
+2. **Database Optimization**
+   ```bash
+   # Analyze query performance
+   pnpm db:analyze
+
+   # Rebuild indexes
+   pnpm db:reindex
+   ```
+
+3. **Cache Issues**
+   ```bash
+   # Clear application cache
+   rm -rf pluggedin-app/.next/cache
+
+   # Clear Redis cache (if using)
+   redis-cli FLUSHALL
+   ```
+
+### High Memory Usage
+
+**Symptoms:**
+- Out of memory errors
+- System becoming unresponsive
+- Frequent OOM killer events
+
+**Solutions:**
+
+1. **Memory Optimization**
+   ```bash
+   # Check for memory leaks
+   pm2 monit
+
+   # Set memory limits
+   pm2 start pluggedin-app --max-memory-restart 1G
+   ```
+
+2. **Garbage Collection**
+   ```bash
+   # Force garbage collection
+   curl http://localhost:12005/admin/gc
+
+   # Monitor GC stats
+   curl http://localhost:12005/admin/stats
+   ```
+
+## File Upload Issues
+
+### Upload Failures
+
+**Symptoms:**
+- File uploads timing out
+- "File too large" errors
+- Upload progress stuck
+
+**Solutions:**
+
+1. **Check File Size Limits**
+   ```bash
+   # Current limits
+   grep MAX_FILE_SIZE pluggedin-app/.env
+
+   # Increase if needed
+   echo "MAX_FILE_SIZE=10485760" >> pluggedin-app/.env  # 10MB
+   ```
+
+2. **Storage Space**
+   ```bash
+   # Check available space
+   df -h uploads/
+
+   # Clean old uploads if needed
+   find uploads/ -type f -mtime +30 -delete
+   ```
+
+### Document Processing Issues
+
+**Symptoms:**
+- Documents not appearing in search
+- RAG processing failures
+- Vector search not working
+
+**Solutions:**
+
+1. **Check RAG Service**
+   ```bash
+   # RAG service status
+   systemctl status pluggedin-rag
+
+   # Test RAG processing
+   pnpm rag:test
+   ```
+
+2. **Rebuild Search Index**
+   ```bash
+   # Rebuild vector index
+   pnpm rag:rebuild
+
+   # Test search functionality
+   pnpm rag:search "test query"
+   ```
+
+## Network Issues
+
+### SSRF Protection Blocks
+
+**Symptoms:**
+- Legitimate requests blocked
+- "SSRF attempt detected" errors
+- Cannot access internal resources
+
+**Solutions:**
+
+1. **Check URL Validation**
+   ```bash
+   # Review blocked URLs
+   tail -f /var/log/pluggedin/security.log | grep SSRF
+
+   # Whitelist safe domains
+   echo "ALLOWED_DOMAINS=github.com,linear.app" >> pluggedin-app/.env
+   ```
+
+2. **Debug Mode**
+   ```bash
+   # Enable debug logging
+   echo "DEBUG=pluggedin:*" >> pluggedin-app/.env
+
+   # Check validation logs
+   journalctl -u pluggedin-app -f | grep -i validation
+   ```
+
+### Rate Limiting Issues
+
+**Symptoms:**
+- 429 Too Many Requests
+- API calls being throttled
+- Cannot perform bulk operations
+
+**Solutions:**
+
+1. **Check Rate Limits**
+   ```bash
+   # Current limits
+   grep RATE_LIMIT pluggedin-app/.env
+
+   # Adjust if needed
+   echo "RATE_LIMIT_API=120" >> pluggedin-app/.env  # per minute
+   ```
+
+2. **Redis Issues** (if using Redis)
+   ```bash
+   # Check Redis status
+   redis-cli ping
+
+   # Clear rate limit cache
+   redis-cli --scan --pattern "ratelimit:*" | xargs redis-cli DEL
+   ```
+
+## Docker Issues
+
+### Container Issues
+
+**Symptoms:**
+- Containers failing to start
+- Port conflicts
+- Volume mount issues
+
+**Solutions:**
+
+1. **Check Docker Logs**
+   ```bash
+   # View container logs
+   docker logs pluggedin-app
+
+   # Check resource usage
+   docker stats pluggedin-app pluggedin-mcp
+   ```
+
+2. **Common Fixes**
+   ```bash
+   # Clean up containers
+   docker system prune -f
+
+   # Restart containers
+   docker-compose restart
+
+   # Check port availability
+   netstat -tlnp | grep :12005
+   ```
+
+## Security Issues
+
+### Encryption Issues
+
+**Symptoms:**
+- Cannot decrypt sensitive data
+- "Invalid key" errors
+- Data corruption
+
+**Solutions:**
+
+1. **Check Encryption Keys**
+   ```bash
+   # Verify encryption key exists
+   grep ENCRYPTION_KEY pluggedin-app/.env
+
+   # Generate new key if needed
+   openssl rand -base64 32
+   ```
+
+2. **Migration Issues**
+   ```bash
+   # Check encryption migration status
+   pnpm db:query "SELECT COUNT(*) FROM servers WHERE command_encrypted IS NULL"
+
+   # Run encryption migration
+   pnpm migrate:encryption
+   ```
+
+### XSS Protection Issues
+
+**Symptoms:**
+- Content not displaying properly
+- Scripts being blocked
+- HTML content sanitized incorrectly
+
+**Solutions:**
+
+1. **Check CSP Settings**
+   ```bash
+   # Review Content Security Policy
+   grep CSP_HEADER pluggedin-app/.env
+
+   # Adjust CSP if needed
+   echo "CSP_HEADER=default-src 'self'; script-src 'self' 'unsafe-inline'" >> pluggedin-app/.env
+   ```
+
+## Getting Help
+
+### Log Collection
+
+When reporting issues, include:
+
+1. **System Information**
+   ```bash
+   uname -a
+   node --version
+   npm --version
+   docker --version
+   ```
+
+2. **Application Logs**
+   ```bash
+   # Last 100 lines of app logs
+   tail -n 100 /var/log/pluggedin/app.log
+
+   # MCP proxy logs
+   tail -n 100 /var/log/pluggedin/mcp.log
+
+   # Database logs
+   tail -n 100 /var/log/postgresql/postgresql.log
+   ```
+
+3. **Configuration (without secrets)**
+   ```bash
+   # Environment variables (redacted)
+   env | grep -v SECRET | grep -v KEY | grep -v TOKEN
+   ```
+
+### Support Channels
+
+- **GitHub Issues**: [Bug Reports](https://github.com/VeriTeknik/pluggedin-app/issues)
+- **Discussions**: [Community Help](https://github.com/orgs/VeriTeknik/discussions)
+- **Email**: support@plugged.in
+- **Emergency**: security@plugged.in
+
+### Emergency Procedures
+
+For critical production issues:
+
+1. **Immediate Actions**
+   - Check system resources (CPU, memory, disk)
+   - Look for obvious errors in logs
+   - Test basic functionality
+
+2. **Quick Fixes**
+   - Restart services: `systemctl restart pluggedin-*`
+   - Clear caches: `rm -rf pluggedin-app/.next/cache`
+   - Check database connectivity
+
+3. **Escalation**
+   - Contact support with collected logs
+   - Provide steps to reproduce
+   - Include system specifications
+
+## Prevention
+
+### Monitoring Setup
+
+```bash
+# Set up log monitoring
+journalctl -u pluggedin-app -f > /var/log/pluggedin/app.log &
+journalctl -u pluggedin-mcp -f > /var/log/pluggedin/mcp.log &
+
+# Set up alerting
+# Monitor for common error patterns
+grep -f error-patterns /var/log/pluggedin/*.log | \
+  while read line; do
+    echo "Error detected: $line" | mail -s "Plugged.in Error" admin@your-domain.com
+  done
+```
+
+### Regular Maintenance
+
+```bash
+# Daily health checks
+pnpm health:check
+
+# Weekly cleanup
+find uploads/ -type f -mtime +30 -delete
+pnpm db:cleanup
+
+# Monthly optimization
+pnpm db:optimize
+pnpm cache:clean
+```
+
+This troubleshooting guide covers the most common issues. For additional help, consult the [community discussions](https://github.com/orgs/VeriTeknik/discussions) or [contact support](mailto:support@plugged.in).

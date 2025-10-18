@@ -1,0 +1,569 @@
+---
+title: Integration Guides
+description: Step-by-step guides for integrating Plugged.in with popular MCP clients
+sidebarTitle: Integration Guides
+---
+
+# Integration Guides
+
+This guide provides detailed instructions for integrating Plugged.in with popular MCP clients and development environments.
+
+## MCP Client Integrations
+
+### Claude Desktop
+
+#### Initial Setup
+
+1. **Install Claude Desktop**
+   ```bash
+   # macOS
+   brew install --cask claude
+
+   # Windows (Scoop)
+   scoop install claude
+
+   # Windows (Chocolatey)
+   choco install claude
+   ```
+
+2. **Configure MCP Servers**
+   ```bash
+   # Create Claude config directory
+   mkdir -p ~/.claude/mcp
+
+   # Create MCP configuration
+   cat > ~/.claude/mcp/config.json << EOF
+   {
+     "mcpServers": {
+       "pluggedin": {
+         "command": "node",
+         "args": ["/path/to/pluggedin-mcp/dist/index.js"],
+         "env": {
+           "PLUGGEDIN_APP_URL": "https://plugged.in",
+           "PLUGGEDIN_API_KEY": "your-api-key"
+         }
+       }
+     }
+   }
+   EOF
+   ```
+
+3. **Restart Claude Desktop**
+   ```bash
+   # macOS
+   osascript -e 'quit app "Claude"'
+
+   # Windows
+   taskkill /f /im "Claude.exe"
+   ```
+
+#### Advanced Configuration
+
+```json
+{
+  "mcpServers": {
+    "pluggedin": {
+      "command": "node",
+      "args": ["/path/to/pluggedin-mcp/dist/index.js"],
+      "env": {
+        "PLUGGEDIN_APP_URL": "https://plugged.in",
+        "PLUGGEDIN_API_KEY": "your-api-key",
+        "MCP_DISCOVERY_TIMEOUT": "30000",
+        "LOG_LEVEL": "info"
+      },
+      "timeout": 30000,
+      "retry": {
+        "maxAttempts": 3,
+        "delay": 1000
+      }
+    }
+   }
+}
+```
+
+### Cursor IDE
+
+#### Setup Instructions
+
+1. **Install Cursor**
+   ```bash
+   # Download from https://cursor.sh
+   # Or via package manager (if available)
+   ```
+
+2. **Configure MCP Integration**
+   ```bash
+   # Create Cursor MCP config
+   mkdir -p ~/.cursor/mcp
+
+   cat > ~/.cursor/mcp/pluggedin.json << EOF
+   {
+     "mcpServers": {
+       "pluggedin-proxy": {
+         "command": "node",
+         "args": ["/path/to/pluggedin-mcp/dist/index.js"],
+         "cwd": "/path/to/pluggedin-mcp",
+         "env": {
+           "PLUGGEDIN_APP_URL": "https://plugged.in",
+           "PLUGGEDIN_API_KEY": "your-api-key"
+         }
+       }
+     }
+   }
+   EOF
+   ```
+
+3. **Enable in Cursor Settings**
+   - Open Cursor Settings
+   - Navigate to "MCP Servers"
+   - Enable the pluggedin-proxy server
+   - Restart Cursor
+
+### Cline Integration
+
+#### VS Code Setup
+
+1. **Install Cline Extension**
+   ```bash
+   # In VS Code
+   code --install-extension cline.cline
+   ```
+
+2. **Configure MCP Proxy**
+   ```bash
+   # Create Cline MCP config
+   mkdir -p ~/.cline/mcp
+
+   cat > ~/.cline/mcp/config.json << EOF
+   {
+     "servers": {
+       "pluggedin": {
+         "type": "stdio",
+         "command": "node",
+         "args": ["/path/to/pluggedin-mcp/dist/index.js"],
+         "environmentVariables": {
+           "PLUGGEDIN_APP_URL": "https://plugged.in",
+           "PLUGGEDIN_API_KEY": "your-api-key"
+         }
+       }
+     }
+   }
+   EOF
+   ```
+
+3. **Verify Integration**
+   - Open Cline in VS Code
+   - Check that MCP tools are available
+   - Test with a simple query
+
+### LM Studio
+
+#### Configuration
+
+1. **Install LM Studio**
+   ```bash
+   # Download from https://lmstudio.ai
+   ```
+
+2. **Set Up MCP Proxy**
+   ```bash
+   # Create LM Studio MCP config
+   mkdir -p ~/.lmstudio/mcp
+
+   cat > ~/.lmstudio/mcp/pluggedin.json << EOF
+   {
+     "mcpServers": {
+       "pluggedin": {
+         "type": "stdio",
+         "executable": "node",
+         "arguments": ["/path/to/pluggedin-mcp/dist/index.js"],
+         "env": {
+           "PLUGGEDIN_APP_URL": "https://plugged.in",
+           "PLUGGEDIN_API_KEY": "your-api-key"
+         }
+       }
+     }
+   }
+   EOF
+   ```
+
+3. **Enable in LM Studio**
+   - Open LM Studio
+   - Go to Settings > MCP Servers
+   - Add the pluggedin configuration
+   - Test the connection
+
+## Development Environment Integrations
+
+### VS Code Development
+
+#### Complete Setup
+
+1. **Install Required Extensions**
+   ```bash
+   # In VS Code
+   code --install-extension ms-vscode.vscode-json
+   code --install-extension cline.cline
+   ```
+
+2. **Create Workspace Configuration**
+   ```json
+   // .vscode/settings.json
+   {
+     "mcp.servers": {
+       "pluggedin": {
+         "type": "stdio",
+         "command": "node",
+         "args": ["/path/to/pluggedin-mcp/dist/index.js"],
+         "options": {
+           "env": {
+             "PLUGGEDIN_APP_URL": "https://plugged.in",
+             "PLUGGEDIN_API_KEY": "${env:PLUGGEDIN_API_KEY}"
+           }
+         }
+       }
+     }
+   }
+   ```
+
+3. **Environment Setup**
+   ```bash
+   # Set environment variable
+   export PLUGGEDIN_API_KEY="your-api-key"
+
+   # Or add to shell profile
+   echo 'export PLUGGEDIN_API_KEY="your-api-key"' >> ~/.bashrc
+   ```
+
+### JetBrains IDEs
+
+#### IntelliJ/PyCharm Setup
+
+1. **Install MCP Plugin** (if available)
+   ```bash
+   # Check JetBrains marketplace for MCP plugins
+   ```
+
+2. **Manual Configuration**
+   ```bash
+   # Create MCP config file
+   mkdir -p ~/.ide-mcp
+
+   cat > ~/.ide-mcp/pluggedin.json << EOF
+   {
+     "servers": {
+       "pluggedin": {
+         "type": "stdio",
+         "command": "node",
+         "args": ["/path/to/pluggedin-mcp/dist/index.js"],
+         "workingDirectory": "/path/to/pluggedin-mcp",
+         "environment": {
+           "PLUGGEDIN_APP_URL": "https://plugged.in",
+           "PLUGGEDIN_API_KEY": "your-api-key"
+         }
+       }
+     }
+   }
+   EOF
+   ```
+
+### Emacs Integration
+
+#### Setup with MCP
+
+1. **Install Required Packages**
+   ```elisp
+   ;; In your Emacs config
+   (use-package mcp
+     :ensure t
+     :config
+     (add-to-list 'mcp-server-configurations
+       '("pluggedin"
+         :type stdio
+         :command "node"
+         :args ("/path/to/pluggedin-mcp/dist/index.js")
+         :env ("PLUGGEDIN_APP_URL" "https://plugged.in")
+         :env ("PLUGGEDIN_API_KEY" "your-api-key"))))
+   ```
+
+2. **Enable the Server**
+   ```elisp
+   ;; Start the MCP server
+   (mcp-start-server "pluggedin")
+   ```
+
+## Cloud Development Environments
+
+### GitHub Codespaces
+
+#### Setup Instructions
+
+1. **Create Dev Container**
+   ```json
+   // .devcontainer/devcontainer.json
+   {
+     "name": "Plugged.in Development",
+     "dockerFile": "Dockerfile",
+     "customizations": {
+       "vscode": {
+         "extensions": [
+           "ms-vscode.vscode-json",
+           "cline.cline"
+         ],
+         "settings": {
+           "mcp.servers": {
+             "pluggedin": {
+               "type": "stdio",
+               "command": "node",
+               "args": ["/workspaces/pluggedin-mcp/dist/index.js"],
+               "options": {
+                 "env": {
+                   "PLUGGEDIN_APP_URL": "https://plugged.in",
+                   "PLUGGEDIN_API_KEY": "${localEnv:PLUGGEDIN_API_KEY}"
+                 }
+               }
+             }
+           }
+         }
+       }
+     },
+     "portsAttributes": {
+       "12005": {
+         "label": "Plugged.in App",
+         "onAutoForward": "notify"
+       }
+     }
+   }
+   ```
+
+2. **Environment Secrets**
+   ```bash
+   # In your codespace secrets
+   PLUGGEDIN_API_KEY=your-api-key
+   ```
+
+### GitLab CI/CD Integration
+
+#### CI Configuration
+
+```yaml
+# .gitlab-ci.yml
+stages:
+  - test
+  - deploy
+
+test:
+  stage: test
+  script:
+    - npm install
+    - npm run test:mcp
+    - npm run test:integration
+  only:
+    - merge_requests
+    - main
+
+deploy:
+  stage: deploy
+  script:
+    - docker build -t pluggedin-app .
+    - docker run -d --name pluggedin-app -p 12005:12005 pluggedin-app
+  environment:
+    name: production
+    url: https://plugged.in
+  only:
+    - main
+```
+
+## Mobile and Remote Access
+
+### Mobile App Integration
+
+#### iOS Shortcuts
+
+1. **Create MCP Query Shortcut**
+   ```javascript
+   // In iOS Shortcuts JavaScript action
+   const apiKey = "your-api-key";
+   const query = $shortcut.input;
+
+   const response = await fetch("https://plugged.in/api/documents/search", {
+     method: "POST",
+     headers: {
+       "Authorization": `Bearer ${apiKey}`,
+       "Content-Type": "application/json"
+     },
+     body: JSON.stringify({
+       query: query,
+       profileUuid: "your-profile-uuid"
+     })
+   });
+
+   const results = await response.json();
+   return results.documents.map(doc => doc.title).join("\n");
+   ```
+
+### Remote Development
+
+#### SSH Tunnel Setup
+
+1. **Secure Tunnel**
+   ```bash
+   # Create SSH tunnel for MCP proxy
+   ssh -R 12005:localhost:12005 -N user@remote-server
+
+   # Access remote Plugged.in instance
+   ssh -L 12005:localhost:12005 user@plugged.in-server
+   ```
+
+2. **VPN Configuration**
+   ```bash
+   # Connect to VPN
+   openvpn --config pluggedin.ovpn
+
+   # Verify connection
+   ping pluggedin.internal
+   ```
+
+## Troubleshooting Integrations
+
+### Common Issues
+
+#### Connection Timeouts
+
+**Symptoms:**
+- MCP client cannot connect to proxy
+- "Connection refused" errors
+
+**Solutions:**
+1. **Check Proxy Status**
+   ```bash
+   # Verify proxy is running
+   ps aux | grep pluggedin-mcp
+
+   # Check port availability
+   netstat -tlnp | grep 12005
+   ```
+
+2. **Firewall Configuration**
+   ```bash
+   # Allow MCP port
+   sudo ufw allow 12005
+
+   # Check firewall status
+   sudo ufw status
+   ```
+
+#### Authentication Failures
+
+**Symptoms:**
+- 401 Unauthorized errors
+- API key rejected
+
+**Solutions:**
+1. **Verify API Key**
+   ```bash
+   # Test API key
+   curl -H "Authorization: Bearer $PLUGGEDIN_API_KEY" \
+        https://plugged.in/api/profile
+   ```
+
+2. **Check Environment Variables**
+   ```bash
+   # Ensure variables are set
+   env | grep PLUGGEDIN
+   ```
+
+#### Tool Discovery Issues
+
+**Symptoms:**
+- Tools not appearing in client
+- Empty tool list
+
+**Solutions:**
+1. **Check MCP Proxy Logs**
+   ```bash
+   # View proxy logs
+   tail -f /var/log/pluggedin/mcp.log
+
+   # Test tool discovery
+   curl http://localhost:12005/tools
+   ```
+
+2. **Restart Services**
+   ```bash
+   # Restart MCP proxy
+   systemctl restart pluggedin-mcp
+
+   # Restart client application
+   killall claude cursor cline
+   ```
+
+### Performance Optimization
+
+#### Memory Management
+
+```bash
+# Monitor memory usage
+pm2 monit
+
+# Set memory limits
+pm2 start pluggedin-mcp --max-memory-restart 512M
+
+# Enable memory profiling
+echo "MCP_MEMORY_PROFILING=true" >> pluggedin-mcp/.env
+```
+
+#### Network Optimization
+
+```bash
+# Optimize for low latency
+echo "MCP_CONNECTION_TIMEOUT=5000" >> pluggedin-mcp/.env
+
+# Enable connection pooling
+echo "MCP_CONNECTION_POOL=true" >> pluggedin-mcp/.env
+echo "MCP_POOL_SIZE=10" >> pluggedin-mcp/.env
+```
+
+## Best Practices
+
+### Security Considerations
+
+1. **API Key Management**
+   ```bash
+   # Use environment variables, not config files
+   export PLUGGEDIN_API_KEY="your-key"
+
+   # Rotate keys regularly
+   openssl rand -hex 32
+   ```
+
+2. **Network Security**
+   ```bash
+   # Use HTTPS for all connections
+   # Enable firewall
+   sudo ufw allow from 10.0.0.0/8 to any port 12005
+
+   # Use VPN for remote access
+   openvpn --config secure.ovpn
+   ```
+
+### Performance Best Practices
+
+1. **Resource Allocation**
+   ```bash
+   # Set appropriate resource limits
+   ulimit -n 4096
+   ulimit -u 1024
+
+   # Monitor resource usage
+   htop -p $(pgrep -f pluggedin)
+   ```
+
+2. **Caching Strategy**
+   ```bash
+   # Enable Redis caching
+   echo "CACHE_TYPE=redis" >> pluggedin-app/.env
+   echo "CACHE_TTL=3600" >> pluggedin-app/.env
+   ```
+
+For additional help with specific integrations, consult the [troubleshooting guide](/troubleshooting) or [contact support](mailto:support@plugged.in).

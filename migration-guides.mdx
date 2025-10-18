@@ -1,0 +1,402 @@
+---
+title: Migration Guides
+description: Step-by-step guides for migrating between major versions of Plugged.in
+sidebarTitle: Migration Guides
+---
+
+# Migration Guides
+
+Comprehensive guides for migrating between major versions of the Plugged.in platform. Follow these guides carefully to ensure a smooth transition.
+
+## Latest Migration
+
+### v2.12.0 Migration Guide
+
+#### Upload Context Metadata Migration
+
+**What's New:**
+- Upload context metadata tracking (purpose, related documents, notes)
+- Upload method detection (drag-drop vs file-picker)
+- Enhanced UploadMetadataPanel component
+
+**Migration Steps:**
+
+1. **Update Dependencies**
+   ```bash
+   # Update to latest version
+   pnpm update pluggedin-app@2.12.0
+   ```
+
+2. **Database Migration**
+   ```bash
+   # Generate new migration
+   pnpm db:generate
+
+   # Apply migration
+   pnpm db:migrate
+   ```
+
+3. **Environment Variables**
+   ```env
+   # No new environment variables required for v2.12.0
+   ```
+
+4. **Testing**
+   ```bash
+   # Test upload functionality
+   pnpm test
+
+   # Verify metadata tracking
+   pnpm test:integration
+   ```
+
+**Breaking Changes:**
+- None
+
+**Estimated Downtime:** < 5 minutes
+
+## Major Version Migrations
+
+### v2.10.0 Migration Guide
+
+#### Security & Performance Overhaul
+
+**What's New:**
+- Complete encryption system overhaul
+- Enhanced security audit compliance
+- Performance optimizations (10x faster queries)
+- Custom Instructions UI improvements
+
+**Migration Steps:**
+
+1. **Pre-Migration Backup**
+   ```bash
+   # Create database backup
+   pg_dump pluggedin_db > backup_v2.9.0.sql
+
+   # Backup uploads directory
+   cp -r uploads uploads_backup
+   ```
+
+2. **Update Dependencies**
+   ```bash
+   pnpm update pluggedin-app@2.10.0
+   pnpm update pluggedin-mcp@1.8.0
+   ```
+
+3. **Environment Variables Update**
+   ```env
+   # Add new security variables
+   NEXTAUTH_SECRET=new_random_secret
+   NEXTAUTH_URL=https://your-domain.com
+
+   # Database SSL (recommended)
+   DATABASE_SSL=true
+   DATABASE_SSL_CERT_PATH=/path/to/ca-cert.pem
+   ```
+
+4. **Database Migration**
+   ```bash
+   # Generate migration files
+   pnpm db:generate
+
+   # Apply migrations
+   pnpm db:migrate
+   ```
+
+5. **Encryption Migration** ⚠️ **Critical Step**
+   ```bash
+   # Run encryption migration script
+   pnpm migrate:encryption
+
+   # Verify encryption migration
+   pnpm test:encryption-migration
+   ```
+
+6. **Post-Migration Verification**
+   ```bash
+   # Test all functionality
+   pnpm test
+
+   # Verify security headers
+   curl -I https://your-domain.com | grep -E "(X-Frame-Options|X-Content-Type-Options|Strict-Transport-Security)"
+
+   # Check performance improvements
+   pnpm test:performance
+   ```
+
+**Breaking Changes:**
+- Password hashing algorithm changed from bcrypt to argon2
+- Some legacy API endpoints deprecated
+- Enhanced CSP may affect custom scripts
+
+**Estimated Downtime:** 15-30 minutes
+
+### v2.9.0 Migration Guide
+
+#### UUID Tool Prefixing & Security Release
+
+**What's New:**
+- Automatic UUID tool prefixing for collision prevention
+- Slug-based server identification system
+- Security patches for encryption vulnerabilities
+
+**Migration Steps:**
+
+1. **Security Preparation**
+   ```bash
+   # Backup before security migration
+   pg_dump pluggedin_db > backup_pre_security.sql
+   ```
+
+2. **Update Dependencies**
+   ```bash
+   pnpm update pluggedin-app@2.9.0
+   ```
+
+3. **Environment Variables**
+   ```env
+   # No new variables required
+   # Existing variables remain compatible
+   ```
+
+4. **Database Migration**
+   ```bash
+   # Apply security patches
+   pnpm db:migrate
+
+   # Run slug generation for existing servers
+   pnpm migrate:slugs
+   ```
+
+5. **Verification**
+   ```bash
+   # Test tool name collision resolution
+   pnpm test:tool-collision
+
+   # Verify slug uniqueness
+   pnpm test:slug-uniqueness
+   ```
+
+**Breaking Changes:**
+- Tool names now include UUID prefixes
+- Server URLs may include slugs
+
+**Estimated Downtime:** 5-10 minutes
+
+### v2.8.0 Migration Guide
+
+#### AI Document Exchange (RAG v2)
+
+**What's New:**
+- AI document creation and management
+- Complete version history tracking
+- Advanced search capabilities
+- Multi-format support with validation
+
+**Migration Steps:**
+
+1. **Pre-Migration Setup**
+   ```bash
+   # Ensure sufficient disk space for document storage
+   df -h uploads/
+
+   # Backup existing RAG data
+   cp -r rag_data rag_data_backup
+   ```
+
+2. **Update Dependencies**
+   ```bash
+   pnpm update pluggedin-app@2.8.0
+   pnpm update pluggedin-mcp@1.8.0
+   ```
+
+3. **Environment Variables**
+   ```env
+   # Document storage configuration
+   MAX_DOCUMENT_SIZE=10485760  # 10MB
+   ALLOWED_DOCUMENT_TYPES=pdf,txt,md,json,html,jpg,png
+   RAG_V2_ENABLED=true
+   ```
+
+4. **Database Migration**
+   ```bash
+   # Apply RAG v2 schema changes
+   pnpm db:migrate
+
+   # Initialize vector search
+   pnpm rag:init
+   ```
+
+5. **MCP Proxy Configuration**
+   ```bash
+   # Update MCP proxy to use RAG v2 tools
+   cd pluggedin-mcp
+   pnpm update
+   pnpm build
+   ```
+
+6. **Testing**
+   ```bash
+   # Test document upload and search
+   pnpm test:documents
+
+   # Verify AI document creation
+   pnpm test:ai-documents
+
+   # Test semantic search
+   pnpm test:rag-search
+   ```
+
+**Breaking Changes:**
+- RAG v1 APIs deprecated in favor of v2
+- Document storage format changes
+- New MCP tools replace old ones
+
+**Estimated Downtime:** 10-20 minutes
+
+### v2.7.0 Migration Guide
+
+#### Registry v2 & OAuth Integration
+
+**What's New:**
+- MCP Registry v2 with GitHub authentication
+- Smart Server Wizard with repository analysis
+- OAuth integration for MCP servers
+- Trending servers and analytics
+
+**Migration Steps:**
+
+1. **OAuth Setup**
+   ```bash
+   # Configure OAuth providers
+   # GitHub OAuth app setup required
+   # Linear OAuth app setup required
+   ```
+
+2. **Update Dependencies**
+   ```bash
+   pnpm update pluggedin-app@2.7.0
+   pnpm update pluggedin-mcp@1.4.0
+   ```
+
+3. **Environment Variables**
+   ```env
+   # OAuth Configuration
+   GITHUB_CLIENT_ID=your_github_client_id
+   GITHUB_CLIENT_SECRET=your_github_client_secret
+   LINEAR_CLIENT_ID=your_linear_client_id
+   LINEAR_CLIENT_SECRET=your_linear_client_secret
+
+   # Registry Configuration
+   REGISTRY_V2_ENABLED=true
+   TRENDING_ANALYTICS_ENABLED=true
+   ```
+
+4. **Database Migration**
+   ```bash
+   # Apply OAuth and registry schema
+   pnpm db:migrate
+
+   # Initialize OAuth tables
+   pnpm oauth:init
+   ```
+
+5. **Registry Migration**
+   ```bash
+   # Migrate to Registry v2
+   pnpm registry:migrate-v2
+
+   # Test registry connectivity
+   pnpm test:registry
+   ```
+
+6. **MCP Proxy Update**
+   ```bash
+   cd pluggedin-mcp
+   pnpm build
+   pnpm test
+   ```
+
+**Breaking Changes:**
+- Registry API endpoints changed
+- OAuth flow replaces API key auth for some servers
+
+**Estimated Downtime:** 20-40 minutes
+
+## Migration Best Practices
+
+### Pre-Migration Checklist
+
+- [ ] Create full database backup
+- [ ] Backup all uploaded files and documents
+- [ ] Test migration on staging environment first
+- [ ] Notify users of expected downtime
+- [ ] Prepare rollback plan
+
+### Post-Migration Verification
+
+- [ ] Verify all API endpoints respond correctly
+- [ ] Test MCP server connections
+- [ ] Check document upload and search functionality
+- [ ] Verify OAuth integrations work
+- [ ] Test notification system
+- [ ] Monitor performance metrics
+
+### Rollback Procedures
+
+If issues occur during migration:
+
+1. **Immediate Rollback**
+   ```bash
+   # Restore database
+   psql pluggedin_db < backup_pre_migration.sql
+
+   # Restore files
+   rm -rf uploads && mv uploads_backup uploads
+
+   # Restart services
+   pm2 restart all
+   ```
+
+2. **Gradual Rollback**
+   ```bash
+   # Downgrade one version at a time
+   pnpm update pluggedin-app@2.11.0
+   pnpm db:migrate:down
+   ```
+
+## Getting Help
+
+### Support Resources
+
+- **Documentation**: [docs.plugged.in](https://docs.plugged.in)
+- **GitHub Issues**: [Report migration issues](https://github.com/VeriTeknik/pluggedin-app/issues)
+- **Community**: [GitHub Discussions](https://github.com/orgs/VeriTeknik/discussions)
+- **Email Support**: migration-support@plugged.in
+
+### Emergency Contacts
+
+- **Critical Issues**: security@plugged.in
+- **Enterprise Support**: enterprise@plugged.in
+- **Phone Support**: Available for enterprise customers
+
+## Migration Timeline
+
+| Version | Release Date | Support Until | Migration Complexity |
+|---------|-------------|---------------|---------------------|
+| 2.12.0 | 2024-12-21 | Active | Low |
+| 2.11.1 | 2025-01-18 | Active | Low |
+| 2.10.0 | 2025-01-27 | Active | High |
+| 2.9.0 | 2025-01-27 | 2026-01 | Medium |
+| 2.8.0 | 2025-01-27 | 2026-01 | High |
+| 2.7.0 | 2025-01-26 | 2025-07 | High |
+
+## Version Support Policy
+
+- **Current Version**: Full support and active development
+- **Previous Version**: Security updates and critical bug fixes
+- **Older Versions**: Community support only
+- **End of Life**: No support provided
+
+For detailed information about each version's features and changes, see the [Changelog](/releases/changelog).

@@ -347,6 +347,32 @@ POST /api/collections
 }
 ```
 
+#### Update Collection
+
+Update an existing collection's metadata and server list.
+
+```bash
+PATCH /api/collections/{collectionUuid}
+```
+
+**Request Body:**
+```json
+{
+  "name": "Updated Collection Name",
+  "description": "Updated description",
+  "serverUuids": ["server-uuid-1", "server-uuid-3"],
+  "isPublic": true
+}
+```
+
+#### Delete Collection
+
+Remove a collection and its associations.
+
+```bash
+DELETE /api/collections/{collectionUuid}
+```
+
 ### Registry API
 
 #### Submit to Registry
@@ -392,6 +418,180 @@ GET /api/servers/{uuid}/stats
 }
 ```
 
+#### Registry Health Check
+
+Check the status of the MCP registry.
+
+```bash
+GET /api/registry/health
+```
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "version": "2.0.0",
+  "last_indexed": "2024-01-15T10:30:00Z",
+  "total_servers": 15420
+}
+```
+
+### Registry API
+
+#### Submit to Registry
+
+Submit an MCP server to the official registry.
+
+```bash
+POST /api/registry/submit
+```
+
+**Request Body:**
+```json
+{
+  "repository": "https://github.com/username/repo",
+  "transport": ["stdio", "sse"],
+  "package_type": "npm",
+  "environment_variables": ["API_KEY", "DATABASE_URL"]
+}
+```
+
+**Requirements:**
+- Must be authenticated with GitHub
+- Must have repository ownership
+- Valid package.json/Dockerfile/setup.py
+
+#### Get Server Statistics
+
+Get detailed statistics for a server.
+
+```bash
+GET /api/servers/{uuid}/stats
+```
+
+**Response:**
+```json
+{
+  "installations": 1250,
+  "rating": 4.5,
+  "ratings_count": 28,
+  "trending_rank": 3,
+  "last_activity": "2024-01-15T10:30:00Z",
+  "daily_installs": [10, 15, 20, 25, 30, 35, 40]
+}
+```
+
+### OAuth API
+
+#### OAuth Sessions
+
+Get all OAuth sessions for the authenticated user.
+
+```bash
+GET /api/mcp/oauth/session
+```
+
+**Response:**
+```json
+{
+  "sessions": [
+    {
+      "id": "session_123",
+      "provider": "github",
+      "created_at": "2024-01-15T10:30:00Z",
+      "last_used": "2024-01-15T14:20:00Z",
+      "scopes": ["repo", "user:email"]
+    }
+  ]
+}
+```
+
+#### Create OAuth Session
+
+Initiate a new OAuth session for MCP server authentication.
+
+```bash
+POST /api/mcp/oauth/session
+```
+
+**Request Body:**
+```json
+{
+  "provider": "github",
+  "redirect_uri": "https://your-app.com/oauth/callback",
+  "scopes": ["repo", "user:email"]
+}
+```
+
+**Response:**
+```json
+{
+  "authorization_url": "https://github.com/login/oauth/authorize?client_id=...&state=...",
+  "session_id": "session_123"
+}
+```
+
+#### OAuth Callback
+
+Handle OAuth provider callback with authorization code.
+
+```bash
+POST /api/mcp/oauth/callback
+```
+
+**Request Body:**
+```json
+{
+  "session_id": "session_123",
+  "code": "authorization_code_from_provider",
+  "state": "oauth_state_parameter"
+}
+```
+
+**Response:**
+```json
+{
+  "access_token": "encrypted_access_token",
+  "refresh_token": "encrypted_refresh_token",
+  "expires_at": "2024-01-15T11:30:00Z"
+}
+```
+
+#### Get OAuth Session
+
+Retrieve details for a specific OAuth session.
+
+```bash
+GET /api/mcp/oauth/session/{sessionId}
+```
+
+**Response:**
+```json
+{
+  "id": "session_123",
+  "provider": "github",
+  "status": "active",
+  "created_at": "2024-01-15T10:30:00Z",
+  "expires_at": "2024-01-15T11:30:00Z"
+}
+```
+
+#### Delete OAuth Session
+
+Revoke an OAuth session and associated tokens.
+
+```bash
+DELETE /api/mcp/oauth/session/{sessionId}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "OAuth session revoked successfully"
+}
+```
+
 ### User Management
 
 #### Check Username Availability
@@ -427,6 +627,26 @@ GET /api/users/{username}
   "followers_count": 42,
   "following_count": 23,
   "servers_count": 5
+}
+```
+
+#### Update User Profile
+
+Update the authenticated user's profile information.
+
+```bash
+PATCH /api/users/profile
+```
+
+**Request Body:**
+```json
+{
+  "bio": "Updated bio",
+  "is_public": true,
+  "social_links": {
+    "github": "https://github.com/username",
+    "twitter": "https://twitter.com/username"
+  }
 }
 ```
 
@@ -862,6 +1082,71 @@ curl -X POST "https://plugged.in/api/webhooks/webhook_123/test" \
   -d '{
     "event": "test.ping"
   }'
+```
+
+### Analytics API
+
+#### Get Trending Servers
+
+Retrieve trending MCP servers based on activity and popularity.
+
+```bash
+GET /api/trending/servers
+```
+
+**Query Parameters:**
+- `limit` (integer) - Number of results (default: 20, max: 100)
+- `timeframe` (string) - Time period: `day`, `week`, `month` (default: week)
+- `category` (string) - Filter by category
+
+**Response:**
+```json
+{
+  "servers": [
+    {
+      "uuid": "server_123",
+      "name": "Database Tools",
+      "slug": "database-tools",
+      "installation_count": 1250,
+      "rating": 4.5,
+      "trending_score": 95.2,
+      "rank_change": "+5",
+      "category": "database"
+    }
+  ],
+  "total": 150,
+  "timeframe": "week"
+}
+```
+
+#### Get Service Search Statistics
+
+Get search analytics for service discovery.
+
+```bash
+GET /api/service/search
+```
+
+**Query Parameters:**
+- `q` (string) - Search query to analyze
+- `timeframe` (string) - Analysis period: `day`, `week`, `month`
+
+**Response:**
+```json
+{
+  "query": "database",
+  "total_searches": 1250,
+  "unique_users": 89,
+  "top_results": [
+    {
+      "server_uuid": "server_123",
+      "clicks": 45,
+      "impressions": 120,
+      "ctr": 0.375
+    }
+  ],
+  "related_queries": ["postgres", "mysql", "mongodb"]
+}
 ```
 
 ### Webhook Best Practices

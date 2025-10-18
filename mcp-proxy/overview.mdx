@@ -1,406 +1,80 @@
 ---
 title: MCP Proxy Overview
-description: Unified interface for aggregating multiple MCP servers
+description: Understand how the Plugged.in MCP Proxy works and what it provides.
 sidebarTitle: Overview
 ---
 
-# MCP Proxy
+# Plugged.in MCP Proxy
 
-The Plugged.in MCP Proxy is a lightweight, high-performance server that aggregates multiple Model Context Protocol (MCP) servers into a single unified interface.
-
-## What is MCP Proxy?
+The Plugged.in MCP Proxy is your single connection point to every MCP server defined in your Plugged.in workspace. It pulls configuration from the Plugged.in API, normalises capability names, and adds knowledge-base and notification tooling so any MCP client can act on your data.
 
 <Info>
-MCP Proxy acts as a gateway between AI assistants and multiple MCP servers, simplifying integration and management.
+Use the proxy when you want Claude, Cline, Cursor, Smithery, or any other MCP-compatible client to talk to multiple servers without bespoke configuration.
 </Info>
 
-The proxy server:
-- **Aggregates** multiple MCP servers into one endpoint
-- **Manages** authentication and connection pooling
-- **Transforms** different transport types (STDIO, SSE, Streamable HTTP)
-- **Provides** unified tool discovery and invocation
-- **Handles** error recovery and retry logic
+## Core responsibilities
 
-## Architecture
+- Fetch server definitions, instructions, and static prompts from Plugged.in using `PLUGGEDIN_API_KEY`.
+- Expose every discovered tool, resource, and prompt to the connected MCP client.
+- Provide Plugged.in-specific static tools—discovery, notifications, and document management—alongside downstream servers.
+- Prefix tool names with their server UUID to prevent collisions (override with `PLUGGEDIN_UUID_TOOL_PREFIXING=false` if required).
+- Run in STDIO mode for desktop clients or as a Streamable HTTP service for remote consumers.
 
-<CardGroup cols={2}>
-  <Card title="Client Side" icon="laptop">
-    - AI Assistants (Claude, GPT, etc.)
-    - MCP Clients
-    - API Consumers
-    - Web Applications
-  </Card>
-  <Card title="Proxy Layer" icon="server">
-    - Connection Management
-    - Request Routing
-    - Response Aggregation
-    - Error Handling
-  </Card>
-  <Card title="MCP Servers" icon="cubes">
-    - STDIO Servers
-    - Streamable HTTP Servers
-    - SSE Servers (deprecated)
-    - Custom Implementations
-  </Card>
-  <Card title="Features" icon="sparkles">
-    - Tool Discovery
-    - Resource Access
-    - Prompt Templates
-    - OAuth Support
-  </Card>
-</CardGroup>
-
-## Key Features
-
-### 1. Multi-Transport Support
-
-Supports all MCP transport types:
-
-```typescript
-// STDIO Transport
-{
-  transport: {
-    type: "stdio",
-    command: "node",
-    args: ["server.js"]
-  }
-}
-
-// Streamable HTTP Transport
-{
-  transport: {
-    type: "streamable",
-    baseUrl: "https://api.example.com/mcp"
-  }
-}
-
-// SSE Transport (deprecated)
-{
-  transport: {
-    type: "sse",
-    url: "https://api.example.com/sse"
-  }
-}
-```
-
-### 2. Unified Tool Interface
-
-Access tools from multiple servers through one endpoint:
-
-```typescript
-// Discover all available tools
-const tools = await proxy.listTools();
-// Returns tools from all connected servers
-
-// Invoke a tool
-const result = await proxy.invokeTool({
-  name: "search_documents",
-  parameters: { query: "MCP integration" }
-});
-```
-
-### 3. Intelligent Routing
-
-Automatically routes requests to the appropriate server:
-
-```mermaid
-graph LR
-    Client[AI Client] --> Proxy[MCP Proxy]
-    Proxy --> Router{Tool Router}
-    Router --> Server1[Server 1]
-    Router --> Server2[Server 2]
-    Router --> Server3[Server 3]
-```
-
-### 4. Connection Management
-
-- **Connection Pooling**: Reuse connections for performance
-- **Health Checks**: Automatic server health monitoring
-- **Retry Logic**: Automatic retry with exponential backoff
-- **Circuit Breaker**: Prevent cascading failures
-
-### 5. Authentication
-
-Multiple authentication methods:
-
-<Tabs>
-  <Tab title="API Key">
-    ```typescript
-    {
-      auth: {
-        type: "apiKey",
-        key: process.env.PLUGGEDIN_API_KEY
-      }
-    }
-    ```
-  </Tab>
-  <Tab title="OAuth">
-    ```typescript
-    {
-      auth: {
-        type: "oauth",
-        provider: "github",
-        token: accessToken
-      }
-    }
-    ```
-  </Tab>
-  <Tab title="Custom">
-    ```typescript
-    {
-      auth: {
-        type: "custom",
-        headers: {
-          "X-Custom-Auth": "token"
-        }
-      }
-    }
-    ```
-  </Tab>
-</Tabs>
-
-## Use Cases
-
-### 1. AI Assistant Integration
-
-Connect multiple specialized MCP servers to your AI assistant:
-
-```typescript
-// Configure proxy with multiple servers
-const proxy = new MCPProxy({
-  servers: [
-    { name: "github", url: "mcp://github.com/servers/github" },
-    { name: "slack", url: "mcp://slack.com/servers/slack" },
-    { name: "database", url: "mcp://internal/database" }
-  ]
-});
-
-// AI assistant can now access all tools
-const response = await assistant.query(
-  "Search GitHub issues and post summary to Slack"
-);
-```
-
-### 2. Enterprise Integration
-
-Aggregate internal and external MCP servers:
-
-```typescript
-// Internal servers behind firewall
-const internalServers = [
-  { name: "crm", url: "mcp://internal.company.com/crm" },
-  { name: "erp", url: "mcp://internal.company.com/erp" }
-];
-
-// External SaaS integrations
-const externalServers = [
-  { name: "salesforce", url: "mcp://salesforce.com/api" },
-  { name: "hubspot", url: "mcp://hubspot.com/api" }
-];
-
-// Unified access through proxy
-const proxy = new MCPProxy({
-  servers: [...internalServers, ...externalServers]
-});
-```
-
-### 3. Development Workflow
-
-Simplify development with local and remote servers:
-
-```typescript
-// Local development server
-const localServer = {
-  name: "dev",
-  transport: {
-    type: "stdio",
-    command: "npm",
-    args: ["run", "mcp:dev"]
-  }
-};
-
-// Production servers
-const prodServers = [
-  { name: "api", url: "https://api.production.com/mcp" },
-  { name: "data", url: "https://data.production.com/mcp" }
-];
-
-// Switch between environments easily
-const proxy = new MCPProxy({
-  servers: isDev ? [localServer] : prodServers
-});
-```
-
-## Performance
-
-### Optimization Strategies
-
-<AccordionGroup>
-  <Accordion title="Connection Pooling">
-    Maintains persistent connections to frequently used servers:
-    ```typescript
-    {
-      connectionPool: {
-        maxConnections: 10,
-        idleTimeout: 60000,
-        keepAlive: true
-      }
-    }
-    ```
-  </Accordion>
-
-  <Accordion title="Response Caching">
-    Caches tool discovery and resource listings:
-    ```typescript
-    {
-      cache: {
-        ttl: 300000, // 5 minutes
-        maxSize: 100 // MB
-      }
-    }
-    ```
-  </Accordion>
-
-  <Accordion title="Parallel Execution">
-    Execute requests to multiple servers in parallel:
-    ```typescript
-    const results = await Promise.all([
-      proxy.invokeTool({ server: "s1", name: "tool1" }),
-      proxy.invokeTool({ server: "s2", name: "tool2" })
-    ]);
-    ```
-  </Accordion>
-
-  <Accordion title="Lightweight Design">
-    Minimal dependencies for Docker deployment:
-    - Core size: < 50MB
-    - Memory usage: < 128MB
-    - Startup time: < 2 seconds
-  </Accordion>
-</AccordionGroup>
-
-## Security
-
-### Built-in Security Features
-
-<Warning>
-Always use authentication and encryption in production environments.
-</Warning>
-
-1. **Authentication**: Required for all production deployments
-2. **Rate Limiting**: Prevent abuse and DoS attacks
-3. **Input Validation**: Sanitize all inputs before forwarding
-4. **Audit Logging**: Track all tool invocations
-5. **Encryption**: TLS/SSL for all network communication
-
-### Security Configuration
-
-```typescript
-{
-  security: {
-    authentication: {
-      required: true,
-      type: "apiKey"
-    },
-    rateLimiting: {
-      enabled: true,
-      requests: 100,
-      window: 60000 // 1 minute
-    },
-    cors: {
-      enabled: true,
-      origins: ["https://trusted.domain.com"]
-    },
-    audit: {
-      enabled: true,
-      level: "info"
-    }
-  }
-}
-```
-
-## Monitoring
-
-### Health Checks
-
-The proxy provides health endpoints:
-
-```bash
-# Overall health
-GET /health
-{
-  "status": "healthy",
-  "servers": {
-    "connected": 5,
-    "healthy": 5
-  }
-}
-
-# Individual server health
-GET /health/servers
-{
-  "servers": [
-    { "name": "github", "status": "healthy", "latency": 45 },
-    { "name": "slack", "status": "healthy", "latency": 120 }
-  ]
-}
-```
-
-### Metrics
-
-Track proxy performance:
-
-```typescript
-// Prometheus metrics endpoint
-GET /metrics
-
-# HELP mcp_proxy_requests_total Total requests
-# TYPE mcp_proxy_requests_total counter
-mcp_proxy_requests_total{method="listTools"} 1234
-
-# HELP mcp_proxy_latency_seconds Request latency
-# TYPE mcp_proxy_latency_seconds histogram
-mcp_proxy_latency_seconds_bucket{le="0.1"} 900
-```
-
-## Comparison
-
-### MCP Proxy vs Direct Connection
-
-| Feature | MCP Proxy | Direct Connection |
-|---------|-----------|-------------------|
-| Multiple Servers | ✅ Unified access | ❌ Separate connections |
-| Authentication | ✅ Centralized | ❌ Per-server config |
-| Connection Management | ✅ Pooling & reuse | ❌ Manual handling |
-| Error Recovery | ✅ Automatic retry | ❌ Manual implementation |
-| Tool Discovery | ✅ Aggregated | ❌ Per-server query |
-| Performance | ✅ Optimized | ⚠️ Depends on implementation |
-| Monitoring | ✅ Built-in | ❌ Custom implementation |
-
-## Getting Started
+## Request lifecycle
 
 <Steps>
-  <Step title="Install">
-    Install the MCP Proxy package
-    [Installation Guide](/mcp-proxy/installation)
+  <Step title="Client request">
+    The MCP client asks for tools/resources/prompts or invokes an operation through STDIO or HTTP.
   </Step>
-  <Step title="Configure">
-    Set up your servers and authentication
-    [Configuration Guide](/mcp-proxy/installation#configuration)
+  <Step title="Workspace lookup">
+    The proxy validates your API key, then queries the Plugged.in API. Responses are cached for 1 second to keep calls fast while reflecting recent changes.
   </Step>
-  <Step title="Connect">
-    Connect your AI clients to the proxy
-    [Integration Guide](/mcp-proxy/installation#integration)
+  <Step title="Routing">
+    Based on the capability metadata, the proxy either calls the downstream MCP server (STDIO, SSE, Streamable HTTP) or serves a Plugged.in static tool.
   </Step>
-  <Step title="Monitor">
-    Set up monitoring and alerts
-    [Monitoring Guide](/mcp-proxy/installation#monitoring)
+  <Step title="Response shaping">
+    Results are normalised, prefixed, and returned to the MCP client. Knowledge-base answers include document IDs and snippets; notifications include severity metadata.
   </Step>
 </Steps>
 
-## Next Steps
+## Transport modes
 
-- [Installation Guide](/mcp-proxy/installation) - Set up MCP Proxy
-- [Changelog](/mcp-proxy/changelog) - See what's new
-- [API Reference](/api/reference) - Detailed API documentation
-- [GitHub Repository](https://github.com/VeriTeknik/pluggedin-mcp) - Source code
+| Mode | Default port | When to choose it | Command |
+|------|--------------|-------------------|---------|
+| STDIO | N/A | Claude Desktop, Cursor, Cline, or MCP Inspector running locally. | `PLUGGEDIN_API_KEY=... npx @pluggedin/pluggedin-mcp-proxy` |
+| Streamable HTTP | 12006 | External deployments, remote IDEs, CI jobs, or multiple users sharing the same proxy. | `... --transport streamable-http --port 12006 [--require-api-auth] [--stateless]` |
+
+Streamable HTTP supports session stickiness by default. Pass `--stateless` when you want a fresh transport per request (useful for serverless deployments). Add `--require-api-auth` to enforce `Authorization: Bearer <PLUGGEDIN_API_KEY>`.
+
+## Built-in Plugged.in tool surface
+
+| Category | Tools | Notes |
+|----------|-------|-------|
+| Onboarding | `pluggedin_setup` | Works without an API key to show setup, configuration, and troubleshooting help. |
+| Discovery | `pluggedin_discover_tools` | Forces a capabilities refresh. Partial metadata is available without a key; full results require authentication. |
+| Knowledge base | `pluggedin_ask_knowledge_base`, `pluggedin_search_documents`, `pluggedin_get_document`, `pluggedin_update_document`, `pluggedin_create_document`, `pluggedin_list_documents` | Read and write documents stored in Plugged.in with full model attribution metadata. |
+| Notifications | `pluggedin_send_notification`, `pluggedin_list_notifications`, `pluggedin_mark_notification_done`, `pluggedin_delete_notification` | Send notifications (with optional email) and manage inbox state. |
+
+Every MCP server you add through the Plugged.in UI is surfaced alongside these static tools. In clients you will see them labeled with their UUID-prefixed names under the external tools section, complete with the instructions, prompts, and resources you configured in the dashboard.
+
+All other tools/resources/prompts originate from the MCP servers you register in the Plugged.in app. The proxy automatically maps UUID-prefixed tool names back to their original identifiers when forwarding requests.
+
+## Integration with the Plugged.in app
+
+- Create and manage servers under **MCP Servers** in Plugged.in; the proxy reads the API on demand.
+- The proxy sanitises environment variables and command arguments before spawning STDIO servers.
+- Server metadata includes transport type, custom headers, session IDs, and optional instructions that appear as formatted prompts in your client.
+- Knowledge-base operations respect workspace permissions, document visibility, and model attribution.
+
+## Security posture
+
+- API keys are validated for allowed characters before use. Invalid input fails fast.
+- Downstream HTTP URLs are checked to avoid localhost/SSRF exploits.
+- Command execution is allow-listed to frequently used binaries (`node`, `npx`, `python`, etc.).
+- Optional HTTP auth (`--require-api-auth`) ensures remote deployments stay private.
+- Set `PLUGGEDIN_DEBUG=true` to emit detailed logs during debugging; leave it `false` in STDIO mode to avoid polluting the MCP stream.
+
+## Next steps
+
+- Follow the [Setup Guide](/setup-guide) to configure credentials and connect your clients.
+- When you are ready to deploy, use the [Installation](/mcp-proxy/installation) guide for CLI, pnpm, or Docker workflows.

@@ -1,0 +1,568 @@
+---
+title: Advanced Configuration
+description: Comprehensive configuration options for the Plugged.in platform
+sidebarTitle: Advanced Configuration
+---
+
+# Advanced Configuration
+
+This guide covers advanced configuration options for the Plugged.in platform, including security, performance, and customization settings.
+
+## Environment Variables
+
+### Core Application Settings
+
+```env
+# Application
+NODE_ENV=production
+NEXT_PUBLIC_APP_URL=https://your-domain.com
+PORT=12005
+
+# Database
+DATABASE_URL=postgresql://user:password@localhost:5432/pluggedin_db
+DATABASE_SSL=true
+DATABASE_POOL_MIN=2
+DATABASE_POOL_MAX=10
+
+# Authentication
+NEXTAUTH_SECRET=your-nextauth-secret
+NEXTAUTH_URL=https://your-domain.com
+
+# API Configuration
+PLUGGEDIN_API_KEY=your-api-key
+API_RATE_LIMIT=60
+API_RATE_LIMIT_WINDOW=60
+```
+
+### Security Configuration
+
+```env
+# Encryption
+ENCRYPTION_KEY=your-32-character-encryption-key
+ENCRYPTION_ALGORITHM=aes-256-gcm
+
+# Content Security Policy
+CSP_HEADER="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'"
+
+# CORS
+CORS_ORIGIN=https://your-domain.com,https://app.your-domain.com
+CORS_CREDENTIALS=true
+
+# Security Headers
+HSTS_MAX_AGE=31536000
+X_FRAME_OPTIONS=DENY
+X_CONTENT_TYPE_OPTIONS=nosniff
+
+# Rate Limiting
+RATE_LIMIT_API=60
+RATE_LIMIT_AUTH=5
+RATE_LIMIT_UPLOAD=10
+RATE_LIMIT_SEARCH=100
+
+# Input Validation
+MAX_FILE_SIZE=10485760
+MAX_REQUEST_SIZE=10485760
+ALLOWED_FILE_TYPES=pdf,txt,md,json,html,jpg,png,gif
+
+# Sandboxing
+MCP_ISOLATION_TYPE=bubblewrap
+MCP_ISOLATION_FALLBACK=firejail
+MCP_ISOLATION_TIMEOUT=30000
+MCP_ISOLATION_MEMORY=1G
+MCP_ISOLATION_CPU_SHARES=512
+```
+
+### OAuth Configuration
+
+```env
+# GitHub OAuth
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+GITHUB_OAUTH_SCOPES=repo,user:email
+
+# Linear OAuth
+LINEAR_CLIENT_ID=your-linear-client-id
+LINEAR_CLIENT_SECRET=your-linear-client-secret
+LINEAR_OAUTH_SCOPES=read,write
+
+# OAuth Security
+OAUTH_STATE_TIMEOUT=600
+OAUTH_TOKEN_REFRESH_THRESHOLD=300
+OAUTH_ENCRYPTION_KEY=your-oauth-encryption-key
+```
+
+### MCP Server Configuration
+
+```env
+# Server Discovery
+MCP_DISCOVERY_TIMEOUT=30000
+MCP_DISCOVERY_RETRIES=3
+MCP_DISCOVERY_PARALLEL=5
+
+# Transport Settings
+MCP_STDIO_TIMEOUT=30000
+MCP_SSE_TIMEOUT=60000
+MCP_HTTP_TIMEOUT=60000
+
+# Tool Configuration
+UUID_PREFIX_ENABLED=true
+TOOL_NAME_MAX_LENGTH=50
+TOOL_DESCRIPTION_MAX_LENGTH=500
+
+# Resource Limits
+MCP_SERVER_MEMORY=512M
+MCP_SERVER_CPU=0.5
+MCP_SERVER_PROCESSES=1
+```
+
+### Document Processing (RAG v2)
+
+```env
+# Document Storage
+DOCUMENTS_MAX_SIZE=10485760
+DOCUMENTS_ALLOWED_TYPES=pdf,txt,md,json,html,jpg,png,gif
+DOCUMENTS_UPLOAD_PATH=/app/uploads
+DOCUMENTS_MAX_FILES=1000
+
+# RAG Configuration
+RAG_ENABLED=true
+RAG_MODEL=gpt-3.5-turbo
+RAG_CHUNK_SIZE=1000
+RAG_CHUNK_OVERLAP=200
+RAG_TOP_K=5
+RAG_SCORE_THRESHOLD=0.7
+
+# Vector Database
+VECTOR_DB_TYPE=postgresql
+VECTOR_DIMENSIONS=1536
+VECTOR_METRIC=cosine
+VECTOR_INDEX_TYPE=ivfflat
+
+# Search Settings
+SEARCH_DEBOUNCE_MS=500
+SEARCH_MAX_RESULTS=50
+SEARCH_MIN_QUERY_LENGTH=3
+```
+
+### Notification System
+
+```env
+# Notification Settings
+NOTIFICATIONS_ENABLED=true
+NOTIFICATIONS_POLLING_INTERVAL=15000
+NOTIFICATIONS_EMAIL_ENABLED=true
+NOTIFICATIONS_WEBHOOK_ENABLED=true
+
+# Email Configuration
+SMTP_HOST=smtp.your-domain.com
+SMTP_PORT=587
+SMTP_SECURE=true
+SMTP_USER=your-smtp-user
+SMTP_PASS=your-smtp-password
+SMTP_FROM=noreply@your-domain.com
+
+# Webhook Settings
+WEBHOOK_TIMEOUT=5000
+WEBHOOK_RETRIES=3
+WEBHOOK_RETRY_DELAY=1000
+WEBHOOK_SECRET=your-webhook-secret
+```
+
+### Performance & Caching
+
+```env
+# Caching
+CACHE_TYPE=redis
+CACHE_TTL=3600
+CACHE_MAX_SIZE=100MB
+CACHE_REDIS_URL=redis://localhost:6379
+
+# Memory Cache (Fallback)
+MEMORY_CACHE_ENABLED=true
+MEMORY_CACHE_TTL=300
+MEMORY_CACHE_MAX_SIZE=50MB
+
+# Database Optimization
+DB_QUERY_TIMEOUT=30000
+DB_CONNECTION_TIMEOUT=5000
+DB_STATEMENT_TIMEOUT=60000
+
+# Application Performance
+NEXT_TELEMETRY_DISABLED=true
+BUNDLE_ANALYZER=false
+SOURCEMAP=false
+```
+
+### Monitoring & Logging
+
+```env
+# Logging
+LOG_LEVEL=info
+LOG_FORMAT=json
+LOG_FILE=/var/log/pluggedin/app.log
+LOG_MAX_SIZE=100MB
+LOG_MAX_FILES=5
+
+# Metrics
+METRICS_ENABLED=true
+METRICS_PORT=9090
+METRICS_PATH=/metrics
+
+# Health Checks
+HEALTH_CHECK_PATH=/health
+HEALTH_CHECK_INTERVAL=30000
+HEALTH_CHECK_TIMEOUT=5000
+
+# Tracing
+TRACING_ENABLED=false
+TRACING_SERVICE_NAME=pluggedin-app
+TRACING_ENDPOINT=http://localhost:4318/v1/traces
+```
+
+## Docker Configuration
+
+### docker-compose.yml
+
+```yaml
+version: '3.8'
+services:
+  pluggedin-app:
+    image: pluggedin/app:latest
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://pluggedin:password@db:5432/pluggedin_db
+    depends_on:
+      - db
+      - redis
+    volumes:
+      - uploads:/app/uploads
+      - ./logs:/var/log/pluggedin
+
+  pluggedin-mcp:
+    image: pluggedin/mcp:latest
+    environment:
+      - PLUGGEDIN_APP_URL=http://pluggedin-app:12005
+    depends_on:
+      - pluggedin-app
+
+  db:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=pluggedin_db
+      - POSTGRES_USER=pluggedin
+      - POSTGRES_PASSWORD=your-secure-password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads:
+```
+
+### Kubernetes Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pluggedin-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: pluggedin-app
+  template:
+    metadata:
+      labels:
+        app: pluggedin-app
+    spec:
+      containers:
+      - name: pluggedin-app
+        image: pluggedin/app:latest
+        ports:
+        - containerPort: 12005
+        env:
+        - name: NODE_ENV
+          value: "production"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: pluggedin-secrets
+              key: database-url
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 12005
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 12005
+          initialDelaySeconds: 5
+          periodSeconds: 5
+```
+
+## Advanced Security Configuration
+
+### Custom SSL/TLS
+
+```env
+# SSL Configuration
+SSL_CERT_PATH=/etc/ssl/certs/pluggedin.crt
+SSL_KEY_PATH=/etc/ssl/private/pluggedin.key
+SSL_CA_PATH=/etc/ssl/certs/ca.crt
+
+# Certificate Auto-Renewal
+CERT_AUTO_RENEW=true
+CERT_RENEW_THRESHOLD=30
+CERT_RENEW_HOOK=/scripts/renew-cert.sh
+```
+
+### Custom Sandboxing Rules
+
+```env
+# Bubblewrap Configuration
+BWRAP_SHARE_NET=false
+BWRAP_RO_BIND=/usr,/usr
+BWRAP_TMPFS=/tmp
+BWRAP_PROC=/proc
+BWRAP_DEV=/dev
+
+# Firejail Configuration
+FIREJAIL_PROFILE=/etc/firejail/pluggedin.profile
+FIREJAIL_BLACKLIST=/etc/firejail/blacklist.txt
+```
+
+### Advanced Rate Limiting
+
+```env
+# Redis-based Rate Limiting
+RATE_LIMIT_STORE=redis
+RATE_LIMIT_REDIS_URL=redis://localhost:6379
+RATE_LIMIT_KEY_PREFIX=pluggedin:ratelimit
+
+# Custom Limits by Endpoint
+RATE_LIMIT_DOCUMENTS=10
+RATE_LIMIT_MCP_SERVERS=20
+RATE_LIMIT_COLLECTIONS=30
+RATE_LIMIT_WEBHOOKS=50
+```
+
+## Database Optimization
+
+### PostgreSQL Configuration
+
+```ini
+# postgresql.conf optimizations
+shared_buffers = 256MB
+effective_cache_size = 1GB
+work_mem = 4MB
+maintenance_work_mem = 64MB
+checkpoint_segments = 32
+wal_buffers = 16MB
+default_statistics_target = 100
+random_page_cost = 1.5
+effective_io_concurrency = 200
+```
+
+### Connection Pooling
+
+```env
+# PgBouncer Configuration
+PGBOUNCER_ENABLED=true
+PGBOUNCER_POOL_SIZE=20
+PGBOUNCER_RESERVE_POOL_SIZE=5
+PGBOUNCER_MAX_CLIENT_CONN=100
+```
+
+## Performance Tuning
+
+### Memory Management
+
+```env
+# Node.js Memory Settings
+NODE_OPTIONS="--max-old-space-size=4096 --optimize-for-size"
+
+# Garbage Collection
+GC_INTERVAL=30000
+GC_THRESHOLD=0.8
+
+# Memory Limits
+MEMORY_MAX_BUFFER=1GB
+MEMORY_MAX_RSS=1.5GB
+```
+
+### Database Query Optimization
+
+```env
+# Query Settings
+DB_SLOW_QUERY_LOG=true
+DB_SLOW_QUERY_THRESHOLD=1000
+DB_QUERY_CACHE=true
+DB_QUERY_CACHE_SIZE=1000
+
+# Index Settings
+DB_AUTO_EXPLAIN=true
+DB_INDEX_ADVISOR=true
+```
+
+## Monitoring & Alerting
+
+### Prometheus Metrics
+
+```env
+# Prometheus Configuration
+PROMETHEUS_ENABLED=true
+PROMETHEUS_PORT=9090
+PROMETHEUS_PATH=/metrics
+
+# Custom Metrics
+METRICS_COLLECT_DB=true
+METRICS_COLLECT_MCP=true
+METRICS_COLLECT_RAG=true
+```
+
+### Alert Configuration
+
+```yaml
+# Alert Rules
+groups:
+  - name: pluggedin
+    rules:
+      - alert: HighErrorRate
+        expr: rate(errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+
+      - alert: DatabaseConnectionPoolExhausted
+        expr: db_connections_max - db_connections_available < 5
+        for: 2m
+        labels:
+          severity: critical
+
+      - alert: HighMemoryUsage
+        expr: process_memory_usage_bytes / process_memory_max_bytes > 0.9
+        for: 1m
+        labels:
+          severity: critical
+```
+
+## Backup & Recovery
+
+### Automated Backup Configuration
+
+```env
+# Backup Settings
+BACKUP_ENABLED=true
+BACKUP_SCHEDULE="0 2 * * *"
+BACKUP_RETENTION=30
+BACKUP_COMPRESSION=gzip
+
+# Backup Destinations
+BACKUP_S3_BUCKET=pluggedin-backups
+BACKUP_S3_REGION=us-east-1
+BACKUP_LOCAL_PATH=/backups
+
+# Encryption
+BACKUP_ENCRYPTION=true
+BACKUP_ENCRYPTION_KEY=your-backup-key
+```
+
+### Recovery Procedures
+
+```bash
+# Database Recovery
+pg_restore -d pluggedin_db backup_file.dump
+
+# File Recovery
+rsync -av backup_server:/backups/uploads /app/uploads
+
+# Configuration Recovery
+cp backup_config/.env .env.backup
+```
+
+## Development Configuration
+
+### Development Environment
+
+```env
+# Development Settings
+NODE_ENV=development
+DEBUG=pluggedin:*
+LOG_LEVEL=debug
+
+# Hot Reload
+NEXT_HOT_RELOAD=true
+FAST_REFRESH=true
+
+# Development Tools
+BUNDLE_ANALYZER=true
+SOURCEMAP=true
+```
+
+### Testing Configuration
+
+```env
+# Test Settings
+TEST_DATABASE_URL=postgresql://test:test@localhost:5432/pluggedin_test
+TEST_REDIS_URL=redis://localhost:6379/1
+TEST_TIMEOUT=30000
+
+# Mock Settings
+MOCK_EXTERNAL_APIS=true
+MOCK_MCP_SERVERS=true
+MOCK_OAUTH_PROVIDERS=true
+```
+
+## Troubleshooting Configuration
+
+### Debug Settings
+
+```env
+# Debug Configuration
+DEBUG_MODE=true
+DEBUG_REQUESTS=true
+DEBUG_DATABASE=true
+DEBUG_MCP=true
+
+# Stack Traces
+STACK_TRACE_LIMIT=50
+SOURCE_MAP_SUPPORT=true
+
+# Performance Profiling
+PROFILER_ENABLED=true
+PROFILER_PORT=9229
+```
+
+### Log Configuration
+
+```env
+# Detailed Logging
+LOG_REQUESTS=true
+LOG_RESPONSES=true
+LOG_DATABASE_QUERIES=true
+LOG_MCP_COMMUNICATION=true
+
+# Log Rotation
+LOG_ROTATION_SIZE=100MB
+LOG_ROTATION_DATE=true
+LOG_COMPRESSION=true
+```
+
+This advanced configuration guide provides comprehensive options for customizing and optimizing your Plugged.in deployment. For specific use cases or custom requirements, consult the [troubleshooting guide](/troubleshooting) or [contact support](mailto:support@plugged.in).

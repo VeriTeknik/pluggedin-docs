@@ -1,608 +1,167 @@
 ---
 title: MCP Proxy Installation
-description: Step-by-step guide to install and configure MCP Proxy
+description: Install and run the Plugged.in MCP Proxy in STDIO or Streamable HTTP mode.
 sidebarTitle: Installation
 ---
 
-# MCP Proxy Installation
+# Install the Plugged.in MCP Proxy
 
-Complete guide for installing and configuring the Plugged.in MCP Proxy server.
+The proxy is published as `@pluggedin/pluggedin-mcp-proxy`. This guide walks you through installing it with your preferred toolchain, configuring credentials, and validating the deployment.
 
-## Installation Methods
+## 1. Prerequisites
+
+- Node.js 20 LTS or newer (required for top-level `await` and the MCP SDK)
+- `npm` 10+ or `pnpm` 9+
+- Plugged.in API key with MCP access
+- Optional: Docker 24+ if you plan to containerize the proxy
+
+## 2. Choose an installation path
 
 <Tabs>
-  <Tab title="npm">
+  <Tab title="Run on demand (npx)">
     ```bash
-    npm install -g @pluggedin/mcp-proxy
+    PLUGGEDIN_API_KEY=pg_in_your_key \
+      npx @pluggedin/pluggedin-mcp-proxy
     ```
+    Ideal for local testing or temporary sessions.
   </Tab>
-  <Tab title="Docker">
+  <Tab title="Global npm install">
     ```bash
-    docker pull pluggedin/mcp-proxy:latest
+    npm install -g @pluggedin/pluggedin-mcp-proxy
+    PLUGGEDIN_API_KEY=pg_in_your_key pluggedin-mcp-proxy
     ```
+    Use this when you want a stable binary on your PATH (e.g., Claude Desktop integrations).
   </Tab>
-  <Tab title="Source">
+  <Tab title="Project dependency (pnpm)">
+    ```bash
+    pnpm add -D @pluggedin/pluggedin-mcp-proxy
+    PLUGGEDIN_API_KEY=pg_in_your_key pnpm exec pluggedin-mcp-proxy
+    ```
+    Adds the proxy to your project for scripting or CI jobs.
+  </Tab>
+  <Tab title="From source">
     ```bash
     git clone https://github.com/VeriTeknik/pluggedin-mcp.git
     cd pluggedin-mcp
-    npm install
-    npm run build
+    pnpm install
+    pnpm build
+    PLUGGEDIN_API_KEY=pg_in_your_key node dist/index.js
     ```
+    Use this when contributing to the proxy or testing unreleased changes.
   </Tab>
 </Tabs>
 
-## Quick Start
+## 3. Configure credentials
 
-<Steps>
-  <Step title="Install Package">
-    ```bash
-    npm install -g @pluggedin/mcp-proxy
-    ```
-  </Step>
-  <Step title="Create Configuration">
-    ```bash
-    mcp-proxy init
-    ```
-  </Step>
-  <Step title="Start Server">
-    ```bash
-    mcp-proxy start
-    ```
-  </Step>
-  <Step title="Verify Installation">
-    ```bash
-    curl http://localhost:3000/health
-    ```
-  </Step>
-</Steps>
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PLUGGEDIN_API_KEY` | Required | Required | Authenticate the proxy with your Plugged.in workspace. |
+| `PLUGGEDIN_API_BASE_URL` | Optional | `https://plugged.in` | Override when targeting a self-hosted Plugged.in environment. |
+| `PLUGGEDIN_UUID_TOOL_PREFIXING` | Optional | `true` | Disable to remove server UUID prefixes from tool names. |
+| `PLUGGEDIN_DEBUG` | Optional | `false` | Enable verbose logging (do not use in STDIO mode unless debugging). |
 
-## Configuration
+Set them inline (`VAR=value command`) or export them in your shell profile.
 
-### Basic Configuration
+## 4. Deployment options
 
-Create `mcp-proxy.config.json`:
+- **Plugged.in Cloud (managed)**: Teams on the hosted Plugged.in platform can provision the MCP Proxy directly in the cloud. The managed instance stays updated automatically, scales with usage, and exposes the HTTP endpoint without any local setup. Use this when you need zero-maintenance infrastructure or want to share the proxy across your team instantly.
+- **Local desktop integration**: Run the proxy in STDIO mode when attaching Claude Desktop, Cursor, or any Inspector session running on the same machine. This keeps everything offline except for calls to the Plugged.in API.
+- **Local or on-prem HTTP service**: Use Streamable HTTP mode on a server you control (VM, bare metal, container, or serverless environment) when multiple users or remote IDEs need to reuse the proxy. Pair it with `--require-api-auth` for authenticated access.
+- **Hybrid setups**: Mix approaches by running STDIO for developer workstations and deploying a hardened HTTP instance (or the cloud version) for production workloads.
 
-```json
-{
-  "port": 3000,
-  "host": "0.0.0.0",
-  "auth": {
-    "type": "apiKey",
-    "key": "your-secure-api-key"
-  },
-  "servers": [
-    {
-      "name": "github",
-      "transport": {
-        "type": "streamable",
-        "baseUrl": "https://api.github.com/mcp"
-      }
-    },
-    {
-      "name": "local",
-      "transport": {
-        "type": "stdio",
-        "command": "node",
-        "args": ["./local-server.js"]
-      }
-    }
-  ]
-}
-```
+## 5. Run the proxy locally
 
-### Environment Variables
-
-Configure using environment variables:
-
-```env
-# Server Configuration
-MCP_PROXY_PORT=3000
-MCP_PROXY_HOST=0.0.0.0
-
-# Authentication
-MCP_PROXY_AUTH_TYPE=apiKey
-MCP_PROXY_API_KEY=your-secure-api-key
-
-# Logging
-MCP_PROXY_LOG_LEVEL=info
-MCP_PROXY_LOG_FORMAT=json
-
-# Performance
-MCP_PROXY_MAX_CONNECTIONS=100
-MCP_PROXY_TIMEOUT=30000
-
-# Cache
-MCP_PROXY_CACHE_ENABLED=true
-MCP_PROXY_CACHE_TTL=300000
-```
-
-### Advanced Configuration
-
-Full configuration with all options:
-
-```json
-{
-  "server": {
-    "port": 3000,
-    "host": "0.0.0.0",
-    "cors": {
-      "enabled": true,
-      "origins": ["https://app.plugged.in"],
-      "credentials": true
-    }
-  },
-  "auth": {
-    "type": "apiKey",
-    "key": "${MCP_PROXY_API_KEY}",
-    "header": "X-API-Key"
-  },
-  "servers": [
-    {
-      "name": "github",
-      "transport": {
-        "type": "streamable",
-        "baseUrl": "https://api.github.com/mcp",
-        "headers": {
-          "Authorization": "Bearer ${GITHUB_TOKEN}"
-        }
-      },
-      "retry": {
-        "attempts": 3,
-        "delay": 1000,
-        "backoff": 2
-      },
-      "timeout": 30000
-    }
-  ],
-  "performance": {
-    "connectionPool": {
-      "max": 10,
-      "min": 2,
-      "idle": 60000
-    },
-    "cache": {
-      "enabled": true,
-      "ttl": 300000,
-      "maxSize": 104857600
-    }
-  },
-  "logging": {
-    "level": "info",
-    "format": "json",
-    "file": "/var/log/mcp-proxy.log"
-  },
-  "monitoring": {
-    "metrics": {
-      "enabled": true,
-      "port": 9090
-    },
-    "health": {
-      "enabled": true,
-      "interval": 30000
-    }
-  }
-}
-```
-
-## Docker Deployment
-
-### Basic Docker Setup
+### STDIO mode (default)
 
 ```bash
-# Run with default configuration
-docker run -p 3000:3000 pluggedin/mcp-proxy:latest
-
-# Run with custom configuration
-docker run -p 3000:3000 \
-  -v $(pwd)/config.json:/app/config.json \
-  -e MCP_PROXY_API_KEY=your-key \
-  pluggedin/mcp-proxy:latest
+PLUGGEDIN_API_KEY=pg_in_your_key \
+  npx @pluggedin/pluggedin-mcp-proxy
 ```
 
-### Docker Compose
+- STDIO mode is best for desktop clients and the MCP Inspector.
+- The process stays attached to stdin/stdout; avoid printing extra logs unless debugging.
 
-```yaml
-version: '3.8'
-
-services:
-  mcp-proxy:
-    image: pluggedin/mcp-proxy:latest
-    ports:
-      - "3000:3000"
-    environment:
-      - MCP_PROXY_API_KEY=${API_KEY}
-      - MCP_PROXY_LOG_LEVEL=info
-    volumes:
-      - ./config.json:/app/config.json
-      - ./logs:/var/log
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-```
-
-### Kubernetes Deployment
-
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: mcp-proxy
-spec:
-  replicas: 3
-  selector:
-    matchLabels:
-      app: mcp-proxy
-  template:
-    metadata:
-      labels:
-        app: mcp-proxy
-    spec:
-      containers:
-      - name: mcp-proxy
-        image: pluggedin/mcp-proxy:latest
-        ports:
-        - containerPort: 3000
-        env:
-        - name: MCP_PROXY_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: mcp-proxy-secret
-              key: api-key
-        livenessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 30
-          periodSeconds: 30
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
-            memory: "512Mi"
-            cpu: "500m"
-```
-
-## Server Configuration
-
-### STDIO Servers
-
-Configure local command-line MCP servers:
-
-```json
-{
-  "name": "local-tools",
-  "transport": {
-    "type": "stdio",
-    "command": "python",
-    "args": ["mcp_server.py"],
-    "env": {
-      "PYTHONPATH": "/app/lib"
-    },
-    "cwd": "/app/servers"
-  }
-}
-```
-
-### Streamable HTTP Servers
-
-Configure HTTP-based MCP servers:
-
-```json
-{
-  "name": "api-server",
-  "transport": {
-    "type": "streamable",
-    "baseUrl": "https://api.example.com/mcp",
-    "headers": {
-      "Authorization": "Bearer ${API_TOKEN}",
-      "X-Custom-Header": "value"
-    }
-  },
-  "oauth": {
-    "enabled": true,
-    "provider": "github",
-    "clientId": "${GITHUB_CLIENT_ID}",
-    "clientSecret": "${GITHUB_CLIENT_SECRET}"
-  }
-}
-```
-
-### SSE Servers (Deprecated)
-
-<Warning>
-SSE transport is deprecated. Migrate to Streamable HTTP.
-</Warning>
-
-```json
-{
-  "name": "legacy-sse",
-  "transport": {
-    "type": "sse",
-    "url": "https://legacy.example.com/sse"
-  },
-  "deprecated": true,
-  "migrateTo": "streamable"
-}
-```
-
-## Integration
-
-### Claude Desktop
-
-Add to Claude Desktop configuration:
-
-```json
-{
-  "mcpServers": {
-    "pluggedin-proxy": {
-      "command": "mcp-proxy",
-      "args": ["start", "--config", "/path/to/config.json"]
-    }
-  }
-}
-```
-
-### JavaScript/TypeScript
-
-```typescript
-import { MCPClient } from '@modelcontextprotocol/sdk';
-
-const client = new MCPClient({
-  url: 'http://localhost:3000',
-  headers: {
-    'X-API-Key': 'your-api-key'
-  }
-});
-
-// List available tools
-const tools = await client.listTools();
-
-// Invoke a tool
-const result = await client.invokeTool({
-  name: 'search_documents',
-  parameters: { query: 'MCP proxy' }
-});
-```
-
-### Python
-
-```python
-import requests
-
-# Configure client
-api_key = "your-api-key"
-base_url = "http://localhost:3000"
-
-headers = {
-    "X-API-Key": api_key,
-    "Content-Type": "application/json"
-}
-
-# List tools
-response = requests.get(f"{base_url}/tools", headers=headers)
-tools = response.json()
-
-# Invoke tool
-payload = {
-    "name": "search_documents",
-    "parameters": {"query": "MCP proxy"}
-}
-response = requests.post(f"{base_url}/tools/invoke",
-                         json=payload, headers=headers)
-result = response.json()
-```
-
-### cURL
+### Streamable HTTP mode
 
 ```bash
-# List tools
-curl -H "X-API-Key: your-api-key" \
-     http://localhost:3000/tools
-
-# Invoke tool
-curl -X POST \
-     -H "X-API-Key: your-api-key" \
-     -H "Content-Type: application/json" \
-     -d '{"name":"search_documents","parameters":{"query":"MCP"}}' \
-     http://localhost:3000/tools/invoke
+PLUGGEDIN_API_KEY=pg_in_your_key \
+  npx @pluggedin/pluggedin-mcp-proxy \
+  --transport streamable-http --port 12006 --require-api-auth
 ```
 
-## Monitoring
+- `--port` defaults to `12006`; change it if the port is busy.
+- `--require-api-auth` enforces `Authorization: Bearer <PLUGGEDIN_API_KEY>` for tool/resource calls.
+- `--stateless` creates a new transport per request (set this for serverless or load-balanced deployments).
 
-### Health Checks
+Health check: `GET http://localhost:12006/health`
 
-Monitor proxy health:
+## 6. Containerized deployment
+
+Build your own image (optional):
 
 ```bash
-# Basic health check
-curl http://localhost:3000/health
-
-# Detailed health with server status
-curl http://localhost:3000/health?detailed=true
+docker build -t pluggedin-mcp-proxy:latest .
 ```
 
-### Metrics
-
-Prometheus metrics endpoint:
+Run it:
 
 ```bash
-# Access metrics
-curl http://localhost:9090/metrics
-
-# Sample metrics
-mcp_proxy_requests_total{method="listTools"} 1234
-mcp_proxy_request_duration_seconds{quantile="0.99"} 0.234
-mcp_proxy_active_connections 15
-mcp_proxy_server_health{server="github"} 1
+docker run --rm -it \
+  --name pluggedin-mcp-proxy \
+  -e PLUGGEDIN_API_KEY=pg_in_your_key \
+  -e PLUGGEDIN_API_BASE_URL=https://plugged.in \
+  -p 12006:12006 \
+  pluggedin-mcp-proxy:latest \
+  --transport streamable-http --port 12006 --require-api-auth
 ```
 
-### Logging
-
-Configure logging levels:
-
-```json
-{
-  "logging": {
-    "level": "debug", // trace, debug, info, warn, error
-    "format": "json", // json, pretty
-    "destinations": [
-      {
-        "type": "console",
-        "level": "info"
-      },
-      {
-        "type": "file",
-        "path": "/var/log/mcp-proxy.log",
-        "level": "debug",
-        "rotate": {
-          "maxSize": "10MB",
-          "maxFiles": 5
-        }
-      }
-    ]
-  }
-}
-```
-
-## Troubleshooting
-
-### Common Issues
-
-<AccordionGroup>
-  <Accordion title="Connection Refused">
-    **Symptoms:** Cannot connect to proxy
-
-    **Solutions:**
-    - Check if proxy is running: `ps aux | grep mcp-proxy`
-    - Verify port is not in use: `lsof -i :3000`
-    - Check firewall settings
-    - Verify configuration file syntax
-  </Accordion>
-
-  <Accordion title="Authentication Failed">
-    **Symptoms:** 401 Unauthorized errors
-
-    **Solutions:**
-    - Verify API key is correct
-    - Check authentication header name
-    - Ensure API key is properly escaped in config
-    - Verify environment variables are loaded
-  </Accordion>
-
-  <Accordion title="Server Connection Failed">
-    **Symptoms:** Cannot connect to MCP servers
-
-    **Solutions:**
-    - Test server connectivity directly
-    - Check server authentication credentials
-    - Verify network connectivity
-    - Review proxy logs for detailed errors
-  </Accordion>
-
-  <Accordion title="High Memory Usage">
-    **Symptoms:** Proxy consuming excessive memory
-
-    **Solutions:**
-    - Reduce connection pool size
-    - Decrease cache size
-    - Enable connection timeout
-    - Review and fix memory leaks
-  </Accordion>
-</AccordionGroup>
-
-### Debug Mode
-
-Enable debug logging:
+Attach the MCP Inspector to the live container:
 
 ```bash
-# Via environment variable
-MCP_PROXY_LOG_LEVEL=debug mcp-proxy start
-
-# Via configuration
-{
-  "logging": {
-    "level": "debug"
-  }
-}
-
-# Via command line
-mcp-proxy start --log-level debug
+npx @modelcontextprotocol/inspector docker://pluggedin-mcp-proxy
 ```
 
-## Performance Tuning
+(Replace the container name if you chose a different one.)
 
-### Connection Pool
+## 7. Validate the installation
 
-Optimize connection pooling:
-
-```json
-{
-  "connectionPool": {
-    "max": 20,          // Maximum connections
-    "min": 5,           // Minimum idle connections
-    "idle": 60000,      // Idle timeout (ms)
-    "acquire": 30000,   // Acquire timeout (ms)
-    "evict": 10000      // Eviction interval (ms)
-  }
-}
+```bash
+PLUGGEDIN_API_KEY=pg_in_your_key \
+  npx @modelcontextprotocol/inspector npx:@pluggedin/pluggedin-mcp-proxy
 ```
 
-### Caching
+Inside the Inspector, run `tools/list` to confirm Plugged.in static tools and your registered servers appear. Call `pluggedin_ask_knowledge_base` to verify document access.
 
-Configure cache for better performance:
+## 8. Development and testing scripts
 
-```json
-{
-  "cache": {
-    "enabled": true,
-    "ttl": 300000,      // 5 minutes
-    "maxSize": 104857600, // 100MB
-    "strategy": "lru",   // lru, lfu, fifo
-    "persist": true,     // Persist to disk
-    "path": "/var/cache/mcp-proxy"
-  }
-}
-```
+The project `package.json` exposes scripts that simplify local builds, testing, and inspector workflows:
 
-### Rate Limiting
+| Script | Purpose |
+|--------|---------|
+| `pnpm run build` | Compile TypeScript to `dist/` and make the binaries executable. |
+| `pnpm run watch` | Rebuild automatically when source files change (helpful during development). |
+| `pnpm test`, `pnpm run test:watch`, `pnpm run test:coverage`, `pnpm run test:ui` | Execute Vitest test suites in standard, watch, coverage, or UI modes. |
+| `pnpm run test:no-api` | Run tests that cover behaviour when no API key is provided. |
+| `pnpm run inspector` and `pnpm run inspector:auto` | Launch scripted MCP Inspector sessions that automatically connect to a local build for smoke testing. |
+| `pnpm run inspector:manual` | Start the Inspector in manual mode, loading environment variables from `.env.local` so you can step through tool calls yourself. |
+| `pnpm run inspector:auth`, `pnpm run inspector:staging`, `pnpm run inspector:prod` | Connect the Inspector to different environments by reading the appropriate API keys and base URLs. Useful when validating staging or production workspaces. |
+| `pnpm run inspector:no-api` | Verify the proxy’s behaviour when no API key is present. |
+| `pnpm run report` | Generate a capabilities report by running `dist/index.js --report` with dotenv-loaded credentials. |
 
-Prevent abuse with rate limiting:
+All inspector commands rely on the published `dist` output, so run `pnpm build` first or use the version shipped on npm via `npx @pluggedin/pluggedin-mcp-proxy`.
 
-```json
-{
-  "rateLimiting": {
-    "enabled": true,
-    "window": 60000,    // 1 minute
-    "max": 100,         // Max requests per window
-    "message": "Too many requests",
-    "skipSuccessfulRequests": false,
-    "keyGenerator": "ip" // ip, apiKey, custom
-  }
-}
-```
+## 9. CLI flags reference
 
-## Security Best Practices
+| Flag | Description |
+|------|-------------|
+| `--transport &lt;stdio|streamable-http&gt;` | Switch between STDIO (default) and Streamable HTTP modes. |
+| `--port &lt;number&gt;` | Port for Streamable HTTP mode (default `12006`). |
+| `--stateless` | Start a fresh transport for every HTTP request instead of reusing sessions. |
+| `--require-api-auth` | Enforce Bearer-token authentication in Streamable HTTP mode. |
+| `--pluggedin-api-key &lt;key&gt;` | CLI alternative to the `PLUGGEDIN_API_KEY` environment variable. |
+| `--pluggedin-api-base-url &lt;url&gt;` | CLI alternative to the `PLUGGEDIN_API_BASE_URL` environment variable. |
 
-<Warning>
-Always follow security best practices in production deployments.
-</Warning>
+## 10. Next steps
 
-1. **Use Strong API Keys**: Generate secure random keys
-2. **Enable HTTPS**: Use TLS/SSL in production
-3. **Restrict CORS**: Only allow trusted origins
-4. **Rate Limiting**: Prevent abuse and DoS
-5. **Input Validation**: Sanitize all inputs
-6. **Audit Logging**: Track all operations
-7. **Regular Updates**: Keep proxy and dependencies updated
-
-## Support
-
-For installation help:
-- **Documentation**: [docs.plugged.in](https://docs.plugged.in)
-- **GitHub Issues**: [Report issues](https://github.com/VeriTeknik/pluggedin-mcp/issues)
-- **GitHub Discussions**: [Join community](https://github.com/orgs/VeriTeknik/discussions)
-- **Email Support**: [api-support@plugged.in](mailto:api-support@plugged.in)
+1. Follow the [Setup Guide](/setup-guide) to connect your MCP clients.
+2. Explore the [Overview](/mcp-proxy/overview) to understand the proxy architecture and built-in capabilities.

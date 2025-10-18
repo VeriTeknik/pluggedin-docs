@@ -7,9 +7,49 @@ description: Welcome to Plugged.in - The Crossroads for AI Data Exchanges
 
 <img src="https://plugged.in/_next/image?url=%2Fpluggedin-wl.png&w=256&q=75" alt="Plugged.in Logo" />
 
-## The Crossroads for AI Data Exchanges
+## TL;DR: Plugged.in
 
-Plugged.in is a comprehensive platform for managing Model Context Protocol (MCP) servers with integrated RAG (Retrieval-Augmented Generation) capabilities. It provides a unified interface for discovering, configuring, and utilizing AI tools across multiple MCP servers while leveraging your own documents as context.
+<Warning>
+**The future of AI won't be about bigger models—it'll be about smarter connections.**
+</Warning>
+
+Plugged.in is the unified control plane that solves a critical problem in today's AI landscape: **fragmentation**. Every AI platform—Claude, ChatGPT, Cursor, LM Studio—keeps its own isolated ecosystem of tools, documents, and context. This means you're constantly re-uploading documents, reconfiguring tools, and losing continuity as you switch between models.
+
+Plugged.in changes this by creating **one governed layer** where your knowledge, tools, and memory stay with you across every AI model and platform.
+
+## The Three Pillars
+
+<CardGroup cols={3}>
+  <Card title="📚 Knowledge Base" icon="book-open">
+    **✅ IN PRODUCTION**<br/>
+    Your documents become a living, searchable knowledge base accessible to any AI. Upload once, and every model can query your PDFs, docs, and files through RAG-powered semantic search. AI models can even create and collaborate on documents directly in your library, with complete version history and model attribution—so you always know which AI (Claude, ChatGPT, etc.) contributed what.<br/>
+    <em>Think of it as GitHub for AI-generated content: full version control, complete ownership, and cross-platform availability.</em>
+  </Card>
+
+  <Card title="🔧 Tools" icon="wrench">
+    **✅ IN PRODUCTION**<br/>
+    The Model Context Protocol (MCP) standardized how AI clients connect to external tools, but managing MCP servers is still fragmented—configure once in Claude Desktop, then again in Cursor, then again in VSCode. Plugged.in's universal MCP proxy eliminates this pain: install once, access everywhere.<br/>
+    With 1,500+ MCP servers in the registry and automatic OAuth token management, you get one-click tool installation that works across Claude Desktop, ChatGPT, Cursor, Cline, VSCode, LM Studio, and any MCP-compatible client. Configure your tools once, use them everywhere.
+  </Card>
+
+  <Card title="🧠 Memory" icon="brain">
+    **🚧 IN DEVELOPMENT**<br/>
+    The missing piece is persistent context that evolves with you. Plugged.in's memory layer will provide focus-aware AI that understands your current task (Focus Agent), retains session context (Short-term Memory), and builds long-term understanding of your projects, preferences, and patterns—all while keeping you in control of what's remembered and for how long.
+  </Card>
+</CardGroup>
+
+## What is Plugged.in?
+
+**Plugged.in is the crossroads for AI data exchanges** - the unified control plane that brings your **Knowledge • Tools • Memory** to every AI model. Install once, govern everywhere.
+
+<Info>
+**The Problem:** Every AI model keeps its own tools, documents, and memories → fragmentation & cost.<br/>
+**The Solution:** One governed layer for Memory · Knowledge · Tools across every model.
+</Info>
+
+<Info>
+**For beginners:** MCP (Model Context Protocol) servers are like apps that give AI models access to external tools and data. Instead of each AI platform having its own tools, MCP creates a standard way for AI to use the same tools everywhere.
+</Info>
 
 <CardGroup cols={2}>
   <Card title="Platform" icon="globe" href="https://plugged.in">
@@ -26,9 +66,22 @@ Plugged.in is a comprehensive platform for managing Model Context Protocol (MCP)
   </Card>
 </CardGroup>
 
-## What is Plugged.in?
-
 Plugged.in enables seamless integration with any MCP client (Claude, Cline, Cursor, etc.) while providing advanced management capabilities, document-based knowledge augmentation, and real-time notifications through an intuitive web interface.
+
+<CardGroup cols={4}>
+  <Card title="⭐ GitHub Stars" icon="star" href="https://github.com/VeriTeknik/pluggedin-app">
+    Star us on GitHub!
+  </Card>
+  <Card title="🐦 Twitter/X" icon="twitter" href="https://x.com/PluggedIntoAI">
+    Follow us on X
+  </Card>
+  <Card title="💼 LinkedIn" icon="linkedin" href="https://www.linkedin.com/company/plugged_in">
+    Connect on LinkedIn
+  </Card>
+  <Card title="🗣️ Reddit" icon="message-circle" href="https://www.reddit.com/r/plugged_in/">
+    Join our community
+  </Card>
+</CardGroup>
 
 ## Architecture Overview
 
@@ -140,14 +193,34 @@ Plugged.in serves as the central hub connecting various AI clients and tools wit
   <Step title="Sign Up">
     Create your account at [plugged.in](https://plugged.in/register)
   </Step>
-  <Step title="Set Up MCP Servers">
-    Configure your MCP servers through the web interface
+  <Step title="Add Your First MCP Servers">
+    Visit the <a href="https://plugged.in/search">MCP Registry</a> and install some popular servers:
+    <ul>
+      <li><strong>GitHub Tools</strong> - For code analysis and repository management</li>
+      <li><strong>Database Tools</strong> - For SQL queries and schema exploration</li>
+      <li><strong>File System</strong> - For local file operations</li>
+    </ul>
+    Start with 2-3 servers to learn the workflow!
   </Step>
-  <Step title="Connect Your Client">
-    Use the generated configuration with Claude, Cursor, or other MCP clients
+  <Step title="Connect Your AI Client">
+    Follow our <a href="/setup-guide">Setup Guide</a> to connect:
+    <ul>
+      <li><strong>Claude Desktop</strong> - Most popular choice</li>
+      <li><strong>Cursor/VS Code</strong> - For development work</li>
+      <li><strong>LM Studio</strong> - For local AI models</li>
+      <li><strong>ChatGPT</strong> - Via HTTP proxy mode</li>
+    </ul>
+  </Step>
+  <Step title="Upload Your Knowledge">
+    Add documents to your knowledge base:
+    <ul>
+      <li>Upload PDFs, code files, and documentation</li>
+      <li>Use RAG search across all your documents</li>
+      <li>Let AI create and manage documents for you</li>
+    </ul>
   </Step>
   <Step title="Start Building">
-    Leverage the full power of MCP tools in your AI workflows
+    Leverage unified knowledge, tools, and memory across all AI models! 🚀
   </Step>
 </Steps>
 
@@ -160,6 +233,21 @@ Plugged.in serves as the central hub connecting various AI clients and tools wit
 - [Release Notes](/releases/changelog)
 
 ## Community & Support
+
+<CardGroup cols={4}>
+  <Card title="⭐ GitHub" icon="star" href="https://github.com/VeriTeknik/pluggedin-app">
+    Star us on GitHub!
+  </Card>
+  <Card title="🐦 X/Twitter" icon="twitter" href="https://x.com/PluggedIntoAI">
+    Follow @PluggedIntoAI
+  </Card>
+  <Card title="💼 LinkedIn" icon="linkedin" href="https://www.linkedin.com/company/plugged_in">
+    Connect with us
+  </Card>
+  <Card title="🗣️ Reddit" icon="message-circle" href="https://www.reddit.com/r/plugged_in/">
+    Join r/plugged_in
+  </Card>
+</CardGroup>
 
 <CardGroup cols={3}>
   <Card title="GitHub Issues" icon="bug" href="https://github.com/VeriTeknik/pluggedin-app/issues">

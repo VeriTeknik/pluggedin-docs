@@ -1,0 +1,387 @@
+---
+title: Setup Guide
+description: Connect your MCP clients to Plugged.in and share resources across all your AI tools.
+sidebarTitle: Setup Guide
+---
+
+# Plugged.in Setup Guide
+
+**Why Connect to Plugged.in?** By connecting Plugged.in to your MCP clients, you'll get a unified layer where you can:
+
+<CardGroup cols={3}>
+  <Card title="📚 Share Knowledge" icon="book-open">
+    Create a document on LM Studio and instantly access or update it with Claude Code, ChatGPT, or any other connected client.
+  </Card>
+  <Card title="✅ Manage Tasks" icon="check-circle">
+    Create tasks in one client and mark them as completed from any other client - perfect for workflow continuity.
+  </Card>
+  <Card title="🔧 Unified Tools" icon="wrench">
+    Configure your MCP servers once in Plugged.in and use the same tools across Claude Desktop, Cursor, LM Studio, ChatGPT, and more - without reconfiguring each client.
+  </Card>
+</CardGroup>
+
+<Info>
+**Multiple Connection Methods:** Choose the approach that works best for your workflow - from simple npx commands to Docker deployments to local development setups.
+</Info>
+
+## Who should follow this guide
+
+- Developers connecting Claude Desktop, Cline, Cursor, LM Studio, ChatGPT, or any MCP-compatible tool to Plugged.in
+- Teams who want to share knowledge, tools, and tasks across different AI clients
+- Anyone who wants to avoid reconfiguring MCP servers for each AI platform
+
+## Prerequisites
+
+- Node.js 20 LTS or newer (for npx/pnpm methods)
+- A Plugged.in account with API key access
+- Your favorite MCP client (Claude Desktop, Cursor, LM Studio, etc.)
+
+## 1. Create an API key
+
+1. Sign in at [https://plugged.in](https://plugged.in)
+2. Open **Settings -> API Keys**
+3. Create a key with MCP access scope
+4. Copy the value (keys start with `pg_in_`). Store it securely.
+
+## 2. Connect your MCP client
+
+<Info>
+Most users can connect without any installation - just use npx! The proxy package downloads automatically when needed.
+</Info>
+
+<AccordionGroup>
+  <Accordion title="Claude Desktop (macOS)">
+    Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+    ```json
+    {
+      "mcpServers": {
+        "PluggedInMCP": {
+          "command": "npx",
+          "args": [
+            "-y",
+            "@pluggedin/pluggedin-mcp-proxy@latest"
+          ],
+          "env": {
+            "PLUGGEDIN_API_KEY": "pg_in_your_key"
+          }
+        }
+      }
+    }
+    ```
+
+    **Alternative (global install):**
+    ```json
+    {
+      "mcpServers": {
+        "PluggedInMCP": {
+          "command": "pluggedin-mcp-proxy",
+          "env": {
+            "PLUGGEDIN_API_KEY": "pg_in_your_key"
+          }
+        }
+      }
+    }
+    ```
+
+    Restart Claude Desktop after saving.
+  </Accordion>
+
+  <Accordion title="Claude Desktop (Windows)">
+    Edit `%APPDATA%\Claude\claude_desktop_config.json`:
+
+    ```json
+    {
+      "mcpServers": {
+        "PluggedInMCP": {
+          "command": "npx",
+          "args": [
+            "-y",
+            "@pluggedin/pluggedin-mcp-proxy@latest"
+          ],
+          "env": {
+            "PLUGGEDIN_API_KEY": "pg_in_your_key"
+          }
+        }
+      }
+    }
+    ```
+
+    Restart Claude Desktop to apply changes.
+  </Accordion>
+
+  <Accordion title="Cursor / VS Code (Cline)">
+    **Configuration:**
+    ```json
+    {
+      "mcpServers": {
+        "PluggedInMCP": {
+          "command": "npx",
+          "args": [
+            "-y",
+            "@pluggedin/pluggedin-mcp-proxy@latest"
+          ],
+          "env": {
+            "PLUGGEDIN_API_KEY": "pg_in_your_key"
+          }
+        }
+      }
+    }
+    ```
+
+    **Setup:** Add this configuration to your Cursor/VS Code MCP settings and restart the editor.
+  </Accordion>
+
+  <Accordion title="LM Studio">
+    **Configuration:**
+    ```json
+    {
+      "mcpServers": {
+        "PluggedInMCP": {
+          "command": "npx",
+          "args": [
+            "-y",
+            "@pluggedin/pluggedin-mcp-proxy@latest"
+          ],
+          "env": {
+            "PLUGGEDIN_API_KEY": "pg_in_your_key"
+          }
+        }
+      }
+    }
+    ```
+
+    **Setup:** Add this configuration to LM Studio's MCP settings in the desktop app.
+  </Accordion>
+
+  <Accordion title="ChatGPT (via HTTP proxy)">
+    **Start proxy as HTTP service:**
+    ```bash
+    PLUGGEDIN_API_KEY=pg_in_your_key \
+      npx @pluggedin/pluggedin-mcp-proxy@latest \
+      --transport streamable-http --port 12006 --require-api-auth
+    ```
+
+    **ChatGPT configuration:**
+    ```json
+    {
+      "mcpServers": {
+        "PluggedInMCP": {
+          "url": "http://localhost:12006/mcp",
+          "headers": {
+            "Authorization": "Bearer pg_in_your_key"
+          }
+        }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Claude Code">
+    **CLI Setup:**
+    ```bash
+    # In your project directory, run:
+    claude mcp add PluggedIn npx @pluggedin/pluggedin-mcp-proxy@latest -e PLUGGEDIN_API_KEY=pg_in_your_key
+    ```
+
+    **Alternative (manual config):**
+    ```bash
+    # Set environment variable
+    export PLUGGEDIN_API_KEY=pg_in_your_key
+
+    # Launch VS Code with Claude Code
+    code
+    ```
+
+    **Manual configuration file:**
+    ```json
+    // .claude-code/config.json
+    {
+      "mcpServers": {
+        "PluggedIn": {
+          "command": "npx",
+          "args": ["@pluggedin/pluggedin-mcp-proxy@latest"],
+          "env": {
+            "PLUGGEDIN_API_KEY": "pg_in_your_key"
+          }
+        }
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## 3. Install the proxy (if needed)
+
+<Info>
+**Most users can skip this step!** npx, pnpm dlx, and Docker work without installation. Only install globally if you prefer it for long-lived desktop integrations.
+</Info>
+
+<Tabs>
+  <Tab title="Run with npx (fastest - no installation)">
+    ```bash
+    # macOS/Linux
+    PLUGGEDIN_API_KEY=pg_in_your_key \
+      npx -y @pluggedin/pluggedin-mcp-proxy@latest
+
+    # Windows PowerShell
+    $env:PLUGGEDIN_API_KEY = "pg_in_your_key"
+    npx -y @pluggedin/pluggedin-mcp-proxy@latest
+    ```
+    Downloads and runs the proxy on demand.
+  </Tab>
+  <Tab title="Install globally">
+    ```bash
+    npm install -g @pluggedin/pluggedin-mcp-proxy
+    PLUGGEDIN_API_KEY=pg_in_your_key pluggedin-mcp-proxy
+    ```
+    Best for long-lived desktop integrations.
+  </Tab>
+  <Tab title="Use pnpm dlx">
+    ```bash
+    PLUGGEDIN_API_KEY=pg_in_your_key \
+      pnpm dlx -y @pluggedin/pluggedin-mcp-proxy@latest
+    ```
+    Keeps the package in pnpm's store for reuse.
+  </Tab>
+  <Tab title="Docker">
+    ```bash
+    docker run --rm -it \
+      -e PLUGGEDIN_API_KEY=pg_in_your_key \
+      -e PLUGGEDIN_API_BASE_URL=https://plugged.in \
+      ghcr.io/veriteknik/pluggedin-mcp:latest \
+      --transport streamable-http --port 12006 --require-api-auth
+    ```
+    Perfect for server deployments and HTTP mode.
+  </Tab>
+</Tabs>
+
+## 3. Configure environment variables
+
+Set these before launching the proxy (most are optional with sensible defaults).
+
+| Variable | Required | Default | Purpose |
+|----------|----------|---------|---------|
+| `PLUGGEDIN_API_KEY` | Required | Required | Authenticates the proxy with your Plugged.in workspace. |
+| `PLUGGEDIN_API_BASE_URL` | Optional | `https://plugged.in` | Change only if you self-host the Plugged.in app. |
+| `PLUGGEDIN_UUID_TOOL_PREFIXING` | Optional | `true` | Disable (`false`) if your client cannot handle prefixed tool names. |
+| `PLUGGEDIN_DEBUG` | Optional | `false` | Set to `true` to log verbose diagnostics (Streamable HTTP mode prints to stdout). |
+
+<Info>
+**Environment Setup:** On Windows CMD use `set VAR=value`, on PowerShell use `$env:VAR='value'`, on macOS/Linux use `export VAR=value`.
+</Info>
+
+## 4. Verify with MCP Inspector
+
+Run a quick end-to-end check:
+
+```bash
+PLUGGEDIN_API_KEY=pg_in_your_key \
+  npx @modelcontextprotocol/inspector npx:-y:@pluggedin/pluggedin-mcp-proxy@latest
+```
+
+Inside the Inspector:
+
+1. Choose **List tools** - you should see static tools like `pluggedin_setup` plus any servers you configured in Plugged.in.
+2. Call `pluggedin_discover_tools` - this refreshes server metadata if you just added a new integration.
+3. Try `pluggedin_search_documents` or `pluggedin_ask_knowledge_base` to confirm knowledge-base access.
+
+
+## 5. Add MCP servers from the UI
+
+Once your client is connected, you'll want to add some MCP servers to see the cross-client sharing in action:
+
+<Steps>
+  <Step title="Browse the Registry">
+    Visit [https://plugged.in/search](https://plugged.in/search) to explore 1,500+ available MCP servers
+  </Step>
+  <Step title="Install Popular Servers">
+    Start with these community favorites to see cross-client sharing:
+    - **GitHub Tools** - Create issues in Claude Desktop, check status in Cursor
+    - **Database Tools** - Query data in LM Studio, analyze results in ChatGPT
+    - **File System** - Search files in VS Code, read contents in Claude Code
+    - **Web Search** - Research in one client, summarize findings in another
+  </Step>
+  <Step title="Configure Server Settings">
+    For each server you add:
+    - Choose your preferred transport (STDIO, SSE, or HTTP)
+    - Configure environment variables if needed
+    - Set command arguments for STDIO servers
+    - Test the connection before saving
+  </Step>
+  <Step title="Verify Cross-Client Access">
+    After adding servers in the UI:
+    - Use `pluggedin_discover_tools` in any connected client to refresh
+    - You should see your new servers' tools in ALL connected clients
+    - Test cross-client workflow: create content in one client, access it from another
+  </Step>
+</Steps>
+
+<Info>
+**Cross-Client Benefits:** Once configured in Plugged.in, your servers work across ALL connected clients. Configure once, use everywhere!
+</Info>
+
+## 6. Local development setup (optional)
+
+For contributors or advanced users who want to run the MCP proxy locally:
+
+<Steps>
+  <Step title="Clone and Setup">
+    ```bash
+    git clone https://github.com/VeriTeknik/pluggedin-mcp.git
+    cd pluggedin-mcp
+    npm install
+    ```
+  </Step>
+  <Step title="Configure Environment">
+    ```bash
+    cp .env.example .env.local
+    # Edit .env.local and add your API key:
+    # PLUGGEDIN_API_KEY=pg_in_your_key
+    # PLUGGEDIN_API_BASE_URL=https://plugged.in
+    ```
+  </Step>
+  <Step title="Build and Test">
+    ```bash
+    npm run build
+    npm run inspector  # Test with MCP Inspector
+    ```
+  </Step>
+  <Step title="Use in Clients">
+    ```json
+    {
+      "mcpServers": {
+        "PluggedInMCP": {
+          "command": "node",
+          "args": ["/path/to/pluggedin-mcp/dist/index.js"],
+          "env": {
+            "PLUGGEDIN_API_KEY": "pg_in_your_key"
+          }
+        }
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Built-in static tools
+
+| Tool | Requires API key? | Purpose |
+|------|-------------------|---------|
+| `pluggedin_setup` | No | Walks through onboarding topics without hitting the API. |
+| `pluggedin_discover_tools` | Partial | Refreshes server metadata; full results need an API key. |
+| `pluggedin_ask_knowledge_base` | Yes | Answers questions from your Plugged.in knowledge base. |
+| `pluggedin_search_documents`, `pluggedin_get_document`, `pluggedin_update_document` | Yes | Work with knowledge-base documents. |
+| `pluggedin_send_notification`, `pluggedin_list_notifications`, `pluggedin_mark_notification_done`, `pluggedin_delete_notification` | Yes | Manage Plugged.in notifications programmatically. |
+| `pluggedin_create_document`, `pluggedin_list_documents` | Yes | Create and browse AI-authored documents in your workspace. |
+
+## Troubleshooting
+
+- **Blank tool list** - Confirm `PLUGGEDIN_API_KEY` is set and your Plugged.in workspace has active MCP servers.
+- **401 Unauthorized (HTTP mode)** - Your client must pass `Authorization: Bearer pg_in...` when `--require-api-auth` is set.
+- **Prefixed tool names look odd** - Set `PLUGGEDIN_UUID_TOOL_PREFIXING=false` if your client duplicates prefixes.
+- **Tools not appearing** - Run `pluggedin_discover_tools` in your client after adding servers in the UI.
+- **Cross-client sharing not working** - Ensure all clients use the same Plugged.in workspace and API key.
+- **Connection issues** - Check that your API key is valid and has MCP access permissions.
+- **Package installation issues** - Use `npx -y @pluggedin/pluggedin-mcp-proxy@latest` with the `-y` flag to auto-approve.
+- **Still stuck?** Collect logs with `PLUGGEDIN_DEBUG=true` and contact [api-support@plugged.in](mailto:api-support@plugged.in).

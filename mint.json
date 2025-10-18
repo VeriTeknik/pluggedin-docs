@@ -53,6 +53,7 @@
       "group": "Getting Started",
       "pages": [
         "introduction",
+        "setup-guide",
         "quickstart/installation",
         "quickstart/configuration"
       ]
@@ -131,10 +132,42 @@
         "releases/v2-8-0",
         "releases/v2-7-0"
       ]
+    },
+    {
+      "group": "Migration Guides",
+      "pages": [
+        "migration-guides"
+      ]
+    },
+    {
+      "group": "Troubleshooting",
+      "pages": [
+        "troubleshooting"
+      ]
+    },
+    {
+      "group": "Advanced Configuration",
+      "pages": [
+        "advanced-configuration"
+      ]
+    },
+    {
+      "group": "Integration Guides",
+      "pages": [
+        "integration-guides"
+      ]
+    },
+    {
+      "group": "Performance",
+      "pages": [
+        "performance-optimization"
+      ]
     }
   ],
   "footerSocials": {
-    "github": "https://github.com/VeriTeknik",
-    "twitter": "https://twitter.com/pluggedin"
+    "github": "https://github.com/VeriTeknik/pluggedin-app",
+    "twitter": "https://x.com/PluggedIntoAI",
+    "linkedin": "https://www.linkedin.com/company/plugged_in",
+    "reddit": "https://www.reddit.com/r/plugged_in/"
   }
 }

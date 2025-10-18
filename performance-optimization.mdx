@@ -1,0 +1,731 @@
+---
+title: Performance Optimization
+description: Comprehensive guide to optimizing Plugged.in performance and scalability
+sidebarTitle: Performance Optimization
+---
+
+# Performance Optimization Guide
+
+This guide provides comprehensive strategies for optimizing Plugged.in performance, scalability, and resource utilization across different deployment scenarios.
+
+## System Requirements
+
+### Minimum Requirements
+
+| Component | Minimum | Recommended | Enterprise |
+|-----------|---------|-------------|------------|
+| **CPU** | 2 cores | 4 cores | 8+ cores |
+| **RAM** | 4 GB | 8 GB | 16+ GB |
+| **Storage** | 20 GB SSD | 50 GB SSD | 100+ GB SSD |
+| **Network** | 100 Mbps | 1 Gbps | 10+ Gbps |
+
+### Database Requirements
+
+```bash
+# PostgreSQL Configuration
+shared_buffers = 256MB          # 25% of RAM
+effective_cache_size = 1GB      # 50% of RAM
+work_mem = 4MB                  # Per operation
+maintenance_work_mem = 64MB     # For maintenance
+wal_buffers = 16MB              # WAL buffer
+checkpoint_segments = 32        # Checkpoint frequency
+```
+
+## Application Optimization
+
+### Memory Management
+
+#### Node.js Optimization
+
+```env
+# Memory Settings
+NODE_OPTIONS="--max-old-space-size=4096 --optimize-for-size --enable-gc-interval=30000"
+
+# Garbage Collection
+GC_INTERVAL=30000
+GC_THRESHOLD=0.8
+MEMORY_MAX_BUFFER=1GB
+MEMORY_MAX_RSS=1.5GB
+```
+
+#### Application-Level Caching
+
+```env
+# Caching Strategy
+CACHE_TYPE=redis
+CACHE_TTL=3600
+CACHE_MAX_SIZE=100MB
+CACHE_REDIS_URL=redis://localhost:6379
+
+# Memory Cache (Fallback)
+MEMORY_CACHE_ENABLED=true
+MEMORY_CACHE_TTL=300
+MEMORY_CACHE_MAX_SIZE=50MB
+```
+
+### Database Optimization
+
+#### Query Optimization
+
+```env
+# Query Performance
+DB_QUERY_TIMEOUT=30000
+DB_CONNECTION_TIMEOUT=5000
+DB_STATEMENT_TIMEOUT=60000
+DB_SLOW_QUERY_LOG=true
+DB_SLOW_QUERY_THRESHOLD=1000
+
+# Connection Pooling
+DB_POOL_MIN=2
+DB_POOL_MAX=20
+DB_POOL_IDLE_TIMEOUT=30000
+DB_POOL_ACQUIRE_TIMEOUT=60000
+```
+
+#### Index Optimization
+
+```sql
+-- Essential Indexes for Performance
+CREATE INDEX CONCURRENTLY idx_servers_profile_uuid ON servers(profile_uuid);
+CREATE INDEX CONCURRENTLY idx_documents_profile_uuid ON documents(profile_uuid);
+CREATE INDEX CONCURRENTLY idx_documents_created_at ON documents(created_at DESC);
+CREATE INDEX CONCURRENTLY idx_collections_profile_uuid ON collections(profile_uuid);
+CREATE INDEX CONCURRENTLY idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX CONCURRENTLY idx_notifications_unread ON notifications(unread) WHERE unread = true;
+
+-- Composite Indexes for Common Queries
+CREATE INDEX CONCURRENTLY idx_servers_profile_transport ON servers(profile_uuid, transport);
+CREATE INDEX CONCURRENTLY idx_documents_profile_source ON documents(profile_uuid, source, created_at DESC);
+```
+
+### Frontend Optimization
+
+#### Bundle Optimization
+
+```env
+# Build Optimization
+BUNDLE_ANALYZER=true
+SOURCEMAP=false
+MINIFY=true
+COMPRESS=true
+
+# Code Splitting
+LAZY_LOAD_ROUTES=true
+TREE_SHAKING=true
+DEAD_CODE_ELIMINATION=true
+```
+
+#### Runtime Performance
+
+```javascript
+// React Optimization
+const MemoizedComponent = React.memo(MyComponent);
+const CallbackRef = useCallback(() => {}, []);
+const MemoValue = useMemo(() => computeExpensiveValue(a, b), [a, b]);
+
+// Virtual Scrolling for Large Lists
+import { FixedSizeList as List } from 'react-window';
+```
+
+## Infrastructure Optimization
+
+### Docker Optimization
+
+#### Multi-Stage Builds
+
+```dockerfile
+# Dockerfile optimization
+FROM node:18-alpine AS base
+FROM base AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
+RUN npm ci --only=production
+
+FROM base AS builder
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npm run build
+
+FROM base AS runner
+WORKDIR /app
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 nextjs
+COPY --from=builder /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+USER nextjs
+EXPOSE 12005
+CMD ["node", "server.js"]
+```
+
+#### Docker Compose Optimization
+
+```yaml
+version: '3.8'
+services:
+  pluggedin-app:
+    image: pluggedin/app:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    environment:
+      - NODE_OPTIONS=--max-old-space-size=1536
+    volumes:
+      - ./uploads:/app/uploads:ro
+    restart: unless-stopped
+
+  pluggedin-mcp:
+    image: pluggedin/mcp:latest
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+    environment:
+      - MCP_SERVER_MEMORY=512M
+    restart: unless-stopped
+```
+
+### Kubernetes Optimization
+
+#### Resource Management
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pluggedin-app
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    spec:
+      containers:
+      - name: pluggedin-app
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 12005
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 12005
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+```
+
+#### Horizontal Pod Autoscaling
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pluggedin-app-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pluggedin-app
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 120
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+```
+
+## Database Performance
+
+### PostgreSQL Tuning
+
+#### Configuration Optimization
+
+```ini
+# Memory Settings
+shared_buffers = 1GB                    # 25% of system RAM
+effective_cache_size = 3GB              # 75% of system RAM
+work_mem = 16MB                         # Per operation memory
+maintenance_work_mem = 256MB            # For maintenance operations
+wal_buffers = 64MB                      # WAL writing buffer
+
+# Checkpoint Settings
+checkpoint_segments = 128               # Increase for high write loads
+checkpoint_timeout = 15min              # Checkpoint frequency
+checkpoint_completion_target = 0.9     # Spread checkpoint I/O
+
+# Query Planning
+default_statistics_target = 1000        # More detailed statistics
+random_page_cost = 1.5                  # SSD optimization
+effective_io_concurrency = 200          # SSD concurrent requests
+
+# Logging
+log_min_duration_statement = 1000ms     # Slow query logging
+log_checkpoints = on                    # Checkpoint logging
+log_connections = on                    # Connection logging
+log_disconnections = on                 # Disconnection logging
+```
+
+#### Regular Maintenance
+
+```bash
+# Daily Maintenance
+vacuum (analyze, verbose) pluggedin_db;
+
+# Weekly Maintenance
+reindex concurrently (verbose) pluggedin_db;
+
+# Monthly Maintenance
+vacuum full analyze verbose pluggedin_db;
+
+# Monitor long-running queries
+SELECT pid, now() - pg_stat_activity.query_start AS duration, query
+FROM pg_stat_activity
+WHERE (now() - pg_stat_activity.query_start) > interval '5 minutes';
+```
+
+### Connection Pooling
+
+#### PgBouncer Configuration
+
+```ini
+# /etc/pgbouncer/pgbouncer.ini
+[databases]
+pluggedin_db = host=localhost port=5432 dbname=pluggedin_db
+
+[pgbouncer]
+pool_mode = transaction
+listen_port = 6432
+listen_addr = *
+auth_type = md5
+auth_file = /etc/pgbouncer/userlist.txt
+
+# Pool Settings
+max_client_conn = 1000
+default_pool_size = 25
+min_pool_size = 5
+reserve_pool_size = 5
+reserve_pool_timeout = 5
+
+# Timeouts
+server_reset_query = DISCARD ALL
+server_check_delay = 30
+server_check_query = select 1
+server_lifetime = 3600
+server_idle_timeout = 600
+
+# Performance
+pkt_buf = 4096
+max_packet_size = 2147483647
+```
+
+## Caching Strategies
+
+### Redis Configuration
+
+#### Performance Tuning
+
+```ini
+# /etc/redis/redis.conf
+# Memory Management
+maxmemory 2GB
+maxmemory-policy allkeys-lru
+maxmemory-samples 5
+
+# Performance
+tcp-keepalive 300
+timeout 300
+tcp-keepalive 60
+
+# Persistence (if needed)
+save 900 1
+save 300 10
+save 60 10000
+
+# Advanced
+appendonly yes
+appendfsync everysec
+no-appendfsync-on-rewrite no
+auto-aof-rewrite-percentage 100
+auto-aof-rewrite-min-size 64mb
+```
+
+#### Cache Warming
+
+```bash
+# Warm up frequently accessed data
+redis-cli MGET user:profile:1 user:profile:2 user:profile:3
+
+# Preload popular MCP servers
+redis-cli SMEMBERS trending:servers
+
+# Warm up document search index
+redis-cli KEYS "doc:search:*" | head -100 | xargs redis-cli MGET
+```
+
+### Application-Level Caching
+
+#### Implementation Strategies
+
+```typescript
+// Cache Manager Implementation
+class CacheManager {
+  private cache = new Map();
+  private maxSize = 1000;
+  private ttl = 3600000; // 1 hour
+
+  set(key: string, value: any, ttl?: number) {
+    if (this.cache.size >= this.maxSize) {
+      this.evictLRU();
+    }
+    this.cache.set(key, {
+      value,
+      expiry: Date.now() + (ttl || this.ttl)
+    });
+  }
+
+  get(key: string) {
+    const item = this.cache.get(key);
+    if (!item) return null;
+    if (Date.now() > item.expiry) {
+      this.cache.delete(key);
+      return null;
+    }
+    return item.value;
+  }
+
+  private evictLRU() {
+    // Remove oldest entry
+    const firstKey = this.cache.keys().next().value;
+    this.cache.delete(firstKey);
+  }
+}
+```
+
+## Monitoring & Alerting
+
+### Key Metrics to Monitor
+
+#### Application Metrics
+
+```bash
+# Response Times
+curl -w "@curl-format.txt" -o /dev/null -s "https://plugged.in/api/health"
+
+# Concurrent Connections
+ss -tuln | grep :12005 | wc -l
+
+# Memory Usage
+ps aux | grep pluggedin | grep -v grep | awk '{sum+=$6} END {print sum/1024 "MB"}'
+```
+
+#### Database Metrics
+
+```sql
+-- Connection Count
+SELECT count(*) FROM pg_stat_activity WHERE datname = 'pluggedin_db';
+
+-- Table Sizes
+SELECT schemaname, tablename,
+       pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) as size
+FROM pg_tables
+WHERE schemaname = 'public'
+ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
+
+-- Index Usage
+SELECT schemaname, tablename, indexname, idx_scan, idx_tup_read, idx_tup_fetch
+FROM pg_stat_user_indexes
+ORDER BY idx_scan DESC;
+```
+
+### Performance Benchmarks
+
+#### Load Testing
+
+```bash
+# Using Apache Bench
+ab -n 1000 -c 10 https://plugged.in/api/health
+
+# Using Artillery
+artillery quick --count 100 -n 20 https://plugged.in/api/search
+
+# Using k6
+k6 run --vus 10 --duration 30s load-test.js
+```
+
+#### Benchmark Scripts
+
+```javascript
+// load-test.js for k6
+import http from 'k6/http';
+import { check, sleep } from 'k6';
+
+export let options = {
+  stages: [
+    { duration: '2m', target: 100 },
+    { duration: '5m', target: 100 },
+    { duration: '2m', target: 200 },
+    { duration: '5m', target: 200 },
+    { duration: '2m', target: 0 },
+  ],
+};
+
+export default function () {
+  let response = http.get('https://plugged.in/api/search?q=test');
+  check(response, {
+    'status is 200': (r) => r.status === 200,
+    'response time < 500ms': (r) => r.timings.duration < 500,
+  });
+  sleep(1);
+}
+```
+
+## Scalability Strategies
+
+### Horizontal Scaling
+
+#### Load Balancer Configuration
+
+```nginx
+# nginx.conf
+upstream pluggedin_app {
+    least_conn;
+    server app1:12005 max_fails=3 fail_timeout=30s;
+    server app2:12005 max_fails=3 fail_timeout=30s;
+    server app3:12005 max_fails=3 fail_timeout=30s;
+}
+
+server {
+    listen 80;
+    server_name plugged.in;
+
+    location / {
+        proxy_pass http://pluggedin_app;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Timeouts
+        proxy_connect_timeout 30s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+
+        # Buffering
+        proxy_buffering on;
+        proxy_buffer_size 128k;
+        proxy_buffers 4 256k;
+        proxy_busy_buffers_size 256k;
+    }
+}
+```
+
+### Database Scaling
+
+#### Read Replica Setup
+
+```yaml
+# docker-compose with read replicas
+services:
+  db-primary:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=pluggedin_db
+      - POSTGRES_USER=pluggedin
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_primary:/var/lib/postgresql/data
+    command: postgres -c wal_level=replica
+
+  db-replica:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=pluggedin_db
+      - POSTGRES_USER=pluggedin_ro
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_replica:/var/lib/postgresql/data
+    command: postgres -c hot_standby=on
+    depends_on:
+      - db-primary
+```
+
+## Troubleshooting Performance Issues
+
+### Common Performance Problems
+
+#### High Memory Usage
+
+**Diagnosis:**
+```bash
+# Check process memory
+pm2 monit
+
+# Check system memory
+free -h
+
+# Check for memory leaks
+node -e "setInterval(() => { console.log(process.memoryUsage()) }, 1000)"
+```
+
+**Solutions:**
+```bash
+# Restart services
+pm2 restart all
+
+# Clear caches
+redis-cli FLUSHALL
+
+# Check for memory leaks in logs
+journalctl -u pluggedin-app -f | grep -i memory
+```
+
+#### Slow Database Queries
+
+**Diagnosis:**
+```sql
+-- Find slow queries
+SELECT query, calls, total_time, mean_time
+FROM pg_stat_statements
+ORDER BY mean_time DESC
+LIMIT 10;
+
+-- Check table statistics
+SELECT schemaname, tablename, n_tup_ins, n_tup_upd, n_tup_del, n_live_tup
+FROM pg_stat_user_tables
+ORDER BY n_live_tup DESC;
+```
+
+**Solutions:**
+```bash
+# Update statistics
+ANALYZE VERBOSE pluggedin_db;
+
+# Rebuild indexes
+REINDEX INDEX CONCURRENTLY idx_servers_profile_uuid;
+
+# Check for missing indexes
+pg_stat_user_indexes
+```
+
+#### High CPU Usage
+
+**Diagnosis:**
+```bash
+# Check CPU usage
+top -p $(pgrep -f pluggedin)
+
+# Check CPU per process
+ps aux | grep pluggedin | grep -v grep
+
+# Check system load
+uptime
+```
+
+**Solutions:**
+```bash
+# Enable slow query logging
+echo "log_min_duration_statement = 1000" >> postgresql.conf
+
+# Check for expensive operations
+EXPLAIN ANALYZE SELECT * FROM documents WHERE profile_uuid = 'uuid' ORDER BY created_at DESC;
+```
+
+## Performance Best Practices
+
+### Development Phase
+
+1. **Code Optimization**
+   ```bash
+   # Use performance monitoring
+   npm install --save-dev @next/bundle-analyzer
+
+   # Enable source maps for debugging
+   SOURCEMAP=true npm run build
+
+   # Use tree shaking
+   npm run build -- --analyze
+   ```
+
+2. **Database Design**
+   ```sql
+   -- Use appropriate data types
+   ALTER TABLE users ALTER COLUMN created_at TYPE TIMESTAMP;
+
+   -- Add constraints for performance
+   ALTER TABLE documents ADD CONSTRAINT check_source CHECK (source IN ('upload', 'ai_generated', 'api'));
+
+   -- Use partitioning for large tables
+   CREATE TABLE documents_y2024 PARTITION OF documents FOR VALUES FROM ('2024-01-01') TO ('2025-01-01');
+   ```
+
+### Production Optimization
+
+1. **Resource Allocation**
+   ```bash
+   # Set appropriate limits
+   ulimit -n 65536
+   ulimit -u 4096
+
+   # Monitor resource usage
+   iotop -p $(pgrep -f pluggedin)
+   ```
+
+2. **Regular Maintenance**
+   ```bash
+   # Daily cleanup
+   find /app/uploads -type f -mtime +30 -delete
+
+   # Weekly optimization
+   pnpm db:optimize
+
+   # Monthly analysis
+   pnpm performance:analyze
+   ```
+
+This performance optimization guide provides comprehensive strategies for achieving optimal performance with Plugged.in. For specific performance issues, consult the [troubleshooting guide](/troubleshooting) or [contact support](mailto:support@plugged.in).

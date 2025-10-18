@@ -102,11 +102,16 @@ Organize your MCP servers into separate workspaces to prevent context pollution:
 All sensitive data is protected with enterprise-grade security measures.
 </Warning>
 
-- **End-to-End Encryption**: AES-256-GCM encryption for sensitive data
-- **Per-Profile Isolation**: Each profile has its own encryption key
-- **Secure Sharing**: Sanitized templates without credentials
-- **SSRF Prevention**: Comprehensive URL validation
-- **Rate Limiting**: Tiered limits for different operations
+- **End-to-End Encryption**: AES-256-GCM encryption for all sensitive data (commands, args, env vars, URLs)
+- **Per-Profile Key Derivation**: Unique encryption key per workspace using SHA-256 with profile UUIDs
+- **Transparent Operation**: Automatic encryption/decryption with secure key derivation
+- **Secure Sharing**: Sanitized templates without exposing credentials
+- **SSRF Prevention**: Comprehensive URL validation with private IP and dangerous port protection
+- **Command Allowlisting**: STDIO servers restricted to safe commands (node, npx, python, python3, uv, uvx, uvenv)
+- **Header Validation**: RFC 7230 compliant header sanitization with injection prevention
+- **Rate Limiting**: Tiered limits with Redis-based DDoS protection and intelligent fallbacks
+- **HTML Sanitization**: Industry-standard sanitization with sanitize-html
+- **Input Validation**: Comprehensive Zod schemas for all API endpoints
 
 ### 🛡️ Sandboxing & Isolation
 
@@ -125,10 +130,14 @@ All STDIO MCP servers run in secure sandboxed environments by default.
 
 Real-time activity tracking with optional email delivery:
 
-- MCP server activity logs
-- Custom notifications via `pluggedin_send_notification` tool
-- Email integration for critical alerts
-- Non-blocking asynchronous processing
+- **MCP Activity Tracking**: All tool calls, resource reads, and prompt executions
+- **Custom Notifications**: Via `pluggedin_send_notification` tool with localization support
+- **Email Integration**: Optional delivery for critical alerts with custom titles
+- **Advanced Filtering**: By severity (INFO, SUCCESS, WARNING, ALERT) with search functionality
+- **Sorting Options**: By newest/oldest first with instant refresh capability
+- **Protected Custom Notifications**: Secure notification creation with proper validation
+- **Reduced Polling**: Optimized from 60s to 15s intervals for better performance
+- **Bidirectional Support**: Send and receive notifications through MCP proxy
 
 ## Platform Architecture
 
@@ -216,26 +225,43 @@ Programmatically interact with Plugged.in's Library API using our official SDKs 
 
 ## Key Features by Version
 
+### v2.12.0 - Upload Context Metadata (Latest)
+- **Upload Context Metadata**: Purpose, related documents, and notes tracking
+- **Upload Method Detection**: Drag-drop vs file-picker identification
+- **UploadMetadataPanel Component**: Rich metadata editing interface
+- **Security Enhancements**: Zod validation and XSS prevention
+- **Performance**: Minimal bundle impact (~1-2KB)
+
 ### v2.10.0 - Security & Performance
-- Comprehensive security audit
-- Performance optimizations
-- Custom Instructions UI
-- Enhanced error handling
-- Encryption system overhaul
+- Comprehensive security audit addressing all GitHub security findings
+- Complete encryption system overhaul with scrypt key derivation
+- Performance optimizations with 10x faster database queries
+- Enhanced Content Security Policy (CSP) implementation
+- Custom Instructions UI improvements
+- Advanced error handling and type safety
 
-### v2.8.0 - AI Document Exchange
-- AI-generated documents with attribution
-- Enhanced document viewer
-- Model attribution tracking
-- Advanced search capabilities
-- Document versioning
+### v2.9.0 - UUID Tool Prefixing & Security
+- **Automatic UUID Tool Prefixing**: Prevents tool name collisions between MCP servers
+- **Slug-based Tool Prefixing**: Profile-scoped unique server identifiers
+- **Automatic Slug Generation**: From server names with collision resolution
+- **Security Release**: Encryption migration from predictable to cryptographically secure random salts
+- **SSL Support**: Database connections with configurable certificate validation
 
-### v2.7.0 - Registry v2
-- MCP Registry integration
-- OAuth authentication
-- Smart Server Wizard
-- Trending servers
-- Bidirectional notifications
+### v2.8.0 - AI Document Exchange (RAG v2)
+- **AI Document Creation**: Direct generation via MCP tools with rich metadata
+- **Multi-format Support**: Markdown, plain text, JSON, HTML with validation
+- **Complete Version History**: Full tracking with attribution and change diffs
+- **Model Attribution**: Shows which AI models contributed to each document
+- **Enhanced Library Interface**: Source filtering tabs and metadata display
+- **RAG v2 Search**: Semantic search across all documents with relevance scoring
+
+### v2.7.0 - Registry v2 & OAuth Integration
+- **Registry v2 Integration**: Modified fork of official MCP Registry with GitHub auth
+- **Smart Server Wizard**: Multi-step interface with repository analysis
+- **OAuth for MCP Servers**: Centralized authentication with AES-256-GCM encryption
+- **Trending Servers**: Real-time activity tracking and popularity algorithms
+- **Bidirectional Notifications**: Send/receive notifications via API
+- **Streamable HTTP**: Complete protocol support with session management
 
 ### v2.2.0 - Encryption
 - End-to-end encryption
@@ -264,42 +290,109 @@ Programmatically interact with Plugged.in's Library API using our official SDKs 
   </Card>
 </CardGroup>
 
-## Integration Options
+## Developer Experience
 
-### For Developers
+### ⚡ Speed to Production
+
+<Info>
+**Developer-first design** enables rapid PoC→production transitions with one-click tools, clean playground, and comprehensive SDKs.
+</Info>
 
 <Tabs>
-  <Tab title="API Access">
+  <Tab title="One-Click Setup">
     ```bash
-    # Search for MCP servers
-    GET /api/search?q=database
+    # 1. Sign up (seconds)
+    curl -X POST https://plugged.in/api/auth/register
 
-    # Get server statistics
-    GET /api/servers/{uuid}/stats
+    # 2. Add knowledge base
+    curl -X POST https://plugged.in/api/documents/upload \
+      -H "Authorization: Bearer $API_KEY" \
+      -F "file=@docs.pdf"
 
-    # Submit to registry
-    POST /api/registry/submit
+    # 3. Install MCP tools (1,500+ available)
+    curl -X POST https://plugged.in/api/mcp-servers \
+      -H "Authorization: Bearer $API_KEY" \
+      -d '{"name": "database-tools", "transport": "stdio"}'
+
+    # 4. Connect to any AI - Done! 🚀
     ```
   </Tab>
 
-  <Tab title="MCP Tools">
-    The platform provides these MCP tools:
-    - `pluggedin_create_document`
-    - `pluggedin_list_documents`
-    - `pluggedin_search_documents`
-    - `pluggedin_get_document`
-    - `pluggedin_update_document`
-    - `pluggedin_send_notification`
+  <Tab title="SDK Integration">
+    **JavaScript/TypeScript**
+    ```typescript
+    import { PluggedInClient } from 'pluggedinkit-js';
+
+    const client = new PluggedInClient({
+      apiKey: process.env.PLUGGEDIN_API_KEY,
+      baseUrl: 'https://plugged.in'
+    });
+
+    // Search documents
+    const results = await client.documents.search({
+      query: 'project architecture',
+      profileUuid: 'your-profile-id'
+    });
+
+    // Create AI document
+    const doc = await client.documents.createAI({
+      prompt: 'Document our API design',
+      format: 'markdown',
+      profileUuid: 'your-profile-id'
+    });
+    ```
+
+    **Python**
+    ```python
+    from pluggedinkit import PluggedInClient
+
+    client = PluggedInClient(api_key="your-key")
+
+    # Upload and search documents
+    client.upload_document("docs.pdf", profile_id="profile-123")
+    results = client.search_documents("API architecture", profile_id="profile-123")
+
+    # Manage MCP servers
+    servers = client.list_servers(profile_id="profile-123")
+    ```
+
+    **Go**
+    ```go
+    client := pluggedin.NewClient("your-api-key")
+
+    // Search knowledge base
+    results, err := client.Documents.Search(ctx, &pluggedin.SearchOptions{
+      Query: "system design",
+      ProfileUUID: "profile-123",
+    })
+    ```
   </Tab>
 
-  <Tab title="Webhooks">
-    Configure webhooks for:
-    - Server installation events
-    - Document creation
-    - User activities
-    - System notifications
+  <Tab title="MCP Integration">
+    **7 Built-in Tools:**
+    - `pluggedin_create_document` - AI document generation
+    - `pluggedin_list_documents` - Browse with filtering
+    - `pluggedin_search_documents` - Semantic RAG search
+    - `pluggedin_get_document` - Retrieve with history
+    - `pluggedin_update_document` - Version tracking
+    - `pluggedin_send_notification` - Custom alerts
+    - `pluggedin_discover_tools` - Registry integration
   </Tab>
 </Tabs>
+
+### Integration Options
+
+<CardGroup cols={3}>
+  <Card title="REST API" icon="globe">
+    Full REST API with authentication
+  </Card>
+  <Card title="MCP Protocol" icon="bot">
+    Native MCP server integration
+  </Card>
+  <Card title="SDK Libraries" icon="code">
+    Official SDKs in 3 languages
+  </Card>
+</CardGroup>
 
 ### For Organizations
 
@@ -325,20 +418,93 @@ Programmatically interact with Plugged.in's Library API using our official SDKs 
 - **Lazy Loading**: On-demand server initialization
 - **Background Processing**: Non-blocking operations
 
-## Community & Ecosystem
+## Competitive Advantages
+
+<AccordionGroup>
+  <Accordion title="🔗 Convergence">
+    **Unique convergence of capabilities:** Agents use tools while staying grounded in project knowledge + durable memory. No other platform combines all three.
+  </Accordion>
+
+  <Accordion title="🌐 Cross-Platform & Model-Agnostic">
+    **True platform independence:** Manage once, run across Claude/ChatGPT/Cursor/LM Studio + SDKs. No vendor lock-in.
+  </Accordion>
+
+  <Accordion title="🔐 Data Ownership & Governance">
+    **User-centric design:** Workspaces, export capabilities, permissioning, and audit trails ensure your data stays yours.
+  </Accordion>
+
+  <Accordion title="⚡ Developer-First Speed to Production">
+    **Optimized for developers:** One-click tools, clean playground, comprehensive SDKs → PoC→prod faster than alternatives.
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+**Strategic Moat:** Big AI vendors (Google, OpenAI, Anthropic, xAI) will never build shared knowledge, memory, or tools. Each seeks to control its own ecosystem, not sync others. Plugged.in fills this strategic gap by design.
+</Warning>
+
+## Market Leadership
+
+### Why Plugged.in Matters
+
+<Info>
+**The future of AI won't be about bigger models — it'll be about smarter connections.**<br/><br/>
+Plugged.in is the neutral layer where your knowledge, tools, and memory stay with you, across every model and platform.
+</Info>
+
+### Target Markets
+
+<CardGroup cols={3}>
+  <Card title="AI Power Users" icon="code">
+    **Software engineers & developers**
+    - Daily Claude/Cursor/Cline users
+    - Managing 10+ MCP servers
+    - Need cross-platform sync
+  </Card>
+  <Card title="AI Early Adopters" icon="search">
+    **Consultants & researchers**
+    - Heavy AI users for analysis
+    - Need AI-accessible knowledge
+    - Document-heavy workflows
+  </Card>
+  <Card title="AI Teams" icon="users">
+    **Startups & small teams**
+    - Building with AI assistance
+    - Shared knowledge bases
+    - Consistent tool setup
+  </Card>
+</CardGroup>
+
+### Market Opportunity
+
+<Info>
+**150M Total Available Market** - AI-enabled knowledge workers & developers globally<br/>
+**50M Service Available Market** - MCP-compatible AI tool users by 2027<br/>
+**12M Service Obtainable Market** - Our 3 target segments combined
+</Info>
+
+## Community & Social
+
+<CardGroup cols={4}>
+  <Card title="⭐ GitHub" icon="star" href="https://github.com/VeriTeknik/pluggedin-app">
+    66★ Star for support!
+  </Card>
+  <Card title="🐦 X/Twitter" icon="twitter" href="https://x.com/PluggedIntoAI">
+    Follow @PluggedIntoAI
+  </Card>
+  <Card title="💼 LinkedIn" icon="linkedin" href="https://www.linkedin.com/company/plugged_in">
+    Professional community
+  </Card>
+  <Card title="🗣️ Reddit" icon="message-circle" href="https://www.reddit.com/r/plugged_in/">
+    Join r/plugged_in
+  </Card>
+</CardGroup>
 
 <CardGroup cols={2}>
-  <Card title="GitHub" icon="github" href="https://github.com/VeriTeknik/pluggedin-app">
-    Star the repository and contribute
-  </Card>
   <Card title="Registry" icon="book" href="https://plugged.in/search">
     Browse and share MCP servers
   </Card>
   <Card title="Discussions" icon="comments" href="https://github.com/orgs/VeriTeknik/discussions">
-    Join the community discussion
-  </Card>
-  <Card title="Documentation" icon="book-open" href="/">
-    Explore guides and references
+    Community discussions
   </Card>
 </CardGroup>
 
@@ -364,20 +530,41 @@ Programmatically interact with Plugged.in's Library API using our official SDKs 
 - **Caching**: In-memory and Redis support
 - **CDN**: CloudFlare compatible
 
-## Roadmap
+## Product Roadmap
 
-### Coming Soon
-- Advanced analytics dashboard
-- Team collaboration features
-- Plugin marketplace
-- Mobile application
-- GraphQL API
+<Info>
+**Plugged.in builds the layer where knowledge, tools, and memory belong to the user — not to the vendor.**
+</Info>
 
-### Under Consideration
-- Federated MCP servers
-- Blockchain integration
-- Voice interface
-- AR/VR support
+### Q4 2025 (Current Quarter)
+- **ChatGPT + Claude Native Connectors** - Direct integration without proxy
+- **Memory Tiers GA** - Production-ready memory management system
+- **Enhanced SDK Features** - Advanced capabilities for all languages
+
+### Q1 2026
+- **Mobile Application** - iOS and Android apps for on-the-go access
+- **Organization Analytics** - Team usage insights and productivity metrics
+- **Policy Controls** - Advanced governance and compliance features
+
+### Q2 2026
+- **Enterprise Self-Hosting** - Complete deployment control for organizations
+- **SOC 2 Compliance** - Security certification for enterprise customers
+- **Partner Marketplace** - Third-party tool and integration ecosystem
+
+### Future Vision
+- **Federated MCP Servers** - Cross-organization tool sharing
+- **Advanced AI Agents** - Autonomous workflow management
+- **Voice Interface** - Natural language platform control
+- **AR/VR Integration** - Immersive AI development environments
+
+<CardGroup cols={2}>
+  <Card title="⭐ Star on GitHub" icon="star" href="https://github.com/VeriTeknik/pluggedin-app">
+    Support our development
+  </Card>
+  <Card title="💬 Join Discussions" icon="message-circle" href="https://github.com/orgs/VeriTeknik/discussions">
+    Share your feedback
+  </Card>
+</CardGroup>
 
 ## Getting Started
 
