@@ -275,25 +275,20 @@ answer = client.rag.ask_question("What are the deployment procedures?")
 print(answer)
 
 # Get storage statistics
-stats = client.rag.get_storage_stats()
-print(f"Documents: {stats['document_count']}")
-print(f"Total size: {stats['total_size']} bytes")
+stats = client.rag.get_storage_stats(user_id="user-id-from-dashboard")
+print(f"Documents: {stats.documents_count}")
+print(f"Estimated storage: {stats.estimated_storage_mb} MB")
 ```
 
 #### Query with Sources
 
 ```python
-result = client.rag.query_with_sources(
-    "Explain the authentication flow",
-    project_uuid="project-uuid"  # Optional project scope
-)
+result = client.rag.query_with_sources("Explain the authentication flow")
 
 print(f"Answer: {result['answer']}")
 print("\nSources:")
 for source in result["sources"]:
-    print(f"- {source.name} (relevance: {source.relevance}%)")
-    if source.model:
-        print(f"  Created by: {source.model.provider}/{source.model.name}")
+    print(f"- {source.name} ({source.id})")
 ```
 
 #### Find Relevant Documents
@@ -301,104 +296,20 @@ for source in result["sources"]:
 ```python
 documents = client.rag.find_relevant_documents(
     "user authentication",
-    project_uuid="project-uuid",
     limit=5  # Top 5 documents
 )
 
 for doc in documents:
-    print(f"- {doc.name}")
-    print(f"  Type: {doc.type}")
-    if doc.model:
-        print(f"  Model: {doc.model.provider}/{doc.model.name}")
-    print(f"  Relevance: {doc.relevance}%")
+    print(f"- {doc.name} ({doc.id})")
 ```
 
 ### File Uploads
 
-#### Upload Single File
-
-```python
-from pathlib import Path
-
-# Upload from file path
-file_path = Path("./report.pdf")
-metadata = {
-    "name": "Q4 Report.pdf",
-    "description": "Quarterly financial report",
-    "tags": ["finance", "q4", "2024"],
-    "purpose": "Financial documentation",
-    "relatedTo": "PROJECT-123"
-}
-
-def on_progress(percent):
-    print(f"Upload progress: {percent}%")
-
-response = client.uploads.upload_file(
-    file_path,
-    metadata,
-    on_progress=on_progress
-)
-
-if response.success:
-    print(f"Uploaded: {response.document_id}")
-
-    # Track processing if applicable
-    if response.upload_id:
-        def on_update(status):
-            print(f"Status: {status.status} - {status.message}")
-
-        client.uploads.track_upload(
-            response.upload_id,
-            on_update
-        )
-else:
-    print(f"Upload failed: {response.error}")
-```
-
-#### Upload from Memory
-
-```python
-# Upload bytes directly
-content = b"File content here..."
-metadata = {
-    "name": "data.txt",
-    "description": "Data file",
-    "tags": ["data"]
-}
-
-response = client.uploads.upload_file(content, metadata)
-if response.success:
-    print(f"Document ID: {response.document_id}")
-```
-
-#### Batch Upload
-
-```python
-files = [
-    {
-        "file": Path("doc1.pdf"),
-        "metadata": {"name": "doc1.pdf", "tags": ["batch"]}
-    },
-    {
-        "file": Path("doc2.txt"),
-        "metadata": {"name": "doc2.txt", "tags": ["batch"]}
-    }
-]
-
-def on_batch_progress(current, total):
-    print(f"Uploaded {current}/{total} files")
-
-results = client.uploads.upload_batch(
-    files,
-    on_progress=on_batch_progress
-)
-
-for i, result in enumerate(results):
-    if result.success:
-        print(f"✓ {files[i]['metadata']['name']}: {result.document_id}")
-    else:
-        print(f"✗ {files[i]['metadata']['name']}: {result.error}")
-```
+> **Important:** Direct file uploads are no longer available via the public API.
+> The `client.uploads` helpers now raise descriptive errors so legacy code fails
+> fast. Use the Plugged.in web interface or upcoming ingestion pipeline for
+> binary assets. AI-generated documents remain available through
+> `client.documents.create` and `client.uploads.upload_document`.
 
 ## Async Operations
 
@@ -442,27 +353,6 @@ async def rag_operations():
             print(f"A: {a}\n")
 
 asyncio.run(rag_operations())
-```
-
-### Async File Upload
-
-```python
-async def upload_files():
-    async with AsyncPluggedInClient(api_key="your-key") as client:
-        files = [Path(f"file{i}.txt") for i in range(10)]
-
-        upload_tasks = []
-        for file in files:
-            metadata = {"name": file.name, "tags": ["async-batch"]}
-            task = client.uploads.upload_file(file, metadata)
-            upload_tasks.append(task)
-
-        results = await asyncio.gather(*upload_tasks)
-
-        success_count = sum(1 for r in results if r.success)
-        print(f"Successfully uploaded {success_count}/{len(files)} files")
-
-asyncio.run(upload_files())
 ```
 
 ## Error Handling
@@ -690,7 +580,7 @@ Complete working examples are available in the [GitHub repository](https://githu
 - [Basic Usage](https://github.com/VeriTeknik/pluggedinkit-python/blob/main/examples/basic.py)
 - [Document Management](https://github.com/VeriTeknik/pluggedinkit-python/blob/main/examples/documents.py)
 - [RAG Queries](https://github.com/VeriTeknik/pluggedinkit-python/blob/main/examples/rag.py)
-- [File Upload](https://github.com/VeriTeknik/pluggedinkit-python/blob/main/examples/upload.py)
+- [File Upload (deprecated)](https://github.com/VeriTeknik/pluggedinkit-python/blob/main/examples/upload.py)
 - [Async Operations](https://github.com/VeriTeknik/pluggedinkit-python/blob/main/examples/async_example.py)
 - [Error Handling](https://github.com/VeriTeknik/pluggedinkit-python/blob/main/examples/errors.py)
 
@@ -728,19 +618,16 @@ Complete working examples are available in the [GitHub repository](https://githu
 
 | Method | Description |
 |--------|-------------|
-| `ask_question(query)` | Simple RAG query |
-| `query_with_sources(query, project_uuid)` | Query with source documents |
-| `find_relevant_documents(query, project_uuid, limit)` | Find relevant documents |
+| `query(query)` | Returns `RagResponse` with answer and metadata |
+| `ask_question(query)` | Simple RAG query (answer text only) |
+| `query_with_sources(query)` | Query with structured source metadata |
+| `find_relevant_documents(query, limit)` | Find relevant documents |
 | `check_availability()` | Check RAG service availability |
-| `get_storage_stats()` | Get storage statistics |
+| `get_storage_stats(user_id)` | Get storage statistics |
 
 ### Upload Methods
 
-| Method | Description |
-|--------|-------------|
-| `upload_file(file, metadata, on_progress)` | Upload a single file |
-| `upload_batch(files, on_progress)` | Upload multiple files |
-| `track_upload(upload_id, on_update)` | Track upload processing |
+Upload helpers now raise descriptive errors because binary ingestion is no longer available via the public API.
 
 ## Support
 

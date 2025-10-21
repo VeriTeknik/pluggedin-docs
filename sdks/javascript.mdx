@@ -9,7 +9,7 @@ sidebarTitle: JavaScript
 [![npm version](https://badge.fury.io/js/pluggedinkit-js.svg)](https://www.npmjs.com/package/pluggedinkit-js)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-The official JavaScript/TypeScript SDK for interacting with Plugged.in's Library API. Easily manage documents, perform RAG queries, and upload files with full type safety.
+The official JavaScript/TypeScript SDK for interacting with Plugged.in's Library API. Easily manage documents, create AI-generated content, and perform RAG queries with full type safety.
 
 <CardGroup cols={2}>
   <Card title="NPM Package" icon="npm" href="https://www.npmjs.com/package/pluggedinkit-js">
@@ -63,8 +63,9 @@ const results = await client.documents.search('machine learning', {
 });
 
 // Query RAG
-const answer = await client.rag.query('What are the latest updates?');
-console.log(answer);
+const ragResponse = await client.rag.query('What are the latest updates?');
+console.log(ragResponse.answer);
+console.log('Matched documents:', ragResponse.documentIds);
 ```
 
 ## Authentication
@@ -232,125 +233,49 @@ console.log(`Document updated to version ${updateResult.version}`);
 #### Simple Query
 
 ```typescript
-const answer = await client.rag.query('What are our deployment procedures?');
-console.log(answer);
+const rag = await client.rag.query('What are our deployment procedures?');
+console.log(rag.answer);
 ```
 
 #### Query with Sources
 
 ```typescript
 const { answer, sources } = await client.rag.queryWithSources(
-  'Explain the authentication flow',
-  'project-uuid' // Optional project scope
+  'Explain the authentication flow'
 );
 
 console.log('Answer:', answer);
 console.log('Sources:');
 sources.forEach(source => {
-  console.log(`- ${source.name} (relevance: ${source.relevance}%)`);
+  console.log(`- ${source.name} (${source.id})`);
 });
 ```
 
 #### Find Relevant Documents
 
 ```typescript
-const relevantDocs = await client.rag.findRelevantDocuments(
+const matches = await client.rag.findRelevantDocuments(
   'user authentication',
-  'project-uuid',
-  5 // Return top 5 documents
+  undefined,
+  5 // Top 5 documents
 );
 
-relevantDocs.forEach(doc => {
-  console.log(`- ${doc.name}`);
-  if (doc.model) {
-    console.log(`  Created by: ${doc.model.provider}/${doc.model.name}`);
-  }
+matches.forEach(match => {
+  console.log(`- ${match.name} (${match.id})`);
 });
+
+// Storage statistics (requires your Plugged.in user id)
+const stats = await client.rag.getStorageStats('user-id-from-dashboard');
+console.log(`Indexed documents: ${stats.documentsCount}`);
 ```
 
 ### File Uploads
 
-#### Upload File (Node.js)
-
-```typescript
-import fs from 'fs';
-
-const fileBuffer = fs.readFileSync('./report.pdf');
-
-const uploadResult = await client.uploads.uploadFile(
-  fileBuffer,
-  {
-    name: 'Q4 Report.pdf',
-    description: 'Quarterly financial report',
-    tags: ['finance', 'q4', '2024'],
-    purpose: 'Financial documentation',
-    relatedTo: 'PROJECT-123'
-  },
-  (progress) => {
-    console.log(`Upload progress: ${progress}%`);
-  }
-);
-
-if (uploadResult.success) {
-  console.log(`File uploaded: ${uploadResult.documentId}`);
-
-  // Track RAG processing
-  if (uploadResult.uploadId) {
-    await client.uploads.trackUpload(
-      uploadResult.uploadId,
-      (status) => {
-        console.log(`Processing: ${status.status} - ${status.message}`);
-      }
-    );
-  }
-}
-```
-
-#### Upload File (Browser)
-
-```typescript
-// HTML: <input type="file" id="file-input" />
-
-const fileInput = document.getElementById('file-input') as HTMLInputElement;
-const file = fileInput.files[0];
-
-const result = await client.uploads.uploadFile(
-  file,
-  {
-    name: file.name,
-    description: 'User uploaded document',
-    tags: ['user-upload']
-  },
-  (progress) => {
-    updateProgressBar(progress);
-  }
-);
-```
-
-#### Batch Upload
-
-```typescript
-const files = [
-  { file: file1, metadata: { name: 'doc1.pdf', tags: ['batch'] }},
-  { file: file2, metadata: { name: 'doc2.txt', tags: ['batch'] }},
-  { file: file3, metadata: { name: 'doc3.md', tags: ['batch'] }}
-];
-
-const results = await client.uploads.uploadBatch(
-  files,
-  (current, total) => {
-    console.log(`Uploaded ${current}/${total} files`);
-  }
-);
-
-results.forEach((result, index) => {
-  if (result.success) {
-    console.log(`✓ ${files[index].metadata.name} uploaded`);
-  } else {
-    console.log(`✗ ${files[index].metadata.name} failed: ${result.error}`);
-  }
-});
-```
+> **Important:** Direct file uploads are no longer exposed via the public API.
+> The `client.uploads` helpers now throw descriptive errors so existing code
+> fails fast. Use the Plugged.in web interface or the forthcoming ingestion
+> workflow for binary files. AI-generated content can still be created with
+> `client.documents.create` or `client.uploads.uploadDocument`.
 
 ## Error Handling
 
@@ -474,7 +399,7 @@ Complete working examples are available in the [GitHub repository](https://githu
 - [Basic Usage](https://github.com/VeriTeknik/pluggedinkit-js/blob/main/examples/basic.ts)
 - [Document Management](https://github.com/VeriTeknik/pluggedinkit-js/blob/main/examples/documents.ts)
 - [RAG Queries](https://github.com/VeriTeknik/pluggedinkit-js/blob/main/examples/rag.ts)
-- [File Upload](https://github.com/VeriTeknik/pluggedinkit-js/blob/main/examples/upload.ts)
+- [File Upload (deprecated)](https://github.com/VeriTeknik/pluggedinkit-js/blob/main/examples/upload.ts)
 - [Error Handling](https://github.com/VeriTeknik/pluggedinkit-js/blob/main/examples/errors.ts)
 - [Browser Usage](https://github.com/VeriTeknik/pluggedinkit-js/blob/main/examples/browser.html)
 
@@ -505,17 +430,15 @@ Complete working examples are available in the [GitHub repository](https://githu
 
 | Method | Description |
 |--------|-------------|
-| `query(question)` | Simple RAG query |
-| `queryWithSources(question, projectId)` | Query with source documents |
-| `findRelevantDocuments(query, projectId, limit)` | Find relevant documents |
+| `query(question)` | Returns `RagResponse` with answer, sources, and document IDs |
+| `queryWithSources(question)` | Returns answer plus structured source metadata |
+| `findRelevantDocuments(query, limit?)` | Returns matched document references |
+| `getStorageStats(userId)` | Fetch aggregated storage metrics for the authenticated user |
+| `checkAvailability()` | Lightweight availability check |
 
 ### Upload Methods
 
-| Method | Description |
-|--------|-------------|
-| `uploadFile(file, metadata, onProgress)` | Upload a single file |
-| `uploadBatch(files, onProgress)` | Upload multiple files |
-| `trackUpload(uploadId, onUpdate)` | Track upload processing |
+All binary upload helpers now throw descriptive errors because the public API no longer exposes direct upload endpoints. Use the web interface or upcoming ingestion pipeline for file uploads.
 
 ## Support
 

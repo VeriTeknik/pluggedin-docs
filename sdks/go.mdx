@@ -283,12 +283,12 @@ if err != nil {
 fmt.Printf("RAG Available: %v\n", status["available"])
 
 // Get storage statistics
-stats, err := client.RAG.GetStorageStats(ctx)
+stats, err := client.RAG.GetStorageStats(ctx, "user-id-from-dashboard")
 if err != nil {
     log.Fatal(err)
 }
-fmt.Printf("Documents: %v\n", stats["document_count"])
-fmt.Printf("Total size: %v bytes\n", stats["total_size"])
+fmt.Printf("Documents: %d\n", stats.DocumentsCount)
+fmt.Printf("Estimated storage: %.2f MB\n", stats.EstimatedStorageMB)
 ```
 
 #### Query with Sources
@@ -297,7 +297,7 @@ fmt.Printf("Total size: %v bytes\n", stats["total_size"])
 result, err := client.RAG.QueryWithSources(
     ctx,
     "Explain the authentication flow",
-    "project-uuid", // Optional project scope
+    "",
 )
 if err != nil {
     log.Fatal(err)
@@ -305,11 +305,12 @@ if err != nil {
 
 fmt.Printf("Answer: %s\n", result.Answer)
 fmt.Println("\nSources:")
-for _, source := range result.Sources {
-    fmt.Printf("- %s (relevance: %.0f%%)\n", source.Name, source.Relevance)
-    if source.Model != nil {
-        fmt.Printf("  Created by: %s/%s\n", source.Model.Provider, source.Model.Name)
+for index, source := range result.Sources {
+    var documentID string
+    if index < len(result.DocumentIDs) {
+        documentID = result.DocumentIDs[index]
     }
+    fmt.Printf("- %s (%s)\n", source, documentID)
 }
 ```
 
@@ -319,7 +320,7 @@ for _, source := range result.Sources {
 documents, err := client.RAG.FindRelevantDocuments(
     ctx,
     "user authentication",
-    "project-uuid",
+    "",
     5, // Top 5 documents
 )
 if err != nil {
@@ -327,145 +328,16 @@ if err != nil {
 }
 
 for _, doc := range documents {
-    fmt.Printf("- %s\n", doc.Name)
-    fmt.Printf("  Type: %s\n", doc.Type)
-    if doc.Model != nil {
-        fmt.Printf("  Model: %s/%s\n", doc.Model.Provider, doc.Model.Name)
-    }
-    fmt.Printf("  Relevance: %.0f%%\n", doc.Relevance)
+    fmt.Printf("- %s (%s)\n", doc.Source, doc.DocumentID)
 }
 ```
 
 ### File Uploads
 
-#### Upload Single File
-
-```go
-metadata := &pluggedin.UploadMetadata{
-    Name:        "Q4 Report.pdf",
-    Description: "Quarterly financial report",
-    Tags:        []string{"finance", "q4", "2024"},
-    Purpose:     "Financial documentation",
-    RelatedTo:   "PROJECT-123",
-}
-
-// Progress callback
-onProgress := func(percent int) {
-    fmt.Printf("Upload progress: %d%%\n", percent)
-}
-
-response, err := client.Uploads.UploadFile(
-    ctx,
-    "./report.pdf",
-    metadata,
-    onProgress,
-)
-if err != nil {
-    log.Fatal(err)
-}
-
-if response.Success {
-    fmt.Printf("File uploaded successfully: %s\n", response.DocumentID)
-
-    // Track RAG processing if applicable
-    if response.UploadID != "" {
-        onUpdate := func(status *pluggedin.UploadStatus) {
-            fmt.Printf("Processing: %s - %s (%d%%)\n",
-                status.Status, status.Message, status.Progress)
-        }
-
-        err := client.Uploads.TrackUpload(ctx, response.UploadID, onUpdate)
-        if err != nil {
-            log.Printf("Error tracking upload: %v", err)
-        }
-    }
-} else {
-    fmt.Printf("Upload failed: %s\n", response.Error)
-}
-```
-
-#### Upload from Reader
-
-```go
-file, err := os.Open("document.txt")
-if err != nil {
-    log.Fatal(err)
-}
-defer file.Close()
-
-fileInfo, err := file.Stat()
-if err != nil {
-    log.Fatal(err)
-}
-
-metadata := &pluggedin.UploadMetadata{
-    Name:        fileInfo.Name(),
-    Description: "Text document",
-    Tags:        []string{"text"},
-}
-
-response, err := client.Uploads.UploadReader(
-    ctx,
-    file,
-    fileInfo.Size(),
-    metadata,
-    nil, // No progress callback
-)
-if err != nil {
-    log.Fatal(err)
-}
-
-if response.Success {
-    fmt.Printf("Document ID: %s\n", response.DocumentID)
-}
-```
-
-#### Batch Upload
-
-```go
-files := []pluggedin.FileUpload{
-    {
-        Path: "doc1.pdf",
-        Metadata: &pluggedin.UploadMetadata{
-            Name: "doc1.pdf",
-            Tags: []string{"batch"},
-        },
-    },
-    {
-        Path: "doc2.txt",
-        Metadata: &pluggedin.UploadMetadata{
-            Name: "doc2.txt",
-            Tags: []string{"batch"},
-        },
-    },
-    {
-        Path: "doc3.md",
-        Metadata: &pluggedin.UploadMetadata{
-            Name: "doc3.md",
-            Tags: []string{"batch"},
-        },
-    },
-}
-
-onProgress := func(current, total int) {
-    fmt.Printf("Uploaded %d/%d files\n", current, total)
-}
-
-results, err := client.Uploads.UploadBatch(ctx, files, onProgress)
-if err != nil {
-    log.Fatal(err)
-}
-
-for i, result := range results {
-    if result.Success {
-        fmt.Printf("✓ %s uploaded: %s\n",
-            files[i].Metadata.Name, result.DocumentID)
-    } else {
-        fmt.Printf("✗ %s failed: %s\n",
-            files[i].Metadata.Name, result.Error)
-    }
-}
-```
+> **Important:** The Go SDK no longer exposes binary upload helpers. All previous
+> upload functions now return descriptive errors so legacy code fails fast.
+> Continue using `DocumentsService.Create` for AI-generated content and the
+> Plugged.in web interface (or forthcoming ingestion tools) for binary files.
 
 ## Error Handling
 
@@ -774,7 +646,7 @@ Complete working examples are available in the [GitHub repository](https://githu
 - [Basic Usage](https://github.com/VeriTeknik/pluggedinkit-go/blob/main/examples/basic/main.go)
 - [Document Management](https://github.com/VeriTeknik/pluggedinkit-go/blob/main/examples/documents/main.go)
 - [RAG Queries](https://github.com/VeriTeknik/pluggedinkit-go/blob/main/examples/rag/main.go)
-- [File Upload](https://github.com/VeriTeknik/pluggedinkit-go/blob/main/examples/upload/main.go)
+- [File Upload (deprecated)](https://github.com/VeriTeknik/pluggedinkit-go/blob/main/examples/upload/main.go)
 - [Error Handling](https://github.com/VeriTeknik/pluggedinkit-go/blob/main/examples/errors/main.go)
 - [Concurrent Operations](https://github.com/VeriTeknik/pluggedinkit-go/blob/main/examples/concurrent/main.go)
 
@@ -809,20 +681,16 @@ Complete working examples are available in the [GitHub repository](https://githu
 
 | Method | Description |
 |--------|-------------|
-| `AskQuestion(ctx, query)` | Simple RAG query |
-| `QueryWithSources(ctx, query, projectUUID)` | Query with source documents |
+| `Query(ctx, query)` | Returns `RAGResponse` with answer and metadata |
+| `AskQuestion(ctx, query)` | Simple RAG query (answer text only) |
+| `QueryWithSources(ctx, query, projectUUID)` | Query with source metadata (project argument optional) |
 | `FindRelevantDocuments(ctx, query, projectUUID, limit)` | Find relevant documents |
 | `CheckAvailability(ctx)` | Check RAG service availability |
-| `GetStorageStats(ctx)` | Get storage statistics |
+| `GetStorageStats(ctx, userID)` | Get storage statistics |
 
 ### Upload Service Methods
 
-| Method | Description |
-|--------|-------------|
-| `UploadFile(ctx, path, metadata, onProgress)` | Upload file from path |
-| `UploadReader(ctx, reader, size, metadata, onProgress)` | Upload from io.Reader |
-| `UploadBatch(ctx, files, onProgress)` | Upload multiple files |
-| `TrackUpload(ctx, uploadID, onUpdate)` | Track upload processing |
+Upload helpers now emit descriptive errors because binary ingestion is no longer exposed via the public API.
 
 ## Support
 
