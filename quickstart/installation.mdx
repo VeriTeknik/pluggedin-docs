@@ -284,9 +284,59 @@ The application will be available at:
 
 <Note>
 **🐳 Docker is the recommended installation method** - it includes PostgreSQL 18, automatic migrations, and optimized configuration out of the box.
+
+**NEW:** Multi-architecture support! Our Docker images now support both AMD64 (Intel/AMD) and ARM64 (Apple Silicon, AWS Graviton) platforms.
 </Note>
 
-### Quick Start with Docker
+### Option 1: Using Pre-built Images from Docker Hub (Fastest)
+
+<Info>
+**Official multi-arch images are available on Docker Hub!** Automatically works on both AMD64 and ARM64 platforms.
+</Info>
+
+<Steps>
+  <Step title="Pull Image">
+    ```bash
+    # Docker automatically pulls the correct architecture for your platform
+    docker pull veriteknik/pluggedin:latest
+
+    # Or specific version
+    docker pull veriteknik/pluggedin:v2.16.0
+    ```
+  </Step>
+  <Step title="Download Docker Compose File">
+    ```bash
+    # Download production compose file
+    curl -O https://raw.githubusercontent.com/VeriTeknik/pluggedin-app/main/docker-compose.production.yml
+    ```
+  </Step>
+  <Step title="Configure Environment">
+    ```bash
+    # Create .env file
+    cat > .env <<EOF
+    DATABASE_URL=postgresql://pluggedin:pluggedin_secure_password@pluggedin-postgres:5432/pluggedin
+    NEXTAUTH_URL=http://localhost:12005
+    NEXTAUTH_SECRET=$(openssl rand -base64 32)
+    NEXT_SERVER_ACTIONS_ENCRYPTION_KEY=$(openssl rand -base64 32)
+    PLUGGEDIN_API_KEY=$(openssl rand -base64 32)
+    EOF
+    ```
+  </Step>
+  <Step title="Start Services">
+    ```bash
+    docker-compose -f docker-compose.production.yml up -d
+    ```
+  </Step>
+  <Step title="Access Application">
+    Open [http://localhost:12005](http://localhost:12005) in your browser
+  </Step>
+</Steps>
+
+**Supported Architectures:**
+- ✅ **AMD64 (x86_64)** - Intel/AMD processors, most cloud platforms
+- ✅ **ARM64 (aarch64)** - Apple Silicon (M1/M2/M3), AWS Graviton, Raspberry Pi 4+
+
+### Option 2: Build from Source
 
 <Steps>
   <Step title="Clone Repository">

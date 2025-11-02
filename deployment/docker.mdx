@@ -33,6 +33,53 @@ Deploy Plugged.in using Docker for consistent, scalable, and portable deployment
   </Step>
 </Steps>
 
+## Multi-Architecture Support
+
+<Info>
+**NEW: Plugged.in now supports both AMD64 and ARM64 architectures!**
+
+Our Docker images are now available as multi-architecture builds on Docker Hub, automatically selecting the correct platform for your system.
+</Info>
+
+<CardGroup cols={2}>
+  <Card title="AMD64 (x86_64)" icon="microchip">
+    ✅ Intel/AMD processors
+    ✅ Most cloud platforms
+    ✅ Traditional servers
+  </Card>
+  <Card title="ARM64 (aarch64)" icon="microchip">
+    ✅ Apple Silicon (M1/M2/M3)
+    ✅ AWS Graviton
+    ✅ Raspberry Pi 4+
+  </Card>
+</CardGroup>
+
+### Verify Platform Support
+
+Check available architectures for any version:
+
+```bash
+# Check latest release
+docker manifest inspect veriteknik/pluggedin:latest --verbose | jq '.manifests[].platform'
+
+# Check specific version
+docker manifest inspect veriteknik/pluggedin:v2.16.0 --verbose | jq '.manifests[].platform'
+
+# Expected output:
+# {
+#   "architecture": "amd64",
+#   "os": "linux"
+# }
+# {
+#   "architecture": "arm64",
+#   "os": "linux"
+# }
+```
+
+<Note>
+Docker automatically pulls the correct architecture for your platform. No manual configuration needed!
+</Note>
+
 ## Docker Hub Deployment
 
 ### Using Pre-built Image
@@ -62,38 +109,59 @@ Deploy Plugged.in using Docker for consistent, scalable, and portable deployment
   </Step>
 </Steps>
 
-### Publishing to Docker Hub
+### Publishing Multi-Arch Images to Docker Hub
+
+<Info>
+Use the provided `docker-build.sh` script for automated multi-architecture builds and publishing.
+</Info>
 
 <Steps>
-  <Step title="Build Production Image">
+  <Step title="Build Multi-Arch Image">
     ```bash
-    # Build with production Dockerfile
-    docker build -f Dockerfile.production -t pluggedin:latest .
+    # Build and push multi-architecture image (AMD64 + ARM64)
+    ./docker-build.sh v2.16.0
 
-    # Or use standard Dockerfile
-    docker build -t pluggedin:latest .
+    # Or build locally for testing (current architecture only)
+    ./docker-build.sh v2.16.0 --local
+    ```
+
+    **What this does:**
+    - Sets up Docker buildx for multi-platform builds
+    - Builds for both `linux/amd64` and `linux/arm64`
+    - Creates unified manifest
+    - Pushes to Docker Hub
+    - Tags both version and `latest`
+  </Step>
+
+  <Step title="Manual Multi-Arch Build (Advanced)">
+    ```bash
+    # Create buildx builder
+    docker buildx create --name multiarch-builder --use --bootstrap
+
+    # Build and push for multiple platforms
+    docker buildx build \
+      --platform linux/amd64,linux/arm64 \
+      -f Dockerfile.production \
+      -t veriteknik/pluggedin:v2.16.0 \
+      -t veriteknik/pluggedin:latest \
+      --push \
+      .
     ```
   </Step>
-  <Step title="Tag for Docker Hub">
+
+  <Step title="Verify Multi-Arch Upload">
     ```bash
-    # Tag with your Docker Hub username
-    docker tag pluggedin:latest yourusername/pluggedin:latest
-    docker tag pluggedin:latest yourusername/pluggedin:v2.10.3
-    ```
-  </Step>
-  <Step title="Login to Docker Hub">
-    ```bash
-    docker login
-    # Enter your Docker Hub credentials
-    ```
-  </Step>
-  <Step title="Push to Registry">
-    ```bash
-    docker push yourusername/pluggedin:latest
-    docker push yourusername/pluggedin:v2.10.3
+    # Check that both architectures are available
+    docker manifest inspect veriteknik/pluggedin:v2.16.0
+
+    # You should see manifests for both amd64 and arm64
     ```
   </Step>
 </Steps>
+
+<Warning>
+For multi-arch builds, you need Docker Desktop or Docker with buildx support. The automated script (`docker-build.sh`) handles all setup automatically.
+</Warning>
 
 ## Docker Architecture
 
