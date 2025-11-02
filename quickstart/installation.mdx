@@ -40,7 +40,7 @@ For organizations that prefer to host their own instance, follow these comprehen
 <CardGroup cols={2}>
   <Card title="System Requirements" icon="server">
     - Node.js 18+ or 20+
-    - PostgreSQL 15+
+    - PostgreSQL 15+ (18+ recommended)
     - 2GB+ RAM
     - 10GB+ storage
   </Card>
@@ -280,99 +280,83 @@ The application will be available at:
 - Web Interface: `http://localhost:12005`
 - MCP Proxy: `http://localhost:3000`
 
-## Docker Installation
+## Docker Installation (Recommended)
 
-For containerized deployment, use our Docker setup.
+<Note>
+**🐳 Docker is the recommended installation method** - it includes PostgreSQL 18, automatic migrations, and optimized configuration out of the box.
+</Note>
 
-### Using Docker Compose
+### Quick Start with Docker
 
-```yaml
-version: '3.8'
-
-services:
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: pluggedin
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-
-  app:
-    build: ./pluggedin-app
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/pluggedin
-      NEXTAUTH_URL: http://localhost:12005
-      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET}
-    ports:
-      - "12005:12005"
-    depends_on:
-      - postgres
-
-  mcp-proxy:
-    build: ./pluggedin-mcp
-    environment:
-      PLUGGEDIN_API_KEY: ${PLUGGEDIN_API_KEY}
-    ports:
-      - "3000:3000"
-    depends_on:
-      - app
-
-volumes:
-  postgres_data:
-```
-
-Start with:
-```bash
-docker-compose up -d
-```
-
-### Individual Docker Containers
-
-<Tabs>
-  <Tab title="Build Images">
+<Steps>
+  <Step title="Clone Repository">
     ```bash
-    # Build web application
+    git clone https://github.com/VeriTeknik/pluggedin-app.git
     cd pluggedin-app
-    docker build -t pluggedin-app .
-
-    # Build MCP proxy
-    cd pluggedin-mcp
-    docker build -t pluggedin-mcp .
     ```
-  </Tab>
-  <Tab title="Run Containers">
+  </Step>
+  <Step title="Configure Environment">
     ```bash
-    # Run PostgreSQL
-    docker run -d \
-      --name pluggedin-db \
-      -e POSTGRES_DB=pluggedin \
-      -e POSTGRES_USER=postgres \
-      -e POSTGRES_PASSWORD=postgres \
-      -p 5432:5432 \
-      postgres:15
-
-    # Run web application
-    docker run -d \
-      --name pluggedin-app \
-      -e DATABASE_URL=postgresql://postgres:postgres@host.docker.internal:5432/pluggedin \
-      -e NEXTAUTH_URL=http://localhost:12005 \
-      -e NEXTAUTH_SECRET=your-secret-key \
-      -p 12005:12005 \
-      pluggedin-app
-
-    # Run MCP proxy
-    docker run -d \
-      --name pluggedin-mcp \
-      -e PLUGGEDIN_API_KEY=your-api-key \
-      -p 3000:3000 \
-      pluggedin-mcp
+    cp .env.example .env
+    # Edit .env with your configuration (see environment variables section above)
     ```
-  </Tab>
-</Tabs>
+  </Step>
+  <Step title="Start Services">
+    ```bash
+    docker-compose up --build -d
+    ```
+  </Step>
+  <Step title="Access Application">
+    Open [http://localhost:12005](http://localhost:12005) in your browser
+  </Step>
+</Steps>
+
+### What's Included in Docker Setup
+
+<CardGroup cols={2}>
+  <Card title="Application Container" icon="cube">
+    - Next.js 15 application
+    - Node.js 20 runtime
+    - MCP proxy integration
+    - Port 12005 exposed
+  </Card>
+  <Card title="Database Container" icon="database">
+    - PostgreSQL 18-alpine
+    - Automatic migrations
+    - Health checks
+    - Persistent storage
+  </Card>
+  <Card title="Migrator Container" icon="rocket">
+    - One-time setup (288 MB)
+    - Drizzle ORM migrations
+    - Auto-stops after completion
+  </Card>
+  <Card title="Persistent Volumes" icon="hard-drive">
+    - Database data
+    - User uploads
+    - Application logs
+    - MCP package cache
+  </Card>
+</CardGroup>
+
+### Key Features
+
+- ✅ PostgreSQL 18 (latest stable) with automatic migrations
+- ✅ Optimized production build with health checks
+- ✅ Persistent volumes for data safety
+- ✅ Docker-optimized MCP isolation (no sandboxing overhead)
+- ✅ Automatic restarts and health monitoring
+
+### Advanced Docker Configuration
+
+For detailed Docker deployment guides including:
+- Production setup with Nginx
+- Environment variable configuration
+- PostgreSQL upgrade paths
+- Backup strategies
+- Troubleshooting
+
+See the [Docker Deployment Guide](/deployment/docker).
 
 ## MCP Client Configuration
 
