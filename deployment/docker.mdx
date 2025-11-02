@@ -99,30 +99,39 @@ Deploy Plugged.in using Docker for consistent, scalable, and portable deployment
 
 <CardGroup cols={2}>
   <Card title="Application Container" icon="cube">
-    - Next.js application
-    - Node.js runtime
+    - Next.js 15 application
+    - Node.js 20 runtime
     - MCP proxy server
     - Port 12005 exposed
   </Card>
   <Card title="Database Container" icon="database">
-    - PostgreSQL 15
+    - PostgreSQL 18-alpine
     - Persistent volume
-    - Automatic migrations
-    - Port 5432 internal
+    - Health checks enabled
+    - Port 5432 exposed
   </Card>
-  <Card title="Redis Container" icon="bolt">
-    - Session storage
-    - Cache layer
-    - Rate limiting
-    - Port 6379 internal
+  <Card title="Migrator Container" icon="rocket">
+    - One-time migration runner
+    - Optimized size (288 MB)
+    - Auto-stops after migrations
+    - Drizzle ORM migrations
   </Card>
-  <Card title="Nginx Container" icon="shield">
-    - Reverse proxy
-    - SSL termination
-    - Static file serving
-    - Ports 80/443 exposed
+  <Card title="Persistent Volumes" icon="hard-drive">
+    - Database data
+    - User uploads
+    - Application logs
+    - MCP package cache
   </Card>
 </CardGroup>
+
+### What's Included
+
+- ✅ PostgreSQL 18 (latest stable) with automatic migrations
+- ✅ Next.js 15 web application with optimized production build
+- ✅ Persistent volumes for database, uploads, logs, and MCP packages
+- ✅ Health checks and automatic restarts
+- ✅ Migrator container (288 MB) for database setup
+- ✅ Docker-optimized MCP isolation (no sandboxing overhead)
 
 ## Production Dockerfile
 
@@ -208,60 +217,90 @@ CMD ["node", "server.js"]
 
 ```yaml
 # docker-compose.yml
-version: '3.8'
-
 services:
-  app:
-    build: .
+  pluggedin-app:
     container_name: pluggedin-app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env
+    restart: always
     ports:
-      - "12005:3000"
-    environment:
-      - NODE_ENV=development
-      - DATABASE_URL=postgresql://pluggedin:password@db:5432/pluggedin_dev
-      - NEXTAUTH_URL=http://localhost:12005
-      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - '12005:3000'
     volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/.next
+      - mcp-cache:/app/.cache
+      - app-uploads:/app/uploads
+      - app-logs:/app/logs
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://pluggedin:pluggedin_secure_password@pluggedin-postgres:5432/pluggedin
+      - DATABASE_SSL=false
+      - MCP_ISOLATION_TYPE=none
+      - MCP_ISOLATION_FALLBACK=firejail
+      - MCP_ENABLE_NETWORK_ISOLATION=false
+      - MCP_PACKAGE_STORE_DIR=/app/.cache/mcp-packages
+      - MCP_PNPM_STORE_DIR=/app/.cache/mcp-packages/pnpm-store
+      - MCP_UV_CACHE_DIR=/app/.cache/mcp-packages/uv-cache
     depends_on:
-      - db
-      - redis
-    networks:
-      - pluggedin-network
+      pluggedin-postgres:
+        condition: service_healthy
 
-  db:
-    image: postgres:15-alpine
-    container_name: pluggedin-db
+  pluggedin-postgres:
+    container_name: pluggedin-postgres
+    image: postgres:18-alpine
+    restart: always
     environment:
-      - POSTGRES_USER=pluggedin
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=pluggedin_dev
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+      POSTGRES_DB: pluggedin
+      POSTGRES_USER: pluggedin
+      POSTGRES_PASSWORD: pluggedin_secure_password
     ports:
-      - "5432:5432"
-    networks:
-      - pluggedin-network
+      - '5432:5432'
+    volumes:
+      - pluggedin-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pluggedin -d pluggedin"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
-  redis:
-    image: redis:7-alpine
-    container_name: pluggedin-redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    networks:
-      - pluggedin-network
+  drizzle-migrate:
+    container_name: pluggedin-migrate
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+    command: >
+      sh -c "
+        echo 'Waiting for database to be ready...';
+        until pg_isready -h pluggedin-postgres -p 5432 -U pluggedin; do
+          echo 'Database is unavailable - sleeping';
+          sleep 2;
+        done;
+        echo 'Database is up - running migrations';
+        pnpm drizzle-kit migrate
+      "
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://pluggedin:pluggedin_secure_password@pluggedin-postgres:5432/pluggedin
+      - DATABASE_SSL=false
+      - PGUSER=pluggedin
+      - PGHOST=pluggedin-postgres
+      - PGDATABASE=pluggedin
+    depends_on:
+      pluggedin-postgres:
+        condition: service_healthy
 
 volumes:
-  postgres_data:
-  redis_data:
-
-networks:
-  pluggedin-network:
-    driver: bridge
+  pluggedin-postgres:
+    driver: local
+  mcp-cache:
+    driver: local
+  app-uploads:
+    driver: local
+  app-logs:
+    driver: local
 ```
 
 ### Production Setup
@@ -301,7 +340,7 @@ services:
           memory: 1G
 
   db:
-    image: postgres:15-alpine
+    image: postgres:18-alpine
     container_name: pluggedin-db
     restart: always
     environment:
@@ -311,6 +350,11 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backup:/backup
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     networks:
       - pluggedin-network
     command:
@@ -388,10 +432,13 @@ MCP_PACKAGE_STORE_DIR=/app/.cache/mcp-packages
 MCP_PNPM_STORE_DIR=/app/.cache/mcp-packages/pnpm-store
 MCP_UV_CACHE_DIR=/app/.cache/mcp-packages/uv-cache
 
-# Sandboxing Configuration
-MCP_ISOLATION_TYPE=bubblewrap
+# Sandboxing Configuration (Docker-optimized)
+MCP_ISOLATION_TYPE=none
 MCP_ISOLATION_FALLBACK=firejail
 MCP_ENABLE_NETWORK_ISOLATION=false
+
+# Note: Use 'none' for Docker deployments as bubblewrap requires
+# Linux kernel user namespace support not available in Docker on macOS
 
 # API Keys (optional)
 ANTHROPIC_API_KEY=your-key
@@ -475,6 +522,61 @@ docker-compose exec db pg_dump -U pluggedin pluggedin_prod | gzip > backup_$(dat
 
 # Restore database
 gunzip -c backup_20240101_120000.sql.gz | docker-compose exec -T db psql -U pluggedin pluggedin_prod
+```
+
+### Upgrading PostgreSQL
+
+<Warning>
+PostgreSQL major version upgrades require data migration. Always backup before upgrading.
+</Warning>
+
+#### Upgrading from PostgreSQL 16 or earlier to 18
+
+<Tabs>
+  <Tab title="Option 1: Fresh Start (Data Loss)">
+    ```bash
+    # Stop all containers and remove volumes
+    docker-compose down -v
+
+    # Update docker-compose.yml to postgres:18-alpine
+    # Start fresh with PostgreSQL 18
+    docker-compose up --build -d
+    ```
+    **Note:** This will DELETE all existing data. Only use for development.
+  </Tab>
+
+  <Tab title="Option 2: Data Migration">
+    ```bash
+    # 1. Backup existing database
+    docker exec pluggedin-postgres pg_dump -U pluggedin pluggedin > backup.sql
+
+    # 2. Stop and remove containers/volumes
+    docker-compose down -v
+
+    # 3. Update docker-compose.yml to postgres:18-alpine
+
+    # 4. Start new PostgreSQL 18 container
+    docker-compose up -d
+
+    # 5. Wait for database to be ready
+    until docker exec pluggedin-postgres pg_isready -U pluggedin; do
+      echo "Waiting for PostgreSQL 18...";
+      sleep 2;
+    done
+
+    # 6. Restore data
+    docker exec -i pluggedin-postgres psql -U pluggedin -d pluggedin < backup.sql
+    ```
+  </Tab>
+</Tabs>
+
+#### Verify PostgreSQL Version
+
+```bash
+# Check PostgreSQL version
+docker exec pluggedin-postgres psql -U pluggedin -d pluggedin -c "SELECT version();"
+
+# Expected output: PostgreSQL 18.0 on ...
 ```
 
 ## Nginx Configuration
