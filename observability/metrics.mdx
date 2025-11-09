@@ -313,7 +313,7 @@ curl http://localhost:12005/metrics | grep oauth
 
 ### Health & SLO Monitoring
 
-**OAuth Flow Success Rate (SLO: >95%):**
+**OAuth Flow Success Rate (SLO: &gt;95%):**
 ```promql
 (
   sum(rate(oauth_flows_total{status="success"}[5m]))
@@ -321,7 +321,7 @@ curl http://localhost:12005/metrics | grep oauth
 ) * 100
 ```
 
-**Token Refresh Success Rate (SLO: >99%):**
+**Token Refresh Success Rate (SLO: &gt;99%):**
 ```promql
 (
   sum(rate(oauth_token_refresh_total{status="success"}[5m]))
@@ -329,7 +329,7 @@ curl http://localhost:12005/metrics | grep oauth
 ) * 100
 ```
 
-**PKCE Validation Success Rate (SLO: >98%):**
+**PKCE Validation Success Rate (SLO: &gt;98%):**
 ```promql
 (
   sum(rate(oauth_pkce_validations_total{status="success"}[5m]))
@@ -351,12 +351,12 @@ histogram_quantile(0.95, sum(rate(oauth_flow_duration_seconds_bucket[5m])) by (l
 histogram_quantile(0.99, sum(rate(oauth_flow_duration_seconds_bucket[5m])) by (le))
 ```
 
-**Token Refresh p95 Duration (Alert if >2s):**
+**Token Refresh p95 Duration (Alert if &gt;2s):**
 ```promql
 histogram_quantile(0.95, sum(rate(oauth_token_refresh_duration_seconds_bucket[5m])) by (le)) > 2
 ```
 
-**Slow OAuth Flows (>10s):**
+**Slow OAuth Flows (&gt;10s):**
 ```promql
 sum(increase(oauth_flow_duration_seconds_bucket{le="10"}[5m]))
   - sum(increase(oauth_flow_duration_seconds_bucket{le="+Inf"}[5m]))
@@ -379,7 +379,7 @@ increase(oauth_code_injection_attempts_total[5m]) > 0
 increase(oauth_integrity_violations_total[5m]) > 0
 ```
 
-**High Security Event Rate (>10/min):**
+**High Security Event Rate (&gt;10/min):**
 ```promql
 sum(rate(oauth_security_events_total{severity=~"high|critical"}[1m])) * 60 > 10
 ```
@@ -544,7 +544,7 @@ oauth:flow_success_rate:5m * 100
 - Min: 0
 - Max: 100
 - Unit: Percent
-- Thresholds: Red <95%, Yellow 95-98%, Green >98%
+- Thresholds: Red &lt;95%, Yellow 95-98%, Green &gt;98%
 
 ### Panel: Token Refresh Duration (p50, p95, p99)
 
