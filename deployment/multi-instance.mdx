@@ -1,0 +1,638 @@
+---
+title: Multi-Instance Deployment
+description: Production-ready horizontal scaling with Redis, load balancing, and high availability
+sidebarTitle: Multi-Instance
+---
+
+# Multi-Instance Deployment Guide
+
+Deploy Plugged.in with horizontal scaling for high availability and load distribution across multiple application instances.
+
+<Warning>
+  **Critical**: Multi-instance deployments require Redis for distributed rate limiting. In-memory rate limiting is **NOT SAFE** for production with multiple instances.
+</Warning>
+
+## Architecture Overview
+
+```
+                    ┌─────────────────┐
+                    │  Load Balancer  │
+                    │   (Nginx/HAProxy)│
+                    └────────┬────────┘
+                             │
+           ┌─────────────────┼─────────────────┐
+           │                 │                 │
+    ┌──────▼──────┐   ┌──────▼──────┐  ┌──────▼──────┐
+    │  Instance 1  │   │  Instance 2  │  │  Instance 3  │
+    │ pluggedin-app│   │ pluggedin-app│  │ pluggedin-app│
+    └──────┬──────┘   └──────┬──────┘  └──────┬──────┘
+           │                 │                 │
+           └─────────────────┼─────────────────┘
+                             │
+          ┌──────────────────┼──────────────────┐
+          │                  │                  │
+    ┌─────▼─────┐     ┌─────▼─────┐     ┌─────▼─────┐
+    │ PostgreSQL │     │   Redis   │     │   Milvus  │
+    │  (Primary) │     │ (Shared)  │     │  (RAG v3) │
+    └────────────┘     └───────────┘     └───────────┘
+```
+
+## Critical Requirements
+
+### 1. Redis (REQUIRED)
+
+Redis is **mandatory** for multi-instance deployments to ensure consistent rate limiting across all instances.
+
+<Steps>
+  <Step title="Install Redis">
+    **Docker Compose:**
+    ```yaml
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - "6379:6379"
+        volumes:
+          - redis-data:/data
+        command: redis-server --appendonly yes
+        healthcheck:
+          test: ["CMD", "redis-cli", "ping"]
+          interval: 5s
+          timeout: 3s
+          retries: 5
+
+    volumes:
+      redis-data:
+    ```
+
+    **Standalone:**
+    ```bash
+    # Ubuntu/Debian
+    sudo apt install redis-server
+    sudo systemctl enable redis-server
+    sudo systemctl start redis-server
+
+    # macOS
+    brew install redis
+    brew services start redis
+    ```
+  </Step>
+
+  <Step title="Install Redis Client">
+    ```bash
+    npm install redis
+    ```
+  </Step>
+
+  <Step title="Configure Connection">
+    Update `.env` for each instance:
+    ```bash
+    # REQUIRED for multi-instance
+    REDIS_URL=redis://redis-host:6379
+
+    # Production with authentication
+    REDIS_URL=redis://user:password@redis-host:6379
+
+    # Redis Cluster
+    REDIS_URL=redis://redis-1:6379,redis-2:6379,redis-3:6379
+    ```
+  </Step>
+</Steps>
+
+### 2. Shared Database
+
+All instances must connect to the **same PostgreSQL database**.
+
+```bash
+# All instances use identical DATABASE_URL
+DATABASE_URL=postgresql://user:pass@postgres-host:5432/pluggedin_prod
+```
+
+### 3. Session Management
+
+Ensure NextAuth sessions are stored in the database, not in-memory.
+
+```typescript
+// next-auth configuration (already configured in Plugged.in)
+adapter: DrizzleAdapter(db),  // ✅ Database-backed sessions
+session: { strategy: "jwt" }, // ✅ JWT tokens (stateless)
+```
+
+## Production Deployment
+
+### Docker Compose (Recommended)
+
+**docker-compose.production.yml:**
+
+```yaml
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: pluggedin_prod
+      POSTGRES_USER: pluggedin
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pluggedin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache (REQUIRED for multi-instance)
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # App Instance 1
+  app-1:
+    image: veriteknik/pluggedin-app:latest
+    environment:
+      - DATABASE_URL=postgresql://pluggedin:${DB_PASSWORD}@postgres:5432/pluggedin_prod
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - METRICS_ALLOWED_IPS=127.0.0.1,::1,172.18.0.0/16
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:12005/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # App Instance 2
+  app-2:
+    image: veriteknik/pluggedin-app:latest
+    environment:
+      - DATABASE_URL=postgresql://pluggedin:${DB_PASSWORD}@postgres:5432/pluggedin_prod
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - METRICS_ALLOWED_IPS=127.0.0.1,::1,172.18.0.0/16
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:12005/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # App Instance 3
+  app-3:
+    image: veriteknik/pluggedin-app:latest
+    environment:
+      - DATABASE_URL=postgresql://pluggedin:${DB_PASSWORD}@postgres:5432/pluggedin_prod
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - METRICS_ALLOWED_IPS=127.0.0.1,::1,172.18.0.0/16
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:12005/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx Load Balancer
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - app-1
+      - app-2
+      - app-3
+
+volumes:
+  postgres-data:
+  redis-data:
+```
+
+### Nginx Load Balancer Configuration
+
+**nginx.conf:**
+
+```nginx
+upstream pluggedin_backend {
+    least_conn;  # Connection-based load balancing
+
+    server app-1:12005 max_fails=3 fail_timeout=30s;
+    server app-2:12005 max_fails=3 fail_timeout=30s;
+    server app-3:12005 max_fails=3 fail_timeout=30s;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name plugged.in;
+
+    # Redirect HTTP to HTTPS
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name plugged.in;
+
+    # SSL Configuration
+    ssl_certificate /etc/nginx/ssl/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+
+    # Security Headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # Proxy Configuration
+    location / {
+        proxy_pass http://pluggedin_backend;
+        proxy_http_version 1.1;
+
+        # WebSocket support
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+
+        # Forward real client IP
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Host $host;
+
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+
+        # Health check endpoint
+        proxy_next_upstream error timeout invalid_header http_500 http_502 http_503;
+    }
+
+    # Metrics endpoint (restricted to Prometheus)
+    location /api/metrics {
+        # Only allow Prometheus server
+        allow 10.20.30.40;  # Replace with your Prometheus IP
+        deny all;
+
+        proxy_pass http://pluggedin_backend;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+## Security Configuration
+
+### 1. Metrics Endpoint Protection
+
+<Warning>
+  Metrics endpoint exposes sensitive operational data. **Restrict to Prometheus server IP only**.
+</Warning>
+
+Update `.env` for all instances:
+
+```bash
+# Development (Docker networks)
+METRICS_ALLOWED_IPS="127.0.0.1,::1,172.17.0.0/16,172.18.0.0/16"
+
+# Production (Prometheus server only)
+METRICS_ALLOWED_IPS="127.0.0.1,::1,10.20.30.40"
+
+# Multiple Prometheus servers
+METRICS_ALLOWED_IPS="127.0.0.1,::1,10.20.30.40,10.20.30.41"
+
+# IPv6 Support (NEW)
+METRICS_ALLOWED_IPS="127.0.0.1,::1,2001:db8::/32"
+```
+
+**Security Features:**
+- ✅ IPv4 CIDR validation
+- ✅ IPv6 CIDR validation (NEW)
+- ✅ Exact IP matching
+- ✅ Default: localhost + Docker networks only
+
+### 2. Rate Limiting Configuration
+
+With Redis configured, rate limits are enforced **across all instances**:
+
+```bash
+# Rate limits (enforced globally with Redis)
+# Auth endpoints: 5 requests per 15 minutes
+# API endpoints: 60 requests per minute
+# Public endpoints: 100 requests per minute
+# OAuth callbacks: 10 requests per 15 minutes
+```
+
+**Verification:**
+
+```bash
+# Check Redis connection from app container
+docker exec app-1 sh -c 'echo "PING" | nc redis 6379'
+# Expected: +PONG
+
+# Monitor rate limit keys in Redis
+docker exec redis redis-cli KEYS "ratelimit:*"
+```
+
+### 3. OAuth Security (OAuth 2.1)
+
+Multi-instance deployments inherit all OAuth 2.1 security features:
+
+- ✅ PKCE with S256 challenge
+- ✅ Refresh token rotation
+- ✅ Token reuse detection (works across instances via database)
+- ✅ State integrity validation
+- ✅ 10-second timeout on OAuth API calls (NEW)
+
+## Monitoring & Health Checks
+
+### Instance Health Endpoint
+
+Each instance exposes a health check endpoint:
+
+```bash
+curl http://instance-1:12005/api/health
+```
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "database": "connected",
+  "redis": "connected",
+  "timestamp": "2025-01-15T10:00:00Z"
+}
+```
+
+### Load Balancer Health Checks
+
+Configure Nginx to automatically remove unhealthy instances:
+
+```nginx
+upstream pluggedin_backend {
+    server app-1:12005 max_fails=3 fail_timeout=30s;
+    server app-2:12005 max_fails=3 fail_timeout=30s;
+    server app-3:12005 max_fails=3 fail_timeout=30s;
+
+    # Passive health check
+    keepalive 32;
+}
+```
+
+### Prometheus Monitoring
+
+Monitor all instances with Prometheus:
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: 'pluggedin-multi-instance'
+    static_configs:
+      - targets:
+          - 'app-1:12005'
+          - 'app-2:12005'
+          - 'app-3:12005'
+        labels:
+          cluster: 'production'
+    metrics_path: '/api/metrics'
+    scrape_interval: 30s
+```
+
+## Performance Optimizations
+
+### 1. Database Connection Pooling
+
+Configure optimal connection pool per instance:
+
+```javascript
+// drizzle.config.ts (automatic in Plugged.in)
+export const pool = new Pool({
+  max: 20,           // Max connections per instance
+  min: 5,            // Min connections per instance
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
+});
+```
+
+**3 instances × 20 connections = 60 total connections to PostgreSQL**
+
+### 2. OAuth Config Caching (NEW)
+
+Each instance caches OAuth configurations for 5 minutes:
+
+```typescript
+// Automatic - no configuration needed
+// Reduces database load for frequently refreshed tokens
+// Cache invalidates on config updates
+```
+
+**Impact:** Significantly reduces database queries for OAuth token refresh operations.
+
+### 3. Server Ownership Validation (NEW)
+
+Optimized JOIN query reduces latency by 60-70%:
+
+```sql
+-- Old: 3 sequential queries (N+1 problem)
+-- New: 1 JOIN query
+SELECT projects.user_id
+FROM mcp_servers
+INNER JOIN profiles ON mcp_servers.profile_uuid = profiles.uuid
+INNER JOIN projects ON profiles.project_uuid = projects.uuid
+WHERE mcp_servers.uuid = $1
+```
+
+## Scaling Guidelines
+
+### Horizontal Scaling
+
+**When to add instances:**
+- CPU usage consistently > 70%
+- Response time p95 > 2 seconds
+- Queue depth increasing
+- Expected traffic spike
+
+**Instance sizing:**
+- Minimum: 2 instances (high availability)
+- Recommended: 3 instances (fault tolerance)
+- Maximum: Limited by database connections
+
+### Vertical Scaling
+
+**Per-instance resources:**
+- Minimum: 2 CPU cores, 4GB RAM
+- Recommended: 4 CPU cores, 8GB RAM
+- Optimal: 8 CPU cores, 16GB RAM
+
+### Auto-Scaling
+
+**Kubernetes Horizontal Pod Autoscaler:**
+
+```yaml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: pluggedin-app-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: pluggedin-app
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Rate limiting not working across instances">
+    **Symptom:** Users can bypass rate limits by hitting different instances
+
+    **Solution:**
+    1. Verify Redis is configured:
+       ```bash
+       docker exec app-1 env | grep REDIS_URL
+       ```
+    2. Check Redis connection:
+       ```bash
+       docker logs app-1 | grep "RateLimit"
+       ```
+    3. Expected log: `[RateLimit] Using Redis backend for distributed rate limiting`
+    4. If seeing warning: `⚠️ WARNING: Using in-memory rate limiting in production!`
+       - Configure `REDIS_URL` immediately
+  </Accordion>
+
+  <Accordion title="Sessions not shared between instances">
+    **Symptom:** Users logged out when hitting different instance
+
+    **Solution:**
+    1. Verify all instances use same `NEXTAUTH_SECRET`
+    2. Check database adapter is enabled (default in Plugged.in)
+    3. Verify JWT strategy is used (default)
+  </Accordion>
+
+  <Accordion title="OAuth flows failing intermittently">
+    **Symptom:** OAuth works sometimes, fails other times
+
+    **Solution:**
+    1. Verify all instances connect to same database
+    2. Check PKCE state storage:
+       ```sql
+       SELECT COUNT(*) FROM oauth_pkce_states;
+       ```
+    3. Verify state cleanup is working (15-minute interval)
+  </Accordion>
+
+  <Accordion title="Metrics endpoint returning 403">
+    **Symptom:** Prometheus can't scrape metrics
+
+    **Solution:**
+    1. Check Prometheus server IP is in allowlist:
+       ```bash
+       echo $METRICS_ALLOWED_IPS
+       ```
+    2. Test CIDR validation:
+       ```bash
+       curl -H "X-Forwarded-For: 10.20.30.40" http://instance:12005/api/metrics
+       ```
+    3. For IPv6:
+       ```bash
+       METRICS_ALLOWED_IPS="127.0.0.1,::1,2001:db8::/32"
+       ```
+  </Accordion>
+
+  <Accordion title="High database connection count">
+    **Symptom:** PostgreSQL running out of connections
+
+    **Solution:**
+    1. Calculate total connections: `instances × max_per_instance`
+    2. Adjust PostgreSQL `max_connections`:
+       ```sql
+       ALTER SYSTEM SET max_connections = 200;
+       ```
+    3. Reduce per-instance pool size:
+       ```javascript
+       max: 15  // Instead of 20
+       ```
+  </Accordion>
+</AccordionGroup>
+
+## Deployment Checklist
+
+<Card title="Pre-Deployment Checklist" icon="clipboard-check">
+  **Infrastructure:**
+  - [ ] Redis cluster configured and tested
+  - [ ] PostgreSQL connection pooling configured
+  - [ ] Load balancer health checks enabled
+  - [ ] SSL certificates installed
+
+  **Security:**
+  - [ ] `REDIS_URL` configured for all instances
+  - [ ] `NEXTAUTH_SECRET` identical across instances
+  - [ ] `METRICS_ALLOWED_IPS` restricted to Prometheus IP
+  - [ ] Rate limiting verified with Redis
+
+  **Monitoring:**
+  - [ ] Prometheus scraping all instances
+  - [ ] Grafana dashboards configured
+  - [ ] Loki log aggregation enabled
+  - [ ] Alerts configured for instance failures
+
+  **Testing:**
+  - [ ] Load test with multiple instances
+  - [ ] Verify rate limiting across instances
+  - [ ] Test instance failure handling
+  - [ ] Verify OAuth flows work across instances
+</Card>
+
+## Related Documentation
+
+<CardGroup cols={2}>
+  <Card title="Docker Deployment" icon="docker" href="/deployment/docker">
+    Single-instance Docker setup
+  </Card>
+
+  <Card title="OAuth Migration" icon="shield" href="/deployment/oauth-migration">
+    OAuth 2.1 migration guide
+  </Card>
+
+  <Card title="Observability" icon="chart-mixed" href="/observability/overview">
+    Monitoring and logging
+  </Card>
+
+  <Card title="Security Best Practices" icon="shield-halved" href="/security/oauth-2.1">
+    OAuth 2.1 security implementation
+  </Card>
+</CardGroup>

@@ -280,6 +280,148 @@ const tokenParams = new URLSearchParams({
 
 ---
 
+## Multi-Instance & Production Requirements
+
+### Redis Rate Limiting (CRITICAL)
+
+<Warning>
+  **Multi-Instance Deployments**: Redis is **REQUIRED** for distributed rate limiting when running multiple application instances. In-memory rate limiting is NOT SAFE for horizontal scaling.
+</Warning>
+
+**Why Redis is Required:**
+- Rate limits are enforced **per instance** with in-memory storage
+- Attackers can bypass rate limits by distributing requests across instances
+- OAuth callback rate limits become ineffective
+- Token refresh rate limits become ineffective
+
+**Setup:**
+
+```bash
+# Install Redis client
+npm install redis
+
+# Configure Redis URL
+export REDIS_URL="redis://redis-host:6379"
+
+# Production with authentication
+export REDIS_URL="redis://user:password@redis-host:6379"
+```
+
+**Verification:**
+
+The application will log on startup:
+
+```
+✅ [RateLimit] Using Redis backend for distributed rate limiting
+```
+
+If you see this warning in production:
+
+```
+⚠️  [RateLimit] WARNING: Using in-memory rate limiting in production!
+⚠️  [RateLimit] This is NOT SAFE for multi-instance deployments.
+```
+
+**Action required**: Configure `REDIS_URL` immediately.
+
+### Performance Optimizations
+
+#### OAuth Config Caching
+
+OAuth configurations are cached for **5 minutes** to reduce database load:
+
+```typescript
+// Automatic - no configuration needed
+// Each instance maintains its own LRU cache (max 500 entries)
+// Cache invalidates on config updates
+```
+
+**Impact:** Significantly reduces database queries for frequently refreshed tokens.
+
+#### Server Ownership Validation
+
+Optimized from 3 sequential queries to 1 JOIN query:
+
+```sql
+-- Before: N+1 problem (3 round-trips)
+SELECT profile_uuid FROM mcp_servers WHERE uuid = $1;
+SELECT project_uuid FROM profiles WHERE uuid = $2;
+SELECT user_id FROM projects WHERE uuid = $3;
+
+-- After: Single JOIN query
+SELECT projects.user_id
+FROM mcp_servers
+INNER JOIN profiles ON mcp_servers.profile_uuid = profiles.uuid
+INNER JOIN projects ON profiles.project_uuid = projects.uuid
+WHERE mcp_servers.uuid = $1;
+```
+
+**Impact:** 60-70% latency improvement for token refresh operations.
+
+#### Request Timeouts
+
+All OAuth API calls now have 10-second timeouts:
+
+```typescript
+await fetch(oauthConfig.token_endpoint, {
+  method: 'POST',
+  headers,
+  body: tokenParams,
+  signal: AbortSignal.timeout(10000), // NEW: Prevents hanging requests
+});
+```
+
+**Impact:** Prevents resource exhaustion from unresponsive OAuth providers.
+
+### IPv6 Support
+
+Metrics endpoint now supports **IPv6 CIDR validation**:
+
+```bash
+# IPv4 (existing)
+METRICS_ALLOWED_IPS="127.0.0.1,::1,172.17.0.0/16"
+
+# IPv6 (NEW)
+METRICS_ALLOWED_IPS="127.0.0.1,::1,2001:db8::/32"
+
+# IPv4-mapped IPv6
+METRICS_ALLOWED_IPS="127.0.0.1,::1,::ffff:192.0.2.0/24"
+```
+
+### Production Security Checklist
+
+<Card title="Pre-Production Checklist" icon="clipboard-check">
+  **Rate Limiting:**
+  - [ ] Redis configured with `REDIS_URL`
+  - [ ] Verify Redis connection on startup
+  - [ ] No rate limit warnings in production logs
+
+  **Metrics Security:**
+  - [ ] `METRICS_ALLOWED_IPS` restricted to Prometheus IP only
+  - [ ] Default `10.0.0.0/8` removed (16.7M IPs)
+  - [ ] IPv6 ranges validated if applicable
+
+  **OAuth Configuration:**
+  - [ ] All instances share same `NEXTAUTH_SECRET`
+  - [ ] All instances connect to same database
+  - [ ] OAuth config caching verified (check logs)
+
+  **Performance:**
+  - [ ] Database connection pooling configured
+  - [ ] Server ownership queries optimized (JOIN)
+  - [ ] Request timeouts enabled (10s)
+</Card>
+
+### Multi-Instance Deployment
+
+For complete multi-instance deployment guide, see:
+
+<Card title="Multi-Instance Deployment" icon="server" href="/deployment/multi-instance">
+  Production-ready horizontal scaling with Redis, load balancing, and high availability
+</Card>
+
+---
+
 ## Migration Notes
 
 ### Database Changes
