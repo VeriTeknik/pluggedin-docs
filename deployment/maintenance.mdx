@@ -1,0 +1,354 @@
+---
+title: Maintenance & Cron Jobs
+description: Automated maintenance tasks and cron job configuration for Plugged.in
+sidebarTitle: Maintenance
+---
+
+# Maintenance & Cron Jobs
+
+Plugged.in includes automated maintenance tasks to keep your installation running smoothly. These tasks handle cleanup operations, scheduled emails, and database maintenance.
+
+## Overview
+
+The platform uses a dual-approach for automated tasks:
+
+<CardGroup cols={2}>
+  <Card title="In-Process Scheduler" icon="clock">
+    **Automatic** - Runs within the application
+
+    ✅ No external configuration needed
+
+    ✅ Works in all environments
+
+    ⚠️ Stops when app restarts
+  </Card>
+  <Card title="External Cron Jobs" icon="server">
+    **Recommended for Production**
+
+    ✅ Runs independently of app
+
+    ✅ Better for serverless/cloud
+
+    ⚠️ Requires configuration
+  </Card>
+</CardGroup>
+
+## Automated Tasks
+
+### 1. OAuth PKCE State Cleanup
+
+**Purpose:** Removes expired OAuth PKCE states to prevent database bloat and ensure security.
+
+**Frequency:** Every 10 minutes
+
+**Methods:**
+
+<Tabs>
+  <Tab title="In-Process (Automatic)">
+    The cleanup runs automatically when the application starts and continues every 10 minutes.
+
+    No configuration needed - it just works!
+
+    ```typescript
+    // Automatically initialized in lib/oauth/pkce-cleanup.ts
+    // Runs every 10 minutes
+    // Executes on startup
+    ```
+
+    <Note>
+    The in-process scheduler skips in test environments to avoid interference with tests.
+    </Note>
+  </Tab>
+
+  <Tab title="External Cron (Recommended)">
+    For production deployments, configure an external cron job to call the API endpoint.
+
+    **Endpoint:** `POST /api/oauth/cleanup-pkce`
+
+    **Authentication:** Requires `CRON_SECRET` environment variable
+
+    **Schedule:** Every 10-15 minutes
+
+    <CodeGroup>
+    ```bash curl
+    curl -X POST https://your-domain.com/api/oauth/cleanup-pkce \
+      -H "Authorization: Bearer YOUR_CRON_SECRET"
+    ```
+
+    ```yaml GitHub Actions
+    name: OAuth PKCE Cleanup
+    on:
+      schedule:
+        - cron: '*/10 * * * *'  # Every 10 minutes
+
+    jobs:
+      cleanup:
+        runs-on: ubuntu-latest
+        steps:
+          - name: Trigger cleanup
+            run: |
+              curl -X POST ${{ secrets.APP_URL }}/api/oauth/cleanup-pkce \
+                -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+    ```
+
+    ```json Vercel Cron
+    {
+      "crons": [{
+        "path": "/api/oauth/cleanup-pkce",
+        "schedule": "*/10 * * * *"
+      }]
+    }
+    ```
+
+    ```bash Linux Crontab
+    # Add to crontab (crontab -e)
+    */10 * * * * curl -X POST https://your-domain.com/api/oauth/cleanup-pkce \
+      -H "Authorization: Bearer YOUR_CRON_SECRET" >> /var/log/pluggedin-cron.log 2>&1
+    ```
+    </CodeGroup>
+  </Tab>
+</Tabs>
+
+### 2. Scheduled Email Processing
+
+**Purpose:** Sends scheduled welcome emails and follow-up messages to new users.
+
+**Frequency:** Every hour
+
+**Endpoint:** `POST /api/emails/process-scheduled`
+
+**Requirements:**
+- `CLOUD_DEPLOY=true` in production
+- `CRON_SECRET` for authentication
+
+<CodeGroup>
+```bash curl
+curl -X POST https://your-domain.com/api/emails/process-scheduled \
+  -H "Authorization: Bearer YOUR_CRON_SECRET"
+```
+
+```yaml GitHub Actions
+name: Process Scheduled Emails
+on:
+  schedule:
+    - cron: '0 * * * *'  # Every hour
+
+jobs:
+  process-emails:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Process emails
+        run: |
+          curl -X POST ${{ secrets.APP_URL }}/api/emails/process-scheduled \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+```
+
+```json Vercel Cron
+{
+  "crons": [{
+    "path": "/api/emails/process-scheduled",
+    "schedule": "0 * * * *"
+  }]
+}
+```
+</CodeGroup>
+
+### 3. OAuth Session Cleanup
+
+**Purpose:** Removes expired OAuth sessions from legacy mcp-remote servers.
+
+**Frequency:** Every hour (built-in)
+
+**Method:** Automatic in-process only
+
+```typescript
+// Automatically runs in lib/mcp/oauth/cleanup.ts
+// No configuration needed
+```
+
+## Environment Variables
+
+### Required for Cron Jobs
+
+```bash .env
+# Production deployment flag
+CLOUD_DEPLOY=true
+
+# Secret for authenticating cron job requests
+# Generate with: openssl rand -base64 32
+CRON_SECRET=your_secure_random_string_here
+```
+
+<Warning>
+**Security:** Never expose your `CRON_SECRET` in public repositories or client-side code.
+
+This secret should be treated with the same care as database passwords.
+</Warning>
+
+## Monitoring & Logs
+
+### Check Cleanup Status
+
+<CodeGroup>
+```bash Development (GET)
+# Only works in development
+curl http://localhost:12005/api/oauth/cleanup-pkce
+```
+
+```bash Production (POST)
+# Requires authentication
+curl -X POST https://your-domain.com/api/oauth/cleanup-pkce \
+  -H "Authorization: Bearer YOUR_CRON_SECRET"
+```
+</CodeGroup>
+
+### Response Format
+
+```json
+{
+  "success": true,
+  "deletedCount": 5,
+  "message": "Cleaned up 5 expired PKCE states",
+  "timestamp": "2025-01-09T12:00:00.000Z"
+}
+```
+
+### Application Logs
+
+Check your application logs for cleanup activity:
+
+```bash Docker
+docker logs pluggedin-app | grep "OAuth Cleanup"
+```
+
+```bash Systemd
+journalctl -u pluggedin -f | grep "OAuth Cleanup"
+```
+
+Expected log output:
+```
+[OAuth Cleanup] Automatic PKCE state cleanup initialized (every 10 minutes)
+[OAuth Cleanup] Deleted 3 expired PKCE states
+```
+
+## Troubleshooting
+
+### Cleanup Not Running
+
+<AccordionGroup>
+  <Accordion title="In-process cleanup not working">
+    **Symptoms:** No cleanup logs in application output
+
+    **Solutions:**
+    1. Verify you're not in test environment (`NODE_ENV !== 'test'`)
+    2. Check application logs for initialization message
+    3. Restart the application to trigger startup cleanup
+    4. Ensure `lib/oauth/pkce-cleanup.ts` is being imported somewhere
+  </Accordion>
+
+  <Accordion title="External cron returning 401">
+    **Symptoms:** `Unauthorized` error from API
+
+    **Solutions:**
+    1. Verify `CRON_SECRET` is set in environment
+    2. Check Authorization header format: `Bearer YOUR_SECRET`
+    3. Ensure secret matches in both .env and cron configuration
+  </Accordion>
+
+  <Accordion title="External cron not triggering">
+    **Symptoms:** No API calls in logs
+
+    **Solutions:**
+    1. Verify cron job configuration (timing, URL)
+    2. Check cron service logs (GitHub Actions, Vercel, etc.)
+    3. Test endpoint manually with curl
+    4. Ensure endpoint is accessible from cron service
+  </Accordion>
+
+  <Accordion title="Cleanup running but states not deleted">
+    **Symptoms:** `deletedCount: 0` in all responses
+
+    **Solutions:**
+    1. Check database connection
+    2. Verify PKCE states exist: `SELECT * FROM oauth_pkce_states`
+    3. Check expiration times: States expire after 10 minutes
+    4. Review application logs for errors
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+### Production Deployment
+
+<Steps>
+  <Step title="Use External Cron">
+    Configure external cron jobs for critical tasks (PKCE cleanup, scheduled emails) to ensure they run even during app restarts or deployments.
+  </Step>
+
+  <Step title="Set CRON_SECRET">
+    Generate a strong random secret and configure it in your environment:
+    ```bash
+    openssl rand -base64 32
+    ```
+  </Step>
+
+  <Step title="Monitor Failures">
+    Set up monitoring/alerting for cron job failures:
+    - GitHub Actions: Email notifications
+    - Vercel: Error tracking in dashboard
+    - Custom: Log aggregation (Sentry, LogDNA, etc.)
+  </Step>
+
+  <Step title="Keep In-Process as Backup">
+    The in-process scheduler acts as a failsafe if external cron fails. Don't disable it.
+  </Step>
+</Steps>
+
+### Development Setup
+
+For local development, the automatic in-process scheduler is sufficient:
+
+1. No cron configuration needed
+2. Cleanup runs automatically on startup
+3. Continues every 10 minutes while app is running
+4. Use GET endpoints for manual testing
+
+### Testing Cleanup Manually
+
+<CodeGroup>
+```bash Development
+# Trigger cleanup manually (GET)
+curl http://localhost:12005/api/oauth/cleanup-pkce
+```
+
+```bash Production
+# Trigger with authentication (POST)
+curl -X POST https://your-domain.com/api/oauth/cleanup-pkce \
+  -H "Authorization: Bearer YOUR_CRON_SECRET"
+```
+</CodeGroup>
+
+## Summary
+
+<Info>
+**TL;DR:**
+
+✅ In-process cleanup works automatically - no config needed
+
+✅ For production, add external cron jobs for reliability
+
+✅ Set `CRON_SECRET` to secure your cron endpoints
+
+✅ Both methods work together for redundancy
+</Info>
+
+<Check>
+**Recommended Production Setup:**
+
+1. Enable `CLOUD_DEPLOY=true`
+2. Set strong `CRON_SECRET`
+3. Configure external cron for OAuth cleanup (every 10 min)
+4. Configure external cron for scheduled emails (every hour)
+5. Monitor cron job execution and errors
+6. Keep in-process scheduler as failsafe
+</Check>
