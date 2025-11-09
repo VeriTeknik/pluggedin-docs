@@ -1,0 +1,267 @@
+---
+title: Observability Overview
+description: Production-grade observability stack for Plugged.in OAuth 2.1 implementation
+sidebarTitle: Overview
+---
+
+# Observability Stack
+
+Plugged.in implements a comprehensive observability stack for OAuth 2.1 operations, enabling real-time monitoring, security event detection, and performance analysis.
+
+## Architecture
+
+The observability stack consists of three pillars:
+
+<CardGroup cols={3}>
+  <Card title="Logs (Loki)" icon="file-lines">
+    Structured JSON logs for all OAuth operations, security events, and errors
+  </Card>
+  <Card title="Metrics (Prometheus)" icon="chart-line">
+    Real-time counters, histograms, and gauges for performance tracking
+  </Card>
+  <Card title="Dashboards (Grafana)" icon="chart-mixed">
+    Unified visualization combining logs and metrics for insights
+  </Card>
+</CardGroup>
+
+## System Diagram
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     pluggedin-app                           │
+│                                                              │
+│  ┌───────────────────┐         ┌──────────────────┐        │
+│  │  OAuth Operations │────────▶│ Structured Logs  │        │
+│  │  (token refresh,  │         │ (Pino + JSON)    │────┐   │
+│  │   PKCE, etc.)     │         └──────────────────┘    │   │
+│  └───────────────────┘                                  │   │
+│           │                                             │   │
+│           ▼                                             │   │
+│  ┌───────────────────┐                                 │   │
+│  │ Prometheus Metrics│──────────┐                      │   │
+│  │ (prom-client)     │          │                      │   │
+│  └───────────────────┘          │                      │   │
+└──────────────────────────────────┼──────────────────────┼───┘
+                                   │                      │
+                    ┌──────────────▼──────┐     ┌────────▼────────┐
+                    │   Prometheus        │     │   Promtail      │
+                    │   (Metrics Store)   │     │  (Log Shipper)  │
+                    └──────────┬──────────┘     └────────┬────────┘
+                               │                         │
+                               │          ┌──────────────▼────────┐
+                               │          │     Loki              │
+                               │          │   (Log Aggregation)   │
+                               │          └──────────┬────────────┘
+                               │                     │
+                    ┌──────────▼─────────────────────▼────────┐
+                    │              Grafana                     │
+                    │  (Unified Dashboards & Alerting)         │
+                    └──────────────────────────────────────────┘
+```
+
+## Key Features
+
+### 📊 Comprehensive Metrics
+
+17 Prometheus metrics track all OAuth operations:
+
+- **OAuth Flows**: Initiation, completion, duration (counters + histograms)
+- **Token Operations**: Refresh attempts, success rate, rotation tracking
+- **PKCE Security**: State creation, validation, cleanup metrics
+- **Security Events**: Code injection attempts, token reuse detection, integrity violations
+- **Discovery**: RFC 9728 metadata discovery, success rates
+- **Registration**: Dynamic client registration (RFC 7591)
+
+### 📝 Structured Logging
+
+All logs use JSON format for Loki compatibility:
+
+- **OAuth Events**: Flow tracking, state transitions, token operations
+- **Security Events**: Suspicious activity, attack detection, compliance violations
+- **Performance**: Timing, duration, resource usage
+- **Errors**: Detailed error context with stack traces
+
+### 🔍 Automatic Redaction
+
+Sensitive data is automatically redacted from logs:
+
+- Access tokens, refresh tokens
+- PKCE code verifiers
+- Client secrets
+- Authorization codes
+
+## Quick Start
+
+### Prerequisites
+
+```bash
+# Ensure pluggedin-observability stack is running
+cd /path/to/pluggedin-observability
+docker-compose up -d
+```
+
+This starts:
+- Prometheus (http://localhost:9090)
+- Loki (http://localhost:3100)
+- Grafana (http://localhost:3000)
+- Promtail (log shipping)
+
+### Environment Variables
+
+Add to `pluggedin-app/.env`:
+
+```bash
+# Observability Configuration
+SERVICE_NAME=pluggedin-app
+APP_VERSION=2.14.0
+LOG_LEVEL=info  # trace, debug, info, warn, error
+
+# Optional: Prometheus Push Gateway
+PROMETHEUS_PUSH_GATEWAY=http://localhost:9091
+```
+
+### Verify Setup
+
+1. **Check Logs**:
+```bash
+# View JSON-formatted OAuth logs
+docker logs pluggedin-app | grep oauth | jq .
+```
+
+2. **Check Metrics**:
+```bash
+# Prometheus metrics endpoint
+curl http://localhost:12005/metrics | grep oauth
+```
+
+3. **Query Loki**:
+```bash
+# Query OAuth events from last hour
+curl -G -s "http://localhost:3100/loki/api/v1/query_range" \
+  --data-urlencode 'query={service_name="pluggedin-app"} |= "oauth"' \
+  --data-urlencode "start=$(date -u -d '1 hour ago' +%s)000000000" \
+  --data-urlencode "end=$(date -u +%s)000000000" | jq .
+```
+
+4. **Access Grafana**:
+```
+Open http://localhost:3000
+Default credentials: admin/admin
+```
+
+## What to Monitor
+
+### Critical Metrics
+
+<Card title="Token Reuse Detection" icon="triangle-exclamation" color="#ff0000">
+  **Metric**: `oauth_token_refresh_total{status="reuse_detected"}`
+
+  **Alert when**: > 0
+
+  **Action**: Immediate security review - indicates replay attack or race condition
+</Card>
+
+<Card title="Code Injection Attempts" icon="shield-exclamation" color="#ff6600">
+  **Metric**: `oauth_code_injection_attempts_total`
+
+  **Alert when**: > 0
+
+  **Action**: Review security logs, block attacker IP, audit user accounts
+</Card>
+
+<Card title="OAuth Flow Success Rate" icon="chart-line" color="#00aa00">
+  **Metric**: `oauth_flows_total{status="success"} / oauth_flows_total`
+
+  **Alert when**: < 95%
+
+  **Action**: Investigate failures, check auth server connectivity
+</Card>
+
+<Card title="Token Refresh Duration" icon="clock" color="#0066ff">
+  **Metric**: `oauth_token_refresh_duration_seconds`
+
+  **Alert when**: p99 > 5s
+
+  **Action**: Check network latency to auth servers, database performance
+</Card>
+
+### Security Events
+
+Monitor these log events continuously:
+
+- `oauth_refresh_token_reuse_detected` (P0 - Critical)
+- `oauth_code_injection_attempt` (P0 - Critical)
+- `oauth_integrity_violation` (P1 - High)
+- `oauth_ownership_violation` (P1 - High)
+- `pkce_replay_detected` (P1 - High)
+
+## Log Levels
+
+Configure based on environment:
+
+```bash
+# Development
+LOG_LEVEL=debug  # Verbose logging for debugging
+
+# Staging
+LOG_LEVEL=info   # Standard operational logging
+
+# Production
+LOG_LEVEL=warn   # Errors and warnings only (reduces volume)
+```
+
+## Performance Impact
+
+The observability stack is designed for minimal overhead:
+
+- **Logging**: ~1-2ms per operation (async I/O)
+- **Metrics**: ~0.1ms per increment (in-memory counters)
+- **Total**: < 0.5% CPU overhead in production
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Log Queries" icon="magnifying-glass" href="/observability/logs">
+    Learn LogQL queries for OAuth operations
+  </Card>
+  <Card title="Metrics & PromQL" icon="chart-line" href="/observability/metrics">
+    Explore Prometheus metrics and queries
+  </Card>
+  <Card title="Grafana Dashboards" icon="chart-mixed" href="/observability/dashboards">
+    Build custom dashboards and alerts
+  </Card>
+  <Card title="OAuth Security" icon="shield-halved" href="/security/oauth-2.1">
+    OAuth 2.1 security implementation
+  </Card>
+</CardGroup>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Metrics not appearing in Prometheus">
+    1. Check metrics endpoint: `curl http://localhost:12005/metrics`
+    2. Verify Prometheus config targets pluggedin-app
+    3. Check Prometheus logs: `docker logs prometheus`
+    4. Ensure app is generating OAuth traffic
+  </Accordion>
+
+  <Accordion title="Logs not in Loki">
+    1. Verify JSON log format: `docker logs pluggedin-app | head -1 | jq .`
+    2. Check Promtail config includes app log path
+    3. Review Promtail logs: `docker logs promtail`
+    4. Test Loki API: `curl http://localhost:3100/ready`
+  </Accordion>
+
+  <Accordion title="Grafana can't connect to data sources">
+    1. Verify Prometheus URL: `http://prometheus:9090` (Docker network)
+    2. Verify Loki URL: `http://loki:3100` (Docker network)
+    3. Test connectivity: `docker exec grafana curl http://prometheus:9090/api/v1/status/config`
+  </Accordion>
+
+  <Accordion title="High log volume">
+    1. Increase `LOG_LEVEL` to `warn` in production
+    2. Configure log sampling in Promtail
+    3. Set Loki retention policy (default: 30 days)
+    4. Archive old logs to S3/GCS
+  </Accordion>
+</AccordionGroup>

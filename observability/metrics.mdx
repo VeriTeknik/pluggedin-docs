@@ -1,0 +1,654 @@
+---
+title: OAuth Metrics & PromQL
+description: Prometheus metrics and queries for OAuth 2.1 performance monitoring
+sidebarTitle: Metrics
+---
+
+# OAuth Metrics & PromQL Queries
+
+Plugged.in exposes 17 Prometheus metrics for comprehensive OAuth 2.1 monitoring, covering flows, tokens, PKCE, security, and discovery operations.
+
+## Metrics Endpoint
+
+```bash
+# Access metrics
+curl http://localhost:12005/metrics
+
+# Filter OAuth metrics only
+curl http://localhost:12005/metrics | grep oauth
+```
+
+## Available Metrics
+
+### OAuth Flow Metrics
+
+<ResponseField name="oauth_flows_total" type="Counter">
+  **Labels:** `provider`, `status` (initiated/success/failure)
+
+  Total number of OAuth authorization flows by provider and outcome.
+
+  ```promql
+  # Total flows
+  sum(oauth_flows_total)
+
+  # Success rate by provider
+  rate(oauth_flows_total{status="success"}[5m])
+    / rate(oauth_flows_total[5m])
+
+  # Flow failures
+  rate(oauth_flows_total{status="failure"}[5m])
+  ```
+</ResponseField>
+
+<ResponseField name="oauth_flow_duration_seconds" type="Histogram">
+  **Labels:** `provider`, `status`
+
+  **Buckets:** 0.5s, 1s, 2s, 5s, 10s, 30s, 60s
+
+  OAuth flow duration from initiation to token storage.
+
+  ```promql
+  # p50, p95, p99 duration
+  histogram_quantile(0.50, rate(oauth_flow_duration_seconds_bucket[5m]))
+  histogram_quantile(0.95, rate(oauth_flow_duration_seconds_bucket[5m]))
+  histogram_quantile(0.99, rate(oauth_flow_duration_seconds_bucket[5m]))
+
+  # Average duration by provider
+  sum by (provider) (rate(oauth_flow_duration_seconds_sum[5m]))
+    / sum by (provider) (rate(oauth_flow_duration_seconds_count[5m]))
+
+  # Slow flows (>5s)
+  sum(oauth_flow_duration_seconds_bucket{le="5"})
+    / sum(oauth_flow_duration_seconds_count)
+  ```
+</ResponseField>
+
+### Token Refresh Metrics
+
+<ResponseField name="oauth_token_refresh_total" type="Counter">
+  **Labels:** `status` (success/failure/reuse_detected), `reason`
+
+  **Reasons:** normal, no_refresh_token, no_record, ownership_failed, reuse_detected, exception
+
+  Total token refresh attempts with outcome and reason.
+
+  ```promql
+  # Refresh success rate
+  rate(oauth_token_refresh_total{status="success"}[5m])
+    / rate(oauth_token_refresh_total[5m])
+
+  # Token reuse detection (CRITICAL)
+  increase(oauth_token_refresh_total{status="reuse_detected"}[5m])
+
+  # Refresh failures by reason
+  sum by (reason) (rate(oauth_token_refresh_total{status="failure"}[5m]))
+  ```
+</ResponseField>
+
+<ResponseField name="oauth_token_refresh_duration_seconds" type="Histogram">
+  **Labels:** `status`
+
+  **Buckets:** 0.1s, 0.5s, 1s, 2s, 5s, 10s
+
+  Token refresh operation duration.
+
+  ```promql
+  # p95 refresh time
+  histogram_quantile(0.95, rate(oauth_token_refresh_duration_seconds_bucket[5m]))
+
+  # Slow refreshes (>2s)
+  rate(oauth_token_refresh_duration_seconds_bucket{le="2"}[5m])
+    / rate(oauth_token_refresh_duration_seconds_count[5m])
+
+  # Average refresh time
+  rate(oauth_token_refresh_duration_seconds_sum[5m])
+    / rate(oauth_token_refresh_duration_seconds_count[5m])
+  ```
+</ResponseField>
+
+<ResponseField name="oauth_token_revocations_total" type="Counter">
+  **Labels:** `reason` (reuse_detected/manual/expired/security)
+
+  Total number of token revocations.
+
+  ```promql
+  # Revocations due to security issues
+  rate(oauth_token_revocations_total{reason=~"reuse_detected|security"}[5m])
+
+  # Total revocations by reason
+  sum by (reason) (oauth_token_revocations_total)
+  ```
+</ResponseField>
+
+<ResponseField name="oauth_active_tokens" type="Gauge">
+  Current number of active, unexpired OAuth tokens.
+
+  ```promql
+  # Current active tokens
+  oauth_active_tokens
+
+  # Change rate
+  rate(oauth_active_tokens[5m])
+
+  # Alert if too many tokens
+  oauth_active_tokens > 10000
+  ```
+</ResponseField>
+
+### PKCE Metrics
+
+<ResponseField name="oauth_pkce_validations_total" type="Counter">
+  **Labels:** `status` (success/failure), `reason` (valid/expired/invalid_hash/not_found)
+
+  Total PKCE state validations.
+
+  ```promql
+  # PKCE validation success rate
+  rate(oauth_pkce_validations_total{status="success"}[5m])
+    / rate(oauth_pkce_validations_total[5m])
+
+  # Validation failures by reason
+  sum by (reason) (rate(oauth_pkce_validations_total{status="failure"}[5m]))
+
+  # Expired states
+  rate(oauth_pkce_validations_total{reason="expired"}[5m])
+  ```
+</ResponseField>
+
+<ResponseField name="oauth_pkce_states_created_total" type="Counter">
+  Total number of PKCE states created.
+
+  ```promql
+  # PKCE state creation rate
+  rate(oauth_pkce_states_created_total[5m])
+
+  # Total created in last 24h
+  increase(oauth_pkce_states_created_total[24h])
+  ```
+</ResponseField>
+
+<ResponseField name="oauth_pkce_states_cleaned_total" type="Counter">
+  **Labels:** `reason` (expired/manual/server_deleted)
+
+  Total number of PKCE states cleaned up.
+
+  ```promql
+  # Cleanup rate
+  rate(oauth_pkce_states_cleaned_total[5m])
+
+  # Expired state cleanup
+  sum(oauth_pkce_states_cleaned_total{reason="expired"})
+
+  # Cleanup by reason
+  sum by (reason) (rate(oauth_pkce_states_cleaned_total[5m]))
+  ```
+</ResponseField>
+
+<ResponseField name="oauth_active_pkce_states" type="Gauge">
+  Current number of active PKCE states.
+
+  ```promql
+  # Current active states
+  oauth_active_pkce_states
+
+  # Alert if too many pending states (potential DoS)
+  oauth_active_pkce_states > 1000
+  ```
+</ResponseField>
+
+### Security Metrics
+
+<ResponseField name="oauth_security_events_total" type="Counter">
+  **Labels:** `event_type`, `severity` (low/medium/high/critical)
+
+  **Event Types:** token_reuse, integrity_violation, code_injection
+
+  Total security events.
+
+  ```promql
+  # Critical security events
+  rate(oauth_security_events_total{severity="critical"}[5m])
+
+  # Security events by type
+  sum by (event_type) (oauth_security_events_total)
+
+  # High/Critical events only
+  sum(oauth_security_events_total{severity=~"high|critical"})
+  ```
+</ResponseField>
+
+<ResponseField name="oauth_integrity_violations_total" type="Counter">
+  **Labels:** `violation_type` (hash_mismatch/state_reuse/user_mismatch)
+
+  Total OAuth integrity violations.
+
+  ```promql
+  # Integrity violations by type
+  sum by (violation_type) (rate(oauth_integrity_violations_total[5m]))
+
+  # Hash mismatch detections
+  increase(oauth_integrity_violations_total{violation_type="hash_mismatch"}[1h])
+  ```
+</ResponseField>
+
+<ResponseField name="oauth_code_injection_attempts_total" type="Counter">
+  Authorization code injection attempts detected.
+
+  ```promql
+  # Code injection attempts
+  increase(oauth_code_injection_attempts_total[5m])
+
+  # Alert on any injection attempt
+  oauth_code_injection_attempts_total > 0
+  ```
+</ResponseField>
+
+### Discovery Metrics
+
+<ResponseField name="oauth_discovery_attempts_total" type="Counter">
+  **Labels:** `method` (rfc9728/www-authenticate/manual), `status`
+
+  OAuth metadata discovery attempts.
+
+  ```promql
+  # Discovery success rate by method
+  sum by (method) (rate(oauth_discovery_attempts_total{status="success"}[5m]))
+    / sum by (method) (rate(oauth_discovery_attempts_total[5m]))
+
+  # RFC 9728 discovery failures
+  rate(oauth_discovery_attempts_total{method="rfc9728", status="failure"}[5m])
+  ```
+</ResponseField>
+
+<ResponseField name="oauth_discovery_duration_seconds" type="Histogram">
+  **Labels:** `method`, `status`
+
+  **Buckets:** 0.5s, 1s, 2s, 5s, 10s
+
+  Discovery operation duration.
+
+  ```promql
+  # p95 discovery time by method
+  histogram_quantile(0.95,
+    sum by (method, le) (rate(oauth_discovery_duration_seconds_bucket[5m]))
+  )
+
+  # Average discovery time
+  rate(oauth_discovery_duration_seconds_sum[5m])
+    / rate(oauth_discovery_duration_seconds_count[5m])
+  ```
+</ResponseField>
+
+### Client Registration Metrics
+
+<ResponseField name="oauth_client_registrations_total" type="Counter">
+  **Labels:** `status` (success/failure)
+
+  Dynamic client registration attempts (RFC 7591).
+
+  ```promql
+  # Registration success rate
+  rate(oauth_client_registrations_total{status="success"}[5m])
+    / rate(oauth_client_registrations_total[5m])
+
+  # Registration failures
+  increase(oauth_client_registrations_total{status="failure"}[1h])
+  ```
+</ResponseField>
+
+<ResponseField name="oauth_client_registration_duration_seconds" type="Histogram">
+  **Labels:** `status`
+
+  **Buckets:** 0.5s, 1s, 2s, 5s, 10s
+
+  Client registration operation duration.
+
+  ```promql
+  # p99 registration time
+  histogram_quantile(0.99, rate(oauth_client_registration_duration_seconds_bucket[5m]))
+  ```
+</ResponseField>
+
+## Common PromQL Queries
+
+### Health & SLO Monitoring
+
+**OAuth Flow Success Rate (SLO: >95%):**
+```promql
+(
+  sum(rate(oauth_flows_total{status="success"}[5m]))
+  / sum(rate(oauth_flows_total[5m]))
+) * 100
+```
+
+**Token Refresh Success Rate (SLO: >99%):**
+```promql
+(
+  sum(rate(oauth_token_refresh_total{status="success"}[5m]))
+  / sum(rate(oauth_token_refresh_total[5m]))
+) * 100
+```
+
+**PKCE Validation Success Rate (SLO: >98%):**
+```promql
+(
+  sum(rate(oauth_pkce_validations_total{status="success"}[5m]))
+  / sum(rate(oauth_pkce_validations_total[5m]))
+) * 100
+```
+
+### Performance Monitoring
+
+**OAuth Flow p50/p95/p99 Duration:**
+```promql
+# p50
+histogram_quantile(0.50, sum(rate(oauth_flow_duration_seconds_bucket[5m])) by (le))
+
+# p95
+histogram_quantile(0.95, sum(rate(oauth_flow_duration_seconds_bucket[5m])) by (le))
+
+# p99
+histogram_quantile(0.99, sum(rate(oauth_flow_duration_seconds_bucket[5m])) by (le))
+```
+
+**Token Refresh p95 Duration (Alert if >2s):**
+```promql
+histogram_quantile(0.95, sum(rate(oauth_token_refresh_duration_seconds_bucket[5m])) by (le)) > 2
+```
+
+**Slow OAuth Flows (>10s):**
+```promql
+sum(increase(oauth_flow_duration_seconds_bucket{le="10"}[5m]))
+  - sum(increase(oauth_flow_duration_seconds_bucket{le="+Inf"}[5m]))
+```
+
+### Security Monitoring
+
+**Token Reuse Detection (Critical Alert):**
+```promql
+increase(oauth_token_refresh_total{status="reuse_detected"}[5m]) > 0
+```
+
+**Code Injection Attempts (Critical Alert):**
+```promql
+increase(oauth_code_injection_attempts_total[5m]) > 0
+```
+
+**Integrity Violations (High Alert):**
+```promql
+increase(oauth_integrity_violations_total[5m]) > 0
+```
+
+**High Security Event Rate (>10/min):**
+```promql
+sum(rate(oauth_security_events_total{severity=~"high|critical"}[1m])) * 60 > 10
+```
+
+### Capacity Planning
+
+**OAuth Flow Rate (flows/second):**
+```promql
+sum(rate(oauth_flows_total[5m]))
+```
+
+**Token Refresh Rate (refreshes/second):**
+```promql
+sum(rate(oauth_token_refresh_total[5m]))
+```
+
+**PKCE State Creation Rate (states/second):**
+```promql
+rate(oauth_pkce_states_created_total[5m])
+```
+
+**Active Token Growth Rate:**
+```promql
+deriv(oauth_active_tokens[5m])
+```
+
+### Error Analysis
+
+**Top Refresh Failure Reasons:**
+```promql
+topk(5, sum by (reason) (increase(oauth_token_refresh_total{status="failure"}[1h])))
+```
+
+**Top PKCE Validation Failure Reasons:**
+```promql
+topk(5, sum by (reason) (increase(oauth_pkce_validations_total{status="failure"}[1h])))
+```
+
+**OAuth Flow Failures by Provider:**
+```promql
+sum by (provider) (rate(oauth_flows_total{status="failure"}[5m]))
+```
+
+## Recording Rules
+
+Add to Prometheus config for pre-computed queries:
+
+```yaml
+groups:
+  - name: oauth_slo
+    interval: 30s
+    rules:
+      # OAuth flow success rate (5m)
+      - record: oauth:flow_success_rate:5m
+        expr: |
+          sum(rate(oauth_flows_total{status="success"}[5m]))
+          / sum(rate(oauth_flows_total[5m]))
+
+      # Token refresh success rate (5m)
+      - record: oauth:refresh_success_rate:5m
+        expr: |
+          sum(rate(oauth_token_refresh_total{status="success"}[5m]))
+          / sum(rate(oauth_token_refresh_total[5m]))
+
+      # p95 flow duration
+      - record: oauth:flow_duration_seconds:p95
+        expr: histogram_quantile(0.95, sum(rate(oauth_flow_duration_seconds_bucket[5m])) by (le))
+
+      # p95 refresh duration
+      - record: oauth:refresh_duration_seconds:p95
+        expr: histogram_quantile(0.95, sum(rate(oauth_token_refresh_duration_seconds_bucket[5m])) by (le))
+
+  - name: oauth_security
+    interval: 30s
+    rules:
+      # Critical security events rate
+      - record: oauth:security_events_critical:rate5m
+        expr: sum(rate(oauth_security_events_total{severity="critical"}[5m]))
+
+      # Total integrity violations
+      - record: oauth:integrity_violations:total
+        expr: sum(oauth_integrity_violations_total)
+```
+
+## Alert Rules
+
+```yaml
+groups:
+  - name: oauth_critical_alerts
+    rules:
+      # P0 Alerts
+      - alert: OAuthTokenReuseDetected
+        expr: increase(oauth_token_refresh_total{status="reuse_detected"}[5m]) > 0
+        labels:
+          severity: critical
+          priority: P0
+        annotations:
+          summary: "OAuth token reuse detected"
+          description: "Potential replay attack or race condition detected"
+
+      - alert: OAuthCodeInjectionAttempt
+        expr: increase(oauth_code_injection_attempts_total[5m]) > 0
+        labels:
+          severity: critical
+          priority: P0
+        annotations:
+          summary: "OAuth code injection attempt detected"
+          description: "Authorization code injection attack in progress"
+
+      # P1 Alerts
+      - alert: OAuthFlowSuccessRateLow
+        expr: oauth:flow_success_rate:5m < 0.95
+        for: 5m
+        labels:
+          severity: high
+          priority: P1
+        annotations:
+          summary: "OAuth flow success rate below 95%"
+          description: "Current rate: {{ $value | humanizePercentage }}"
+
+      - alert: OAuthTokenRefreshSlow
+        expr: oauth:refresh_duration_seconds:p95 > 2
+        for: 5m
+        labels:
+          severity: high
+          priority: P1
+        annotations:
+          summary: "OAuth token refresh p95 > 2s"
+          description: "p95 duration: {{ $value }}s"
+
+      # P2 Alerts
+      - alert: OAuthIntegrityViolations
+        expr: increase(oauth_integrity_violations_total[15m]) > 5
+        labels:
+          severity: warning
+          priority: P2
+        annotations:
+          summary: "Multiple OAuth integrity violations"
+          description: "{{ $value }} violations in last 15 minutes"
+
+      - alert: OAuthActiveTokensHigh
+        expr: oauth_active_tokens > 10000
+        labels:
+          severity: warning
+          priority: P2
+        annotations:
+          summary: "High number of active OAuth tokens"
+          description: "Current count: {{ $value }}"
+```
+
+## Grafana Dashboard Queries
+
+### Panel: OAuth Flow Success Rate
+
+**Query:**
+```promql
+oauth:flow_success_rate:5m * 100
+```
+
+**Settings:**
+- Type: Gauge
+- Min: 0
+- Max: 100
+- Unit: Percent
+- Thresholds: Red <95%, Yellow 95-98%, Green >98%
+
+### Panel: Token Refresh Duration (p50, p95, p99)
+
+**Queries:**
+```promql
+# p50
+histogram_quantile(0.50, sum(rate(oauth_token_refresh_duration_seconds_bucket[5m])) by (le))
+
+# p95
+histogram_quantile(0.95, sum(rate(oauth_token_refresh_duration_seconds_bucket[5m])) by (le))
+
+# p99
+histogram_quantile(0.99, sum(rate(oauth_token_refresh_duration_seconds_bucket[5m])) by (le))
+```
+
+**Settings:**
+- Type: Time series
+- Unit: Seconds
+- Legend: p50, p95, p99
+
+### Panel: Security Events Timeline
+
+**Query:**
+```promql
+sum by (event_type, severity) (increase(oauth_security_events_total[5m]))
+```
+
+**Settings:**
+- Type: Bar chart
+- Stacking: Normal
+- Color scheme by severity
+
+### Panel: OAuth Operations Rate
+
+**Queries:**
+```promql
+# Flows
+sum(rate(oauth_flows_total[5m])) * 60
+
+# Token Refreshes
+sum(rate(oauth_token_refresh_total[5m])) * 60
+
+# PKCE Validations
+sum(rate(oauth_pkce_validations_total[5m])) * 60
+```
+
+**Settings:**
+- Type: Time series
+- Unit: ops/min
+- Legend: Flows, Refreshes, PKCE
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Metrics endpoint returns 404">
+    Ensure metrics route is configured in Next.js:
+    ```typescript
+    // app/metrics/route.ts
+    import { register } from '@/lib/metrics';
+
+    export async function GET() {
+      return new Response(await register.metrics(), {
+        headers: { 'Content-Type': register.contentType },
+      });
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Prometheus can't scrape metrics">
+    Check Prometheus config:
+    ```yaml
+    scrape_configs:
+      - job_name: 'pluggedin-app'
+        static_configs:
+          - targets: ['localhost:12005']
+        metrics_path: '/metrics'
+        scrape_interval: 15s
+    ```
+  </Accordion>
+
+  <Accordion title="Histogram buckets not appropriate">
+    Adjust buckets in oauth-metrics.ts:
+    ```typescript
+    // For faster operations, use smaller buckets
+    buckets: [0.01, 0.05, 0.1, 0.5, 1, 2, 5]
+    ```
+  </Accordion>
+
+  <Accordion title="High cardinality warnings">
+    Avoid user IDs or UUIDs in metric labels. Use bounded values only:
+    - ✅ provider (limited set)
+    - ✅ status (success/failure)
+    - ❌ userId (unbounded)
+    - ❌ serverUuid (unbounded)
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Logs & LogQL" icon="file-lines" href="/observability/logs">
+    Combine metrics with log analysis
+  </Card>
+  <Card title="Grafana Dashboards" icon="chart-mixed" href="/observability/dashboards">
+    Build comprehensive dashboards
+  </Card>
+</CardGroup>

@@ -1,0 +1,678 @@
+---
+title: Grafana Dashboards
+description: Production-ready Grafana dashboards for OAuth 2.1 monitoring
+sidebarTitle: Dashboards
+---
+
+# Grafana Dashboards for OAuth Monitoring
+
+Build comprehensive Grafana dashboards combining Prometheus metrics and Loki logs for real-time OAuth 2.1 monitoring.
+
+## Dashboard Overview
+
+Recommended dashboard structure:
+
+<Card Title="OAuth Overview" icon="chart-mixed">
+  High-level health metrics, SLO tracking, and alert status
+</Card>
+
+<Card title="OAuth Performance" icon="gauge">
+  Latency percentiles, throughput, and resource utilization
+</Card>
+
+<Card title="OAuth Security" icon="shield-halved">
+  Security events, attack detection, and compliance monitoring
+</Card>
+
+<Card title="OAuth Debugging" icon="bug">
+  Detailed logs, traces, and error analysis
+</Card>
+
+## OAuth Overview Dashboard
+
+### Panel 1: SLO Summary (Row)
+
+**OAuth Flow Success Rate**
+```promql
+# Query
+(
+  sum(rate(oauth_flows_total{status="success"}[5m]))
+  / sum(rate(oauth_flows_total[5m]))
+) * 100
+
+# Settings
+- Visualization: Stat
+- Unit: Percent (0-100)
+- Decimals: 2
+- Thresholds:
+  - Red: < 95
+  - Yellow: 95-98
+  - Green: > 98
+- Value mapping: Display "N/A" if no data
+```
+
+**Token Refresh Success Rate**
+```promql
+# Query
+(
+  sum(rate(oauth_token_refresh_total{status="success"}[5m]))
+  / sum(rate(oauth_token_refresh_total[5m]))
+) * 100
+
+# Settings
+- Visualization: Stat
+- Unit: Percent
+- Thresholds:
+  - Red: < 99
+  - Yellow: 99-99.5
+  - Green: > 99.5
+```
+
+**PKCE Validation Success Rate**
+```promql
+# Query
+(
+  sum(rate(oauth_pkce_validations_total{status="success"}[5m]))
+  / sum(rate(oauth_pkce_validations_total[5m]))
+) * 100
+
+# Settings
+- Same as above
+- Thresholds:
+  - Red: < 98
+  - Yellow: 98-99
+  - Green: > 99
+```
+
+**Critical Security Events (Last 24h)**
+```promql
+# Query
+sum(increase(oauth_security_events_total{severity="critical"}[24h]))
+
+# Settings
+- Visualization: Stat
+- Unit: None
+- Color: Red if > 0, Green if 0
+```
+
+### Panel 2: Operations Rate (Time Series)
+
+**OAuth Operations per Minute**
+```promql
+# Flows
+sum(rate(oauth_flows_total[5m])) * 60
+
+# Token Refreshes
+sum(rate(oauth_token_refresh_total[5m])) * 60
+
+# PKCE Validations
+sum(rate(oauth_pkce_validations_total[5m])) * 60
+
+# Settings
+- Visualization: Time series
+- Legend: Flows, Refreshes, PKCE
+- Y-axis: ops/min
+- Stack: None
+```
+
+### Panel 3: Active Resources (Time Series)
+
+**Active Tokens & PKCE States**
+```promql
+# Active Tokens
+oauth_active_tokens
+
+# Active PKCE States
+oauth_active_pkce_states
+
+# Settings
+- Visualization: Time series
+- Y-axis: Count
+- Legend: Tokens, PKCE States
+```
+
+### Panel 4: Error Rate (Time Series)
+
+**OAuth Errors per Minute**
+```promql
+# Flow Failures
+sum(rate(oauth_flows_total{status="failure"}[5m])) * 60
+
+# Refresh Failures
+sum(rate(oauth_token_refresh_total{status="failure"}[5m])) * 60
+
+# PKCE Failures
+sum(rate(oauth_pkce_validations_total{status="failure"}[5m])) * 60
+
+# Settings
+- Visualization: Time series
+- Y-axis: errors/min
+- Color scheme: Red/Orange
+```
+
+## OAuth Performance Dashboard
+
+### Panel 1: Latency Percentiles (Time Series)
+
+**OAuth Flow Duration (p50, p95, p99)**
+```promql
+# p50
+histogram_quantile(0.50, sum(rate(oauth_flow_duration_seconds_bucket[5m])) by (le))
+
+# p95
+histogram_quantile(0.95, sum(rate(oauth_flow_duration_seconds_bucket[5m])) by (le))
+
+# p99
+histogram_quantile(0.99, sum(rate(oauth_flow_duration_seconds_bucket[5m])) by (le))
+
+# Settings
+- Visualization: Time series
+- Y-axis: Seconds
+- Legend: p50, p95, p99
+- Thresholds for p95:
+  - Green: < 5s
+  - Yellow: 5-10s
+  - Red: > 10s
+```
+
+**Token Refresh Duration (p50, p95, p99)**
+```promql
+# Same pattern as flow duration
+histogram_quantile(0.50, sum(rate(oauth_token_refresh_duration_seconds_bucket[5m])) by (le))
+histogram_quantile(0.95, sum(rate(oauth_token_refresh_duration_seconds_bucket[5m])) by (le))
+histogram_quantile(0.99, sum(rate(oauth_token_refresh_duration_seconds_bucket[5m])) by (le))
+
+# Settings
+- Thresholds for p95:
+  - Green: < 1s
+  - Yellow: 1-2s
+  - Red: > 2s
+```
+
+### Panel 2: Throughput by Provider (Bar Gauge)
+
+**OAuth Flows by Provider (Last Hour)**
+```promql
+# Query
+topk(10,
+  sum by (provider) (increase(oauth_flows_total[1h]))
+)
+
+# Settings
+- Visualization: Bar gauge
+- Orientation: Horizontal
+- Display mode: Gradient
+- Show: Value
+```
+
+### Panel 3: Discovery Performance (Stat + Time Series)
+
+**Average Discovery Time by Method**
+```promql
+# Query
+sum by (method) (rate(oauth_discovery_duration_seconds_sum[5m]))
+  / sum by (method) (rate(oauth_discovery_duration_seconds_count[5m]))
+
+# Settings
+- Visualization: Stat (current value) + Time series (trend)
+- Unit: Seconds
+- Group by: method
+```
+
+### Panel 4: Client Registration Performance
+
+**Registration Duration p95**
+```promql
+histogram_quantile(0.95, rate(oauth_client_registration_duration_seconds_bucket[5m]))
+
+# Settings
+- Visualization: Gauge
+- Min: 0
+- Max: 10
+- Unit: Seconds
+```
+
+## OAuth Security Dashboard
+
+### Panel 1: Security Events Timeline (Logs)
+
+**Critical/High Security Events**
+```logql
+# Query
+{service_name="pluggedin-app"}
+  | json
+  | severity =~ "critical|high"
+  | event =~ "(token_reuse|code_injection|integrity_violation|ownership_violation)"
+  | line_format "[{{.severity}}] {{.event}}: {{.msg}}"
+
+# Settings
+- Visualization: Logs
+- Show time: Yes
+- Wrap lines: Yes
+- Deduplication: None
+```
+
+### Panel 2: Security Event Counters (Stat Row)
+
+**Token Reuse Detected (24h)**
+```promql
+sum(increase(oauth_token_refresh_total{status="reuse_detected"}[24h]))
+
+# Settings
+- Color: Red if > 0
+- Sparkline: Show trend
+```
+
+**Code Injection Attempts (24h)**
+```promql
+sum(increase(oauth_code_injection_attempts_total[24h]))
+
+# Settings
+- Color: Red if > 0
+```
+
+**Integrity Violations (24h)**
+```promql
+sum(increase(oauth_integrity_violations_total[24h]))
+
+# Settings
+- Color: Yellow if > 0
+```
+
+**Ownership Violations (24h)**
+```logql
+# Count from logs
+count_over_time({service_name="pluggedin-app"} | json | event="oauth_ownership_violation" [24h])
+
+# Settings
+- Color: Yellow if > 0
+```
+
+### Panel 3: Attack Heatmap (Heatmap)
+
+**Security Events by Hour**
+```promql
+# Query
+sum by (event_type) (
+  increase(oauth_security_events_total{severity=~"high|critical"}[1h])
+)
+
+# Settings
+- Visualization: Heatmap
+- Color scheme: Red-Yellow-Green (inverted)
+- Cell gap: 2
+```
+
+### Panel 4: Top Attackers (Table from Logs)
+
+**Users with Most Security Events**
+```logql
+# Query
+topk(20,
+  sum by (userId) (
+    count_over_time(
+      {service_name="pluggedin-app"}
+      | json
+      | severity =~ "high|critical"
+      [24h]
+    )
+  )
+)
+
+# Settings
+- Visualization: Table
+- Columns: User ID, Event Count
+- Sort: Event Count (desc)
+```
+
+### Panel 5: PKCE Replay Attempts (Time Series)
+
+**PKCE States in Audit Table (Prevented Replays)**
+```logql
+# Query (from logs)
+count_over_time(
+  {service_name="pluggedin-app"}
+  | json
+  | event="pkce_replay_prevented"
+  [5m]
+)
+
+# Settings
+- Visualization: Time series
+- Color: Orange
+- Alert if > 0
+```
+
+## OAuth Debugging Dashboard
+
+### Panel 1: Error Logs (Logs Panel)
+
+**OAuth Errors (Last 6 Hours)**
+```logql
+# Query
+{service_name="pluggedin-app"}
+  | json
+  | level >= 50
+  | event =~ "oauth_.*"
+  | line_format "{{.time | date \"15:04:05\"}} [{{.level | level}}] {{.event}}: {{.msg}}"
+
+# Settings
+- Visualization: Logs
+- Show labels: event, level, serverUuid
+- Order: Time descending
+- Live: Yes
+```
+
+### Panel 2: Error Distribution (Pie Chart)
+
+**OAuth Errors by Type (Last 24h)**
+```logql
+# Query
+sum by (event) (
+  count_over_time(
+    {service_name="pluggedin-app"}
+    | json
+    | level >= 50
+    | event =~ "oauth_.*"
+    [24h]
+  )
+)
+
+# Settings
+- Visualization: Pie chart
+- Legend: Values + percent
+- Tooltip: All series
+```
+
+### Panel 3: Token Refresh Failures by Reason (Bar Chart)
+
+**Refresh Failures by Reason (Last Hour)**
+```promql
+# Query
+topk(10,
+  sum by (reason) (increase(oauth_token_refresh_total{status="failure"}[1h]))
+)
+
+# Settings
+- Visualization: Bar chart
+- Orientation: Horizontal
+- Show values: On bars
+```
+
+### Panel 4: OAuth Flow Trace (Logs with Trace)
+
+**Complete Flow by Trace ID**
+
+**Variables:**
+```
+Name: trace_id
+Label: Trace ID
+Type: Query
+Query:
+  label_values(
+    {service_name="pluggedin-app"} | json | event =~ "oauth_.*",
+    trace_id
+  )
+```
+
+**Panel Query:**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | trace_id="$trace_id"
+  | event =~ "(oauth_|pkce_|token_)"
+  | line_format "{{.time | date \"15:04:05.000\"}} {{.event}}: {{.msg}}"
+
+# Settings
+- Visualization: Logs
+- Sorted by: Time (asc)
+- Show common labels: No
+```
+
+### Panel 5: Slow Operations (Table)
+
+**Operations Exceeding SLO (Last Hour)**
+```logql
+# Query
+{service_name="pluggedin-app"}
+  | json
+  | duration_ms > 2000
+  | event =~ "(token_refresh|oauth_flow)"
+  | line_format "{{.event}} {{.serverUuid}} {{.duration_ms}}ms"
+
+# Settings
+- Visualization: Table
+- Columns: Time, Event, Server, Duration
+- Sort: Duration (desc)
+```
+
+## Dashboard Variables
+
+### Global Variables
+
+```
+# Environment
+Name: env
+Type: Constant
+Value: production
+
+# Time Range Selector
+Name: time_range
+Type: Interval
+Options: 5m, 15m, 1h, 6h, 24h, 7d
+
+# Service Name
+Name: service
+Type: Query
+Query: label_values(service_name)
+```
+
+### OAuth-Specific Variables
+
+```
+# Provider Filter
+Name: provider
+Type: Query
+Query: label_values(oauth_flows_total, provider)
+Multi-value: Yes
+Include all: Yes
+
+# Server UUID (for debugging)
+Name: server_uuid
+Type: Query
+Query:
+  label_values(
+    {service_name="pluggedin-app"} | json | serverUuid != "",
+    serverUuid
+  )
+Multi-value: No
+
+# User ID (for debugging)
+Name: user_id
+Type: Query
+Query:
+  label_values(
+    {service_name="pluggedin-app"} | json | userId != "",
+    userId
+  )
+Multi-value: No
+```
+
+## Alert Annotations
+
+Add alert annotations to show when alerts fire:
+
+```
+# Annotation Query (Prometheus Alerts)
+Name: OAuth Alerts
+Data source: Prometheus
+Query: ALERTS{alertname=~"OAuth.*"}
+```
+
+```
+# Annotation Query (Deployments)
+Name: Deployments
+Data source: Loki
+Query: {service_name="pluggedin-app"} |= "deployment_completed"
+Color: Green
+```
+
+## Dashboard JSON Export
+
+### Complete OAuth Overview Dashboard
+
+<Warning>
+  Import this dashboard JSON into Grafana for instant setup
+</Warning>
+
+```json
+{
+  "dashboard": {
+    "title": "OAuth 2.1 Overview",
+    "tags": ["oauth", "security", "authentication"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "title": "OAuth Flow Success Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "(sum(rate(oauth_flows_total{status=\"success\"}[5m])) / sum(rate(oauth_flows_total[5m]))) * 100",
+            "refId": "A"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                { "value": 0, "color": "red" },
+                { "value": 95, "color": "yellow" },
+                { "value": 98, "color": "green" }
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "refresh": "30s",
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    }
+  }
+}
+```
+
+## Best Practices
+
+<Card title="Use Template Variables" icon="filter">
+  Add provider, server, and user filters for flexible debugging
+</Card>
+
+<Card title="Set Appropriate Refresh Rates" icon="rotate">
+  Overview: 30s, Performance: 15s, Security: 10s, Debugging: 5s
+</Card>
+
+<Card title="Configure Alerts" icon="bell">
+  Critical alerts: Immediate notification (PagerDuty, Slack)
+  Warning alerts: Email or dashboard only
+</Card>
+
+<Card title="Use Annotations" icon="bookmark">
+  Mark deployments, incidents, and configuration changes
+</Card>
+
+<Card title="Optimize Query Performance" icon="bolt">
+  Use recording rules for complex queries
+  Limit time ranges for expensive log queries
+</Card>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Dashboard shows 'No Data'">
+    1. Verify data sources configured correctly (Prometheus, Loki)
+    2. Check metrics endpoint: `curl http://localhost:12005/metrics`
+    3. Ensure OAuth operations are generating events
+    4. Verify time range includes recent data
+  </Accordion>
+
+  <Accordion title="Queries are slow">
+    1. Add recording rules for expensive queries
+    2. Reduce time range for log queries
+    3. Use indexed labels in Loki queries
+    4. Consider query caching in Grafana
+  </Accordion>
+
+  <Accordion title="Variables not populating">
+    1. Check data source selection in variable
+    2. Verify label exists in metrics/logs
+    3. Test query in Explore view first
+    4. Check for syntax errors in query
+  </Accordion>
+
+  <Accordion title="Alerts not firing">
+    1. Verify alert rule expression is correct
+    2. Check evaluation interval (should match panel refresh)
+    3. Test query returns data in expected range
+    4. Verify notification channels configured
+  </Accordion>
+</AccordionGroup>
+
+## Dashboard Recommendations
+
+### Priority 1: Must-Have Panels
+
+- ✅ OAuth Flow Success Rate (SLO)
+- ✅ Token Refresh Success Rate (SLO)
+- ✅ Critical Security Events (Last 24h)
+- ✅ Operations Rate (flows, refreshes, PKCE)
+- ✅ p95 Latency (flows, refreshes)
+
+### Priority 2: Recommended Panels
+
+- ⭐ Error Rate Trends
+- ⭐ Active Tokens/States Gauge
+- ⭐ Security Events Timeline
+- ⭐ Top Providers by Volume
+- ⭐ Slow Operations Table
+
+### Priority 3: Advanced Panels
+
+- 🔧 Trace Correlation
+- 🔧 Attack Heatmap
+- 🔧 Error Distribution Pie
+- 🔧 User Activity Analysis
+- 🔧 Discovery Method Breakdown
+
+## Pre-built Dashboard Downloads
+
+<Card title="OAuth Overview Dashboard" icon="download" href="/dashboards/oauth-overview.json">
+  Production-ready overview with all critical metrics
+</Card>
+
+<Card title="OAuth Security Dashboard" icon="download" href="/dashboards/oauth-security.json">
+  Security monitoring and incident response
+</Card>
+
+<Card title="OAuth Performance Dashboard" icon="download" href="/dashboards/oauth-performance.json">
+  Latency analysis and capacity planning
+</Card>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Set Up Alerts" icon="bell">
+    Configure Grafana alerts for critical events
+  </Card>
+  <Card title="Customize Dashboards" icon="paintbrush">
+    Adapt panels to your specific needs
+  </Card>
+  <Card title="Share Dashboards" icon="share">
+    Export and version control dashboard JSON
+  </Card>
+  <Card title="Monitor SLOs" icon="chart-line">
+    Track OAuth SLOs and error budgets
+  </Card>
+</CardGroup>

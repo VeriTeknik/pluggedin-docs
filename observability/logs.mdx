@@ -1,0 +1,601 @@
+---
+title: OAuth Logs & LogQL
+description: Structured logging and Loki queries for OAuth 2.1 operations
+sidebarTitle: Logs
+---
+
+# OAuth Logs & LogQL Queries
+
+Plugged.in uses structured JSON logging with automatic redaction and Loki integration for powerful log aggregation and querying.
+
+## Log Structure
+
+All OAuth logs follow a consistent JSON structure:
+
+```json
+{
+  "level": 30,
+  "time": 1699564800000,
+  "service_name": "pluggedin-app",
+  "version": "2.14.0",
+  "trace_id": "abc123def456",
+  "event": "oauth_token_refresh_success",
+  "serverUuid": "server-uuid-123",
+  "userId": "user-id-456",
+  "duration_ms": 850,
+  "msg": "Token refresh succeeded"
+}
+```
+
+### Log Fields
+
+<ResponseField name="level" type="number" required>
+  Log level: 10=trace, 20=debug, 30=info, 40=warn, 50=error, 60=fatal
+</ResponseField>
+
+<ResponseField name="time" type="number" required>
+  Unix timestamp in milliseconds
+</ResponseField>
+
+<ResponseField name="service_name" type="string" required>
+  Always "pluggedin-app" for the main application
+</ResponseField>
+
+<ResponseField name="version" type="string" required>
+  Application version (from package.json)
+</ResponseField>
+
+<ResponseField name="trace_id" type="string">
+  Unique trace ID for correlating related logs across operations
+</ResponseField>
+
+<ResponseField name="event" type="string" required>
+  Event type (e.g., "oauth_token_refresh_success", "oauth_integrity_violation")
+</ResponseField>
+
+<ResponseField name="msg" type="string" required>
+  Human-readable log message
+</ResponseField>
+
+<ResponseField name="err" type="object">
+  Error details including stack trace (only for errors)
+</ResponseField>
+
+## OAuth Event Types
+
+### Flow Events
+
+```typescript
+// OAuth flow initiation
+{
+  "event": "oauth_flow_initiated",
+  "provider": "github-mcp-server",
+  "serverUuid": "...",
+  "discoveryMethod": "rfc9728"
+}
+
+// OAuth flow success
+{
+  "event": "oauth_flow_success",
+  "provider": "github-mcp-server",
+  "duration_ms": 3500,
+  "hasRefreshToken": true
+}
+
+// OAuth flow failure
+{
+  "event": "oauth_flow_failure",
+  "provider": "github-mcp-server",
+  "duration_ms": 1200,
+  "error": "invalid_grant"
+}
+```
+
+### PKCE Events
+
+```typescript
+// PKCE state created
+{
+  "event": "pkce_state_created",
+  "state": "[REDACTED]",
+  "serverUuid": "...",
+  "expiresIn": 300
+}
+
+// PKCE validation success
+{
+  "event": "pkce_validation_success",
+  "state": "[REDACTED]",
+  "serverUuid": "...",
+  "userId": "..."
+}
+
+// PKCE validation failure
+{
+  "event": "pkce_validation_failure",
+  "state": "[REDACTED]",
+  "reason": "expired",
+  "expiredAt": "2024-01-15T10:30:00Z"
+}
+```
+
+### Token Events
+
+```typescript
+// Token refresh initiated
+{
+  "event": "token_refresh_initiated",
+  "serverUuid": "...",
+  "userId": "...",
+  "tokenExpired": true
+}
+
+// Token refresh success
+{
+  "event": "token_refresh_success",
+  "serverUuid": "...",
+  "duration_ms": 850,
+  "hasNewRefreshToken": true
+}
+
+// Token rotation complete
+{
+  "event": "token_rotation_complete",
+  "serverUuid": "...",
+  "hasNewRefreshToken": true
+}
+```
+
+### Security Events
+
+```typescript
+// Refresh token reuse detected (CRITICAL)
+{
+  "level": 60,
+  "event": "oauth_refresh_token_reuse_detected",
+  "userId": "...",
+  "serverUuid": "...",
+  "tokenUsedAt": "2024-01-15T10:29:45Z",
+  "currentAttempt": "2024-01-15T10:30:00Z",
+  "severity": "critical"
+}
+
+// Code injection attempt (CRITICAL)
+{
+  "level": 60,
+  "event": "oauth_code_injection_attempt",
+  "attackerUserId": "...",
+  "victimUserId": "...",
+  "state": "[REDACTED]",
+  "serverUuid": "...",
+  "severity": "critical"
+}
+
+// Integrity violation (HIGH)
+{
+  "level": 50,
+  "event": "oauth_integrity_violation",
+  "violationType": "hash_mismatch",
+  "state": "[REDACTED]",
+  "expectedHash": "...",
+  "actualHash": "...",
+  "severity": "high"
+}
+
+// Ownership violation (HIGH)
+{
+  "level": 50,
+  "event": "oauth_ownership_violation",
+  "userId": "...",
+  "serverUuid": "...",
+  "expectedUserId": "...",
+  "actualUserId": "...",
+  "severity": "high"
+}
+```
+
+### Cleanup Events
+
+```typescript
+// PKCE cleanup
+{
+  "event": "pkce_cleanup_completed",
+  "deletedCount": 15,
+  "cutoffTime": "2024-01-15T10:20:00Z"
+}
+
+// Server PKCE cleanup
+{
+  "event": "pkce_server_cleanup_completed",
+  "serverUuid": "...",
+  "deletedCount": 3
+}
+```
+
+## LogQL Queries
+
+### Basic Queries
+
+**All OAuth events from last hour:**
+```logql
+{service_name="pluggedin-app"} |= "oauth"
+```
+
+**OAuth events for specific server:**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | serverUuid="server-uuid-123"
+  | event =~ "oauth_.*"
+```
+
+**OAuth events by user:**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | userId="user-id-456"
+  | event =~ "oauth_.*"
+```
+
+### Security Monitoring
+
+**Critical security events (P0):**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | severity="critical"
+  | event =~ "(token_reuse|code_injection)"
+```
+
+**All integrity violations:**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | event="oauth_integrity_violation"
+```
+
+**Failed PKCE validations:**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | event="pkce_validation_failure"
+  | line_format "{{.reason}}: {{.msg}}"
+```
+
+**Ownership violations by user:**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | event="oauth_ownership_violation"
+  | line_format "User {{.userId}} attempted access to server {{.serverUuid}}"
+```
+
+### Performance Analysis
+
+**Token refresh operations over 2 seconds:**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | event="token_refresh_success"
+  | duration_ms > 2000
+  | line_format "Slow refresh: {{.duration_ms}}ms for server {{.serverUuid}}"
+```
+
+**OAuth flow duration distribution:**
+```logql
+sum by (provider) (
+  count_over_time(
+    {service_name="pluggedin-app"}
+    | json
+    | event="oauth_flow_success"
+    [1h]
+  )
+)
+```
+
+**Average token refresh time:**
+```logql
+avg_over_time(
+  {service_name="pluggedin-app"}
+  | json
+  | event="token_refresh_success"
+  | unwrap duration_ms
+  [5m]
+) / 1000
+```
+
+### Error Tracking
+
+**OAuth errors in last 24h:**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | level >= 50
+  | event =~ "oauth_.*"
+```
+
+**Token refresh failures with reasons:**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | event="token_refresh_failure"
+  | line_format "{{.reason}}: {{.err.message}}"
+```
+
+**Discovery failures by method:**
+```logql
+sum by (discoveryMethod) (
+  count_over_time(
+    {service_name="pluggedin-app"}
+    | json
+    | event="oauth_discovery_failure"
+    [1h]
+  )
+)
+```
+
+### Trace Correlation
+
+**Complete OAuth flow by trace_id:**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | trace_id="abc123def456"
+  | event =~ "oauth_.*"
+```
+
+**Related operations for a server:**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | serverUuid="server-uuid-123"
+  | event =~ "(oauth_|pkce_|token_)"
+```
+
+### Alerting Queries
+
+**Token reuse in last 5 minutes (CRITICAL ALERT):**
+```logql
+count_over_time(
+  {service_name="pluggedin-app"}
+  | json
+  | event="oauth_refresh_token_reuse_detected"
+  [5m]
+) > 0
+```
+
+**High rate of code injection attempts (>10/hour):**
+```logql
+count_over_time(
+  {service_name="pluggedin-app"}
+  | json
+  | event="oauth_code_injection_attempt"
+  [1h]
+) > 10
+```
+
+**OAuth flow success rate below 95%:**
+```logql
+(
+  sum(count_over_time({service_name="pluggedin-app"} | json | event="oauth_flow_success" [5m]))
+  /
+  sum(count_over_time({service_name="pluggedin-app"} | json | event =~ "oauth_flow_(success|failure)" [5m]))
+) < 0.95
+```
+
+**Token refresh failures spiking (>20/min):**
+```logql
+rate(
+  {service_name="pluggedin-app"}
+  | json
+  | event="token_refresh_failure"
+  [1m]
+) * 60 > 20
+```
+
+## Log Aggregation Patterns
+
+### Count Events by Type
+
+```logql
+sum by (event) (
+  count_over_time(
+    {service_name="pluggedin-app"}
+    | json
+    | event =~ "oauth_.*"
+    [1h]
+  )
+)
+```
+
+### Top Error Messages
+
+```logql
+topk(10,
+  sum by (msg) (
+    count_over_time(
+      {service_name="pluggedin-app"}
+      | json
+      | level >= 50
+      | event =~ "oauth_.*"
+      [24h]
+    )
+  )
+)
+```
+
+### Users with Most OAuth Activity
+
+```logql
+topk(20,
+  sum by (userId) (
+    count_over_time(
+      {service_name="pluggedin-app"}
+      | json
+      | event =~ "oauth_.*"
+      [24h]
+    )
+  )
+)
+```
+
+### Servers Requiring Most Token Refreshes
+
+```logql
+topk(10,
+  sum by (serverUuid) (
+    count_over_time(
+      {service_name="pluggedin-app"}
+      | json
+      | event="token_refresh_success"
+      [24h]
+    )
+  )
+)
+```
+
+## Sensitive Data Redaction
+
+Sensitive fields are automatically redacted in logs:
+
+<Warning>
+  **Never log these fields in plaintext:**
+  - `access_token`
+  - `refresh_token`
+  - `code_verifier`
+  - `client_secret`
+  - `authorization_code`
+</Warning>
+
+Example redacted log:
+```json
+{
+  "event": "token_refresh_success",
+  "access_token": "[REDACTED]",
+  "refresh_token": "[REDACTED]",
+  "serverUuid": "visible-server-id"
+}
+```
+
+## Best Practices
+
+<Card title="Use Trace IDs" icon="link">
+  Correlate related operations across services using `trace_id` field
+</Card>
+
+<Card title="Filter by Time Range" icon="clock">
+  Always specify time ranges to avoid scanning entire log history
+</Card>
+
+<Card title="Index by Service" icon="tag">
+  Use `service_name` label for efficient querying in multi-service deployments
+</Card>
+
+<Card title="Alert on Security Events" icon="bell">
+  Set up Grafana alerts for critical security events (token reuse, code injection)
+</Card>
+
+<Card title="Monitor Performance" icon="gauge">
+  Track p50, p95, p99 for token refresh duration to detect degradation
+</Card>
+
+## Example Grafana Queries
+
+### Panel: OAuth Flow Success Rate (Last 24h)
+
+**Query:**
+```logql
+(
+  sum(count_over_time({service_name="pluggedin-app"} | json | event="oauth_flow_success" [$__range]))
+  /
+  sum(count_over_time({service_name="pluggedin-app"} | json | event =~ "oauth_flow_(success|failure)" [$__range]))
+) * 100
+```
+
+**Panel Type:** Stat
+**Unit:** Percent (0-100)
+
+### Panel: Top OAuth Errors (Last 6h)
+
+**Query:**
+```logql
+topk(5,
+  sum by (msg) (
+    count_over_time(
+      {service_name="pluggedin-app"}
+      | json
+      | level >= 50
+      | event =~ "oauth_.*"
+      [6h]
+    )
+  )
+)
+```
+
+**Panel Type:** Bar Chart
+
+### Panel: Security Events Timeline
+
+**Query:**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | severity =~ "(critical|high)"
+  | event =~ "(token_reuse|code_injection|integrity_violation|ownership_violation)"
+  | line_format "[{{.severity}}] {{.event}}: {{.msg}}"
+```
+
+**Panel Type:** Logs
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Logs not structured JSON">
+    Check environment:
+    ```bash
+    # Ensure NODE_ENV is NOT 'development' for JSON logs
+    NODE_ENV=production npm start
+    ```
+
+    Development mode uses pino-pretty for human-readable logs.
+  </Accordion>
+
+  <Accordion title="Sensitive data appearing in logs">
+    Verify redaction is enabled in `lib/observability/logger.ts`:
+    ```typescript
+    const redactPaths = [
+      'access_token',
+      'refresh_token',
+      'code_verifier',
+      'client_secret',
+      'authorization_code'
+    ];
+    ```
+  </Accordion>
+
+  <Accordion title="LogQL query timeout">
+    1. Reduce time range
+    2. Add more specific filters before parsing JSON
+    3. Use indexed labels (service_name) first
+    4. Consider using metric queries instead for aggregations
+  </Accordion>
+
+  <Accordion title="Missing trace_id in logs">
+    Ensure `trace_id` is generated for each request:
+    ```typescript
+    import { generateTraceId } from '@/lib/observability/logger';
+    const traceId = generateTraceId();
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Metrics & PromQL" icon="chart-line" href="/observability/metrics">
+    Explore Prometheus metrics for OAuth
+  </Card>
+  <Card title="Grafana Dashboards" icon="chart-mixed" href="/observability/dashboards">
+    Build custom dashboards combining logs and metrics
+  </Card>
+</CardGroup>
