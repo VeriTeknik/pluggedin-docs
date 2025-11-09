@@ -74,7 +74,23 @@ All other tools/resources/prompts originate from the MCP servers you register in
 - Optional HTTP auth (`--require-api-auth`) ensures remote deployments stay private.
 - Set `PLUGGEDIN_DEBUG=true` to emit detailed logs during debugging; leave it `false` in STDIO mode to avoid polluting the MCP stream.
 
+## Protocol compliance
+
+The proxy is **100% compliant** with the [Model Context Protocol specification](https://spec.modelcontextprotocol.io/):
+
+- ✅ **MCP Protocol Version**: 2024-11-05 with version negotiation
+- ✅ **Header Format**: Title-Case headers (`Mcp-Session-Id`, `Mcp-Protocol-Version`)
+- ✅ **CORS Support**: Full CORS headers with custom header exposure
+- ✅ **JSON-RPC 2.0**: Standardized error codes and message format
+- ✅ **Session Management**: Both stateful and stateless operation modes
+- ✅ **84+ Tests**: Comprehensive test coverage for all protocol features
+
+<Info>
+For technical details on protocol implementation, error codes, and testing, see the [Protocol Compliance](/mcp-proxy/protocol-compliance) documentation.
+</Info>
+
 ## Next steps
 
 - Follow the [Setup Guide](/setup-guide) to configure credentials and connect your clients.
 - When you are ready to deploy, use the [Installation](/mcp-proxy/installation) guide for CLI, pnpm, or Docker workflows.
+- Review [Protocol Compliance](/mcp-proxy/protocol-compliance) for technical specifications and testing details.

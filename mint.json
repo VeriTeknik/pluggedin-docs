@@ -119,6 +119,7 @@
       "pages": [
         "mcp-proxy/overview",
         "mcp-proxy/installation",
+        "mcp-proxy/protocol-compliance",
         "mcp-proxy/changelog"
       ]
     },

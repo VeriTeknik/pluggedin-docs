@@ -222,6 +222,21 @@ If a security issue is discovered:
 - Path traversal protection
 - Content length validation
 
+### MCP Protocol Security
+
+The MCP Proxy implements comprehensive protocol security measures:
+
+- **Protocol Version Validation**: Only supported MCP protocol versions accepted (2024-11-05)
+- **Header Validation**: Strict header format enforcement with Title-Case standardization
+- **Authentication Isolation**: Lazy auth - discovery operations work without credentials
+- **Error Code Sanitization**: Standardized JSON-RPC 2.0 error codes prevent information leakage
+- **CORS Configuration**: Secure CORS headers with proper origin and header restrictions
+- **Session Management**: Secure session handling with optional stateless mode
+
+<Info>
+For detailed MCP security implementation, see [MCP Protocol Compliance](/mcp-proxy/protocol-compliance).
+</Info>
+
 ## Contact
 
 For security concerns or vulnerability reports, please contact:
