@@ -91,14 +91,25 @@
       "pages": [
         "security/overview",
         "security/sandboxing",
-        "security/url-validation"
+        "security/url-validation",
+        "security/oauth-2.1"
       ]
     },
     {
       "group": "Deployment",
       "pages": [
         "deployment/ubuntu-setup",
-        "deployment/docker"
+        "deployment/docker",
+        "deployment/oauth-migration"
+      ]
+    },
+    {
+      "group": "Observability",
+      "pages": [
+        "observability/overview",
+        "observability/logs",
+        "observability/metrics",
+        "observability/dashboards"
       ]
     },
     {
@@ -111,7 +122,8 @@
       "group": "API Documentation",
       "pages": [
         "api/reference",
-        "api/authentication"
+        "api/authentication",
+        "api/oauth"
       ]
     },
     {

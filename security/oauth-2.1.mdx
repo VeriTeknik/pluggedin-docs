@@ -332,30 +332,435 @@ CLOUD_DEPLOY=true
 
 ---
 
-## Monitoring & Logging
+## Monitoring & Observability
+
+### Structured Logging with Loki
+
+Plugged.in uses **structured JSON logging** with Loki for comprehensive OAuth security monitoring. All security events are automatically logged with full context for analysis.
+
+<Info>
+See [Observability Documentation](/observability/overview) for complete setup guide
+</Info>
 
 ### Security Events Logged
 
+All OAuth operations emit structured JSON logs to Loki:
+
 <CodeGroup>
-```log Normal Flow
-[OAuth] PKCE code_verifier stored successfully
-[OAuth 2.1] Marked refresh token as used
-[OAuth 2.1] Token rotation complete - new tokens stored
+```json Normal OAuth Flow
+{
+  "level": 30,
+  "time": 1699564800000,
+  "service_name": "pluggedin-app",
+  "event": "oauth_flow_success",
+  "provider": "github-mcp-server",
+  "duration_ms": 3500,
+  "hasRefreshToken": true,
+  "msg": "OAuth flow completed successfully"
+}
 ```
 
-```log Security Alerts
-[OAuth Security] Refresh token reuse detected! Revoking all tokens
-[OAuth Callback] PKCE state integrity check failed - possible tampering
-[OAuth Security] Server does not belong to user
+```json Token Refresh Success
+{
+  "level": 30,
+  "event": "token_refresh_success",
+  "serverUuid": "server-uuid-123",
+  "duration_ms": 850,
+  "hasNewRefreshToken": true,
+  "msg": "Token rotation complete"
+}
+```
+
+```json CRITICAL: Token Reuse Detected
+{
+  "level": 60,
+  "event": "oauth_refresh_token_reuse_detected",
+  "severity": "critical",
+  "userId": "user-id-123",
+  "serverUuid": "server-uuid-456",
+  "tokenUsedAt": "2024-01-15T10:29:45Z",
+  "currentAttempt": "2024-01-15T10:30:00Z",
+  "msg": "Refresh token reuse detected - revoking all tokens"
+}
+```
+
+```json CRITICAL: Code Injection Attempt
+{
+  "level": 60,
+  "event": "oauth_code_injection_attempt",
+  "severity": "critical",
+  "attackerUserId": "attacker-id",
+  "victimUserId": "victim-id",
+  "state": "[REDACTED]",
+  "serverUuid": "server-uuid",
+  "msg": "Authorization code injection attack detected"
+}
+```
+
+```json HIGH: Integrity Violation
+{
+  "level": 50,
+  "event": "oauth_integrity_violation",
+  "severity": "high",
+  "violationType": "hash_mismatch",
+  "state": "[REDACTED]",
+  "expectedHash": "abc123...",
+  "actualHash": "def456...",
+  "msg": "PKCE state integrity check failed"
+}
 ```
 </CodeGroup>
 
+### LogQL Security Queries
+
+**Critical Security Events (Last Hour):**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | severity="critical"
+  | event =~ "(token_reuse|code_injection)"
+```
+
+**All Integrity Violations:**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | event="oauth_integrity_violation"
+  | line_format "{{.violationType}}: {{.msg}}"
+```
+
+**Token Refresh Failures:**
+```logql
+{service_name="pluggedin-app"}
+  | json
+  | event="token_refresh_failure"
+  | line_format "{{.reason}}: {{.err.message}}"
+```
+
+**OAuth Flow Success Rate:**
+```logql
+(
+  sum(count_over_time({service_name="pluggedin-app"} | json | event="oauth_flow_success" [5m]))
+  /
+  sum(count_over_time({service_name="pluggedin-app"} | json | event =~ "oauth_flow_(success|failure)" [5m]))
+) * 100
+```
+
+### Prometheus Metrics
+
+17 OAuth-specific metrics for real-time monitoring:
+
+<CardGroup cols={2}>
+  <Card title="Flow Success Rate" icon="chart-line">
+    `oauth_flows_total{status="success"}` / `oauth_flows_total`
+
+    **SLO**: > 95%
+  </Card>
+
+  <Card title="Token Reuse Detection" icon="triangle-exclamation">
+    `oauth_token_refresh_total{status="reuse_detected"}`
+
+    **Alert**: > 0 (Critical)
+  </Card>
+
+  <Card title="Code Injection Attempts" icon="shield-exclamation">
+    `oauth_code_injection_attempts_total`
+
+    **Alert**: > 0 (Critical)
+  </Card>
+
+  <Card title="Integrity Violations" icon="shield-halved">
+    `oauth_integrity_violations_total`
+
+    **Alert**: > 0 (High)
+  </Card>
+</CardGroup>
+
+**PromQL Alert Queries:**
+
+```promql
+# P0: Token reuse detected
+increase(oauth_token_refresh_total{status="reuse_detected"}[5m]) > 0
+
+# P0: Code injection attempt
+increase(oauth_code_injection_attempts_total[5m]) > 0
+
+# P1: OAuth flow success rate below 95%
+(
+  sum(rate(oauth_flows_total{status="success"}[5m]))
+  / sum(rate(oauth_flows_total[5m]))
+) < 0.95
+
+# P1: Token refresh p95 duration > 2s
+histogram_quantile(0.95,
+  sum(rate(oauth_token_refresh_duration_seconds_bucket[5m])) by (le)
+) > 2
+```
+
+### Grafana Dashboards
+
+Pre-built dashboards available in `/observability/dashboards`:
+
+<CardGroup cols={3}>
+  <Card title="OAuth Overview" icon="chart-mixed">
+    - Success rates
+    - Operations/min
+    - Active tokens
+    - Error trends
+  </Card>
+
+  <Card title="Security Dashboard" icon="shield-halved">
+    - Security events timeline
+    - Attack heatmap
+    - Top attackers
+    - Violation breakdown
+  </Card>
+
+  <Card title="Performance Dashboard" icon="gauge">
+    - Latency percentiles (p50, p95, p99)
+    - Throughput by provider
+    - Slow operations
+    - Discovery performance
+  </Card>
+</CardGroup>
+
+### Critical Alerts Configuration
+
+Configure these alerts in Grafana:
+
+```yaml
+groups:
+  - name: oauth_critical
+    rules:
+      # P0 Alerts - Page immediately
+      - alert: OAuthTokenReuseDetected
+        expr: increase(oauth_token_refresh_total{status="reuse_detected"}[5m]) > 0
+        labels:
+          severity: critical
+          priority: P0
+        annotations:
+          summary: "OAuth token reuse attack detected"
+          description: "Potential replay attack - tokens revoked"
+
+      - alert: OAuthCodeInjectionAttempt
+        expr: increase(oauth_code_injection_attempts_total[5m]) > 0
+        labels:
+          severity: critical
+          priority: P0
+        annotations:
+          summary: "OAuth code injection attempt"
+          description: "Authorization code injection attack in progress"
+
+      # P1 Alerts - Notify team
+      - alert: OAuthFlowSuccessRateLow
+        expr: |
+          (sum(rate(oauth_flows_total{status="success"}[5m]))
+           / sum(rate(oauth_flows_total[5m]))) < 0.95
+        for: 5m
+        labels:
+          severity: high
+          priority: P1
+        annotations:
+          summary: "OAuth flow success rate below 95%"
+
+      - alert: OAuthIntegrityViolations
+        expr: increase(oauth_integrity_violations_total[15m]) > 5
+        labels:
+          severity: high
+          priority: P1
+        annotations:
+          summary: "Multiple OAuth integrity violations detected"
+```
+
 ### Metrics to Monitor
 
-- **OAuth Success Rate**: Should be >95%
-- **Token Rotation Rate**: All refresh token exchanges
-- **Integrity Violations**: Should be ~0 (log all occurrences)
-- **Token Reuse Detections**: Should be ~0 (investigate if non-zero)
+<ResponseField name="OAuth Flow Success Rate" type="percentage" required>
+  **SLO**: > 95%
+
+  **Metric**: `oauth_flows_total{status="success"}` / `oauth_flows_total`
+
+  **Alert if**: < 95% for 5 minutes
+</ResponseField>
+
+<ResponseField name="Token Refresh Success Rate" type="percentage" required>
+  **SLO**: > 99%
+
+  **Metric**: `oauth_token_refresh_total{status="success"}` / `oauth_token_refresh_total`
+
+  **Alert if**: < 99% for 5 minutes
+</ResponseField>
+
+<ResponseField name="Token Reuse Detection" type="counter" required>
+  **Expected**: 0
+
+  **Metric**: `oauth_token_refresh_total{status="reuse_detected"}`
+
+  **Alert if**: > 0 (IMMEDIATE - Critical)
+</ResponseField>
+
+<ResponseField name="Code Injection Attempts" type="counter" required>
+  **Expected**: 0
+
+  **Metric**: `oauth_code_injection_attempts_total`
+
+  **Alert if**: > 0 (IMMEDIATE - Critical)
+</ResponseField>
+
+<ResponseField name="Integrity Violations" type="counter">
+  **Expected**: ~0
+
+  **Metric**: `oauth_integrity_violations_total`
+
+  **Alert if**: > 5 per 15 minutes (High)
+</ResponseField>
+
+<ResponseField name="Token Refresh p95 Latency" type="duration">
+  **SLO**: < 2 seconds
+
+  **Metric**: `histogram_quantile(0.95, oauth_token_refresh_duration_seconds_bucket)`
+
+  **Alert if**: > 2s for 5 minutes
+</ResponseField>
+
+### Incident Response Playbooks
+
+<AccordionGroup>
+  <Accordion title="Token Reuse Detected (P0)">
+    **Severity**: Critical - Immediate action required
+
+    **Indicators**:
+    - `oauth_refresh_token_reuse_detected` event in logs
+    - `oauth_token_refresh_total{status="reuse_detected"}` > 0
+
+    **Automatic Actions**:
+    - ✅ All tokens for server immediately revoked
+    - ✅ User forced to re-authenticate
+    - ✅ Security event logged with full context
+
+    **Manual Response**:
+    1. Check logs for `serverUuid` and `userId`
+    2. Review user's recent OAuth activity
+    3. Check for concurrent requests (race condition vs. attack)
+    4. If attack: Block user IP, audit account
+    5. If race condition: Review application logs, check for retry logic issues
+
+    **Loki Query**:
+    ```logql
+    {service_name="pluggedin-app"}
+      | json
+      | event="oauth_refresh_token_reuse_detected"
+      | line_format "User: {{.userId}}, Server: {{.serverUuid}}, Used: {{.tokenUsedAt}}"
+    ```
+  </Accordion>
+
+  <Accordion title="Code Injection Attempt (P0)">
+    **Severity**: Critical - Immediate action required
+
+    **Indicators**:
+    - `oauth_code_injection_attempt` event in logs
+    - `oauth_code_injection_attempts_total` > 0
+
+    **Automatic Actions**:
+    - ✅ Authorization code rejected
+    - ✅ Security event logged with attacker/victim details
+
+    **Manual Response**:
+    1. Identify attacker from logs: `attackerUserId`
+    2. Identify victim: `victimUserId`
+    3. Block attacker account immediately
+    4. Notify victim user of attempted account compromise
+    5. Audit all OAuth flows for both users in last 24h
+    6. Check for pattern of attacks (same IP, same target servers)
+
+    **Loki Query**:
+    ```logql
+    {service_name="pluggedin-app"}
+      | json
+      | event="oauth_code_injection_attempt"
+      | line_format "Attacker: {{.attackerUserId}}, Victim: {{.victimUserId}}"
+    ```
+  </Accordion>
+
+  <Accordion title="Integrity Violations (P1)">
+    **Severity**: High - Investigate within 1 hour
+
+    **Indicators**:
+    - `oauth_integrity_violation` events in logs
+    - `oauth_integrity_violations_total` increasing
+
+    **Possible Causes**:
+    - State tampering attempt
+    - Database corruption
+    - Application bug (HMAC calculation mismatch)
+
+    **Manual Response**:
+    1. Check `violationType`: hash_mismatch, state_reuse, user_mismatch
+    2. Review affected `serverUuid` and `userId`
+    3. If single occurrence: Likely user error or network issue
+    4. If multiple from same user: Possible attack or client issue
+    5. If widespread: Check for application deployment issues
+
+    **Loki Query**:
+    ```logql
+    {service_name="pluggedin-app"}
+      | json
+      | event="oauth_integrity_violation"
+      | line_format "[{{.violationType}}] {{.msg}}"
+    ```
+  </Accordion>
+
+  <Accordion title="Low Success Rate (P1)">
+    **Severity**: High - Investigate within 1 hour
+
+    **Indicators**:
+    - OAuth success rate < 95%
+    - Increased error rates in dashboards
+
+    **Possible Causes**:
+    - OAuth server downtime
+    - Network issues
+    - Configuration changes
+    - High user error rate (expired states, etc.)
+
+    **Manual Response**:
+    1. Check recent deployments
+    2. Review error distribution by type
+    3. Check OAuth server status
+    4. Review network connectivity
+    5. Check for expired PKCE states (>5 minutes)
+
+    **PromQL Query**:
+    ```promql
+    topk(10, sum by (event) (
+      rate(oauth_flows_total{status="failure"}[5m])
+    ))
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Sensitive Data Redaction
+
+All sensitive OAuth data is automatically redacted in logs:
+
+<Warning>
+  **Redacted Fields** (never logged in plaintext):
+  - `access_token`
+  - `refresh_token`
+  - `code_verifier`
+  - `client_secret`
+  - `authorization_code`
+</Warning>
+
+Example redacted log:
+```json
+{
+  "event": "token_refresh_success",
+  "access_token": "[REDACTED]",
+  "refresh_token": "[REDACTED]",
+  "serverUuid": "visible-server-id",
+  "msg": "Token successfully refreshed"
+}
+```
 
 ---
 

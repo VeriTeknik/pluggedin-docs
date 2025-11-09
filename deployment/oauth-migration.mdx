@@ -1,0 +1,682 @@
+---
+title: OAuth Observability Migration Guide
+description: Step-by-step guide to migrate to OAuth 2.1 with observability enhancements
+sidebarTitle: OAuth Migration
+---
+
+# OAuth Observability Migration Guide
+
+This guide walks through applying OAuth 2.1 security fixes and observability enhancements from [PR #106](https://github.com/VeriTeknik/pluggedin-app/pull/106).
+
+## Migration Overview
+
+<Card title="What's Being Migrated" icon="database">
+  - **2 Database Migrations**: Atomic token locking + PKCE audit trail
+  - **Observability Stack**: Structured logging + Prometheus metrics
+  - **Security Fixes**: Race condition prevention + PKCE replay protection
+  - **Zero Downtime**: All changes are backward compatible
+</Card>
+
+<Warning>
+  **Recommended Migration Window**: Off-peak hours (optional, but recommended for first deployment)
+
+  **Zero Downtime**: ✅ Yes - rolling deployment supported
+</Warning>
+
+## Pre-Migration Checklist
+
+<Steps>
+  <Step title="Backup Database">
+    Create a full database backup before applying migrations:
+
+    ```bash
+    # PostgreSQL backup
+    pg_dump -h $DB_HOST -U $DB_USER -d $DB_NAME \
+      -f backup_pre_oauth_migration_$(date +%Y%m%d_%H%M%S).sql
+
+    # Verify backup
+    ls -lh backup_pre_oauth_migration_*.sql
+    ```
+  </Step>
+
+  <Step title="Check Current Schema Version">
+    Verify current migration state:
+
+    ```bash
+    # List applied migrations
+    cd pluggedin-app
+    pnpm db:studio
+
+    # Or query directly
+    psql -h $DB_HOST -U $DB_USER -d $DB_NAME \
+      -c "SELECT * FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 5;"
+    ```
+  </Step>
+
+  <Step title="Verify Dependencies">
+    Ensure all required services are running:
+
+    ```bash
+    # Check PostgreSQL
+    psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c "SELECT version();"
+
+    # Check pluggedin-observability stack (optional but recommended)
+    cd /path/to/pluggedin-observability
+    docker-compose ps
+    # Should show: prometheus, loki, grafana, promtail all running
+    ```
+  </Step>
+
+  <Step title="Review Open OAuth Flows">
+    Check for in-progress OAuth flows:
+
+    ```bash
+    # Count active PKCE states
+    psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
+      "SELECT COUNT(*) as active_pkce_states FROM oauth_pkce_states WHERE expires_at > NOW();"
+
+    # Count active tokens
+    psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
+      "SELECT COUNT(*) as active_tokens FROM mcp_server_oauth_tokens;"
+    ```
+
+    **Note**: Migration does NOT affect active flows. They will continue normally.
+  </Step>
+</Steps>
+
+## Migration Steps
+
+### Step 1: Update Code
+
+<Tabs>
+  <Tab title="Production Deployment">
+    ```bash
+    # Pull latest code with OAuth fixes
+    cd /path/to/pluggedin-app
+    git fetch origin
+    git checkout main
+    git pull origin main
+
+    # Verify you have the migrations
+    ls -la drizzle/0074_atomic_refresh_token_marking.sql
+    ls -la drizzle/0075_pkce_state_audit_and_constraints.sql
+
+    # Install dependencies
+    pnpm install
+
+    # Build application
+    pnpm build
+    ```
+  </Tab>
+
+  <Tab title="Staging/Testing">
+    ```bash
+    # Test on staging first
+    cd /path/to/pluggedin-app-staging
+    git fetch origin
+    git checkout main
+    git pull origin main
+
+    pnpm install
+    pnpm build
+
+    # Run tests
+    pnpm test
+    ```
+  </Tab>
+</Tabs>
+
+### Step 2: Apply Database Migrations
+
+<Warning>
+  **Important**: Use Drizzle Kit commands, NOT direct SQL execution
+</Warning>
+
+```bash
+cd /path/to/pluggedin-app
+
+# Generate migration files (already done, but for reference)
+# pnpm db:generate
+
+# Apply migrations
+pnpm db:migrate
+
+# Expected output:
+# Applying migration: 0074_atomic_refresh_token_marking.sql
+# ✓ Migration 0074 applied successfully
+# Applying migration: 0075_pkce_state_audit_and_constraints.sql
+# ✓ Migration 0075 applied successfully
+```
+
+**Migrations Applied:**
+
+<Accordion title="0074: Atomic Refresh Token Marking">
+  **Purpose**: Fixes P0 race condition in refresh token reuse detection
+
+  **Changes**:
+  - Adds `refresh_token_locked_at` column to `mcp_server_oauth_tokens`
+  - Creates indexes for efficient lock queries
+  - Enables optimistic locking pattern
+
+  **SQL**:
+  ```sql
+  ALTER TABLE mcp_server_oauth_tokens
+  ADD COLUMN IF NOT EXISTS refresh_token_locked_at timestamp with time zone;
+
+  CREATE INDEX IF NOT EXISTS idx_oauth_tokens_server_refresh_status
+    ON mcp_server_oauth_tokens(server_uuid, refresh_token_used_at, refresh_token_locked_at);
+  ```
+
+  **Impact**: Zero downtime - existing tokens continue working
+</Accordion>
+
+<Accordion title="0075: PKCE State Audit and Constraints">
+  **Purpose**: Prevents PKCE state replay attacks
+
+  **Changes**:
+  - Creates `oauth_pkce_states_audit` table with 30-day retention
+  - Adds PostgreSQL trigger to auto-audit deleted states
+  - Tracks used states to prevent replay
+
+  **SQL**:
+  ```sql
+  CREATE TABLE IF NOT EXISTS oauth_pkce_states_audit (
+    state text PRIMARY KEY,
+    server_uuid uuid NOT NULL,
+    user_id text NOT NULL,
+    used_at timestamp with time zone NOT NULL DEFAULT NOW(),
+    expires_at timestamp with time zone NOT NULL,
+    audit_reason text NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_oauth_pkce_audit_expires
+    ON oauth_pkce_states_audit(expires_at);
+
+  CREATE OR REPLACE FUNCTION audit_pkce_state_deletion()
+  RETURNS TRIGGER AS $$
+  BEGIN
+    INSERT INTO oauth_pkce_states_audit (state, server_uuid, user_id, used_at, expires_at, audit_reason)
+    VALUES (OLD.state, OLD.server_uuid, OLD.user_id, NOW(), NOW() + INTERVAL '30 days', 'used')
+    ON CONFLICT (state) DO NOTHING;
+    RETURN OLD;
+  END;
+  $$ LANGUAGE plpgsql;
+
+  CREATE TRIGGER pkce_state_audit_trigger
+    BEFORE DELETE ON oauth_pkce_states
+    FOR EACH ROW
+    EXECUTE FUNCTION audit_pkce_state_deletion();
+  ```
+
+  **Impact**: Zero downtime - new security layer, no breaking changes
+</Accordion>
+
+### Step 3: Verify Migration Success
+
+```bash
+# Check migration status
+pnpm db:studio
+# Navigate to __drizzle_migrations table
+# Verify 0074 and 0075 are marked as completed
+
+# Verify new columns exist
+psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
+  "SELECT column_name, data_type FROM information_schema.columns
+   WHERE table_name = 'mcp_server_oauth_tokens'
+   AND column_name = 'refresh_token_locked_at';"
+
+# Verify audit table exists
+psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
+  "SELECT tablename FROM pg_tables WHERE tablename = 'oauth_pkce_states_audit';"
+
+# Verify trigger exists
+psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
+  "SELECT tgname FROM pg_trigger WHERE tgname = 'pkce_state_audit_trigger';"
+```
+
+### Step 4: Configure Environment Variables
+
+Add observability configuration to `.env`:
+
+```bash .env
+# Observability Configuration (required for metrics/logs)
+SERVICE_NAME=pluggedin-app
+APP_VERSION=2.14.0
+LOG_LEVEL=info  # trace, debug, info, warn, error
+
+# Optional: Custom log format
+# LOG_FORMAT=json  # json (production) or pretty (development)
+
+# Optional: Prometheus Push Gateway (if using)
+# PROMETHEUS_PUSH_GATEWAY=http://localhost:9091
+```
+
+### Step 5: Rolling Deployment
+
+<Tabs>
+  <Tab title="Docker Deployment">
+    ```bash
+    # Build new image
+    docker build -t pluggedin-app:oauth-migration .
+
+    # Rolling update (no downtime)
+    docker service update \
+      --image pluggedin-app:oauth-migration \
+      --update-parallelism 1 \
+      --update-delay 30s \
+      pluggedin-app
+
+    # Monitor deployment
+    docker service ps pluggedin-app
+    ```
+  </Tab>
+
+  <Tab title="Systemd Deployment">
+    ```bash
+    # Stop application
+    sudo systemctl stop pluggedin-app
+
+    # Update code (already done in Step 1)
+    # cd /opt/pluggedin-app && git pull
+
+    # Restart application
+    sudo systemctl start pluggedin-app
+
+    # Verify startup
+    sudo systemctl status pluggedin-app
+
+    # Check logs
+    sudo journalctl -u pluggedin-app -f
+    ```
+  </Tab>
+
+  <Tab title="PM2 Deployment">
+    ```bash
+    # Reload with zero downtime
+    pm2 reload pluggedin-app
+
+    # Or restart if reload not configured
+    pm2 restart pluggedin-app
+
+    # Monitor logs
+    pm2 logs pluggedin-app --lines 100
+    ```
+  </Tab>
+</Tabs>
+
+### Step 6: Verify Application Health
+
+<Steps>
+  <Step title="Check Application Startup">
+    ```bash
+    # Check logs for successful startup
+    # Docker
+    docker logs pluggedin-app --tail 50 | grep -i "oauth\|observability"
+
+    # Systemd
+    sudo journalctl -u pluggedin-app -n 50 | grep -i "oauth\|observability"
+
+    # PM2
+    pm2 logs pluggedin-app --lines 50 | grep -i "oauth\|observability"
+
+    # Expected logs:
+    # {"event":"pkce_cleanup_scheduler_initialized","intervalMinutes":15}
+    # {"event":"observability_initialized","metricsEnabled":true}
+    ```
+  </Step>
+
+  <Step title="Verify Metrics Endpoint">
+    ```bash
+    # Check Prometheus metrics
+    curl http://localhost:12005/metrics | grep oauth
+
+    # Expected output (sample):
+    # oauth_flows_total{provider="...",status="success"} 42
+    # oauth_token_refresh_total{status="success"} 128
+    # oauth_active_tokens 15
+    # oauth_active_pkce_states 3
+    ```
+  </Step>
+
+  <Step title="Test OAuth Flow">
+    ```bash
+    # Trigger a test OAuth flow via UI
+    # Navigate to: http://localhost:12005/mcp-servers
+    # Add a new OAuth-enabled MCP server
+    # Complete the OAuth flow
+
+    # Check structured logs
+    curl http://localhost:3100/loki/api/v1/query_range \
+      --data-urlencode 'query={service_name="pluggedin-app"} |= "oauth"' \
+      --data-urlencode "start=$(date -u -d '5 minutes ago' +%s)000000000" \
+      --data-urlencode "end=$(date -u +%s)000000000" | jq .
+    ```
+  </Step>
+
+  <Step title="Verify Security Features">
+    ```bash
+    # Check PKCE cleanup is running
+    psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
+      "SELECT COUNT(*) FROM oauth_pkce_states WHERE expires_at < NOW() - INTERVAL '10 minutes';"
+    # Should be 0 or very low (cleanup working)
+
+    # Check audit table is populating
+    psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
+      "SELECT COUNT(*) FROM oauth_pkce_states_audit;"
+    # Should increase over time as flows complete
+    ```
+  </Step>
+</Steps>
+
+## Post-Migration Tasks
+
+### 1. Set Up Grafana Dashboards
+
+```bash
+# Access Grafana
+open http://localhost:3000
+
+# Default credentials: admin/admin
+
+# Import OAuth dashboards
+# 1. Go to Dashboards → Import
+# 2. Upload dashboard JSON from pluggedin-docs/observability/
+# 3. Configure data sources:
+#    - Prometheus: http://prometheus:9090
+#    - Loki: http://loki:3100
+```
+
+### 2. Configure Alerts
+
+Add to Prometheus `alert.rules.yml`:
+
+```yaml
+groups:
+  - name: oauth_critical
+    interval: 30s
+    rules:
+      - alert: OAuthTokenReuseDetected
+        expr: increase(oauth_token_refresh_total{status="reuse_detected"}[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "OAuth token reuse attack detected"
+
+      - alert: OAuthCodeInjectionAttempt
+        expr: increase(oauth_code_injection_attempts_total[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "OAuth code injection attempt detected"
+```
+
+### 3. Update Promtail Configuration
+
+See [Update Promtail Config](#step-7-update-promtail-optional) below.
+
+### 4. Monitor for Issues
+
+Watch logs for 24-48 hours:
+
+```bash
+# Monitor error rate
+watch -n 10 'curl -s http://localhost:12005/metrics | grep oauth_flows_total'
+
+# Monitor Loki for errors
+# Run in Grafana Explore:
+{service_name="pluggedin-app"} | json | level >= 50 | event =~ "oauth_.*"
+```
+
+## Rollback Procedure
+
+<Warning>
+  Only needed if critical issues arise. Observability changes are additive and safe.
+</Warning>
+
+### Step 1: Stop Application
+
+```bash
+# Docker
+docker service scale pluggedin-app=0
+
+# Systemd
+sudo systemctl stop pluggedin-app
+
+# PM2
+pm2 stop pluggedin-app
+```
+
+### Step 2: Restore Database
+
+```bash
+# Restore from backup
+psql -h $DB_HOST -U $DB_USER -d $DB_NAME \
+  < backup_pre_oauth_migration_YYYYMMDD_HHMMSS.sql
+
+# Verify restoration
+psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
+  "SELECT COUNT(*) FROM mcp_server_oauth_tokens;"
+```
+
+### Step 3: Revert Code
+
+```bash
+cd /path/to/pluggedin-app
+
+# Find commit before migration
+git log --oneline -10
+
+# Revert to previous version
+git checkout <commit-hash-before-migration>
+
+# Rebuild
+pnpm install
+pnpm build
+```
+
+### Step 4: Restart Application
+
+```bash
+# Docker
+docker service scale pluggedin-app=1
+
+# Systemd
+sudo systemctl start pluggedin-app
+
+# PM2
+pm2 start pluggedin-app
+```
+
+### Step 5: Manual Migration Cleanup (if needed)
+
+If you need to manually remove migrations without full restore:
+
+```sql
+-- Remove audit table and trigger
+DROP TRIGGER IF EXISTS pkce_state_audit_trigger ON oauth_pkce_states;
+DROP FUNCTION IF EXISTS audit_pkce_state_deletion();
+DROP TABLE IF EXISTS oauth_pkce_states_audit;
+
+-- Remove lock column
+ALTER TABLE mcp_server_oauth_tokens DROP COLUMN IF EXISTS refresh_token_locked_at;
+
+-- Remove migration records
+DELETE FROM __drizzle_migrations WHERE name IN (
+  '0074_atomic_refresh_token_marking',
+  '0075_pkce_state_audit_and_constraints'
+);
+```
+
+<Warning>
+  Manual cleanup should only be done as a last resort. Prefer full database restore.
+</Warning>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Migration fails with 'column already exists'">
+    **Cause**: Migration was partially applied before
+
+    **Solution**:
+    ```bash
+    # Check current state
+    psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
+      "\d mcp_server_oauth_tokens"
+
+    # If column exists, mark migration as complete manually
+    psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
+      "INSERT INTO __drizzle_migrations (name, hash, created_at)
+       VALUES ('0074_atomic_refresh_token_marking', 'hash', NOW())
+       ON CONFLICT DO NOTHING;"
+    ```
+  </Accordion>
+
+  <Accordion title="Metrics endpoint returns 404">
+    **Cause**: Metrics route not exposed or build issue
+
+    **Solution**:
+    ```bash
+    # Verify metrics route exists
+    ls -la app/metrics/route.ts
+
+    # Rebuild application
+    pnpm build
+
+    # Check for build errors
+    pnpm build 2>&1 | grep -i error
+
+    # Verify route in running app
+    curl -v http://localhost:12005/metrics
+    ```
+  </Accordion>
+
+  <Accordion title="Logs not appearing in Loki">
+    **Cause**: Promtail not configured or log format issue
+
+    **Solution**:
+    ```bash
+    # Check log format (should be JSON in production)
+    docker logs pluggedin-app --tail 1
+
+    # Ensure NODE_ENV=production for JSON logs
+    echo $NODE_ENV
+
+    # Check Promtail is reading logs
+    docker logs promtail | grep pluggedin-app
+
+    # Test Loki API
+    curl http://localhost:3100/ready
+    ```
+  </Accordion>
+
+  <Accordion title="PKCE cleanup not running">
+    **Cause**: Environment check preventing scheduler
+
+    **Solution**:
+    ```bash
+    # Ensure NODE_ENV is NOT 'test'
+    echo $NODE_ENV
+
+    # Check logs for scheduler initialization
+    docker logs pluggedin-app | grep pkce_cleanup_scheduler_initialized
+
+    # Verify VITEST is not defined
+    echo $VITEST  # Should be empty
+    ```
+  </Accordion>
+
+  <Accordion title="High number of PKCE states not cleaned">
+    **Cause**: Grace period protecting recent states
+
+    **Solution**:
+    ```bash
+    # Check state ages
+    psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c \
+      "SELECT
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE expires_at > NOW()) as active,
+        COUNT(*) FILTER (WHERE expires_at < NOW() - INTERVAL '10 minutes') as should_clean
+       FROM oauth_pkce_states;"
+
+    # States should only be cleaned if expired >10 min ago
+    # This is expected behavior (grace period protection)
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Migration Validation Checklist
+
+After migration, verify all items:
+
+<Tabs>
+  <Tab title="Database">
+    - [ ] Migrations 0074 and 0075 applied successfully
+    - [ ] `refresh_token_locked_at` column exists
+    - [ ] `oauth_pkce_states_audit` table exists
+    - [ ] Audit trigger `pkce_state_audit_trigger` exists
+    - [ ] All existing tokens still valid
+    - [ ] No orphaned PKCE states
+  </Tab>
+
+  <Tab title="Application">
+    - [ ] Application starts without errors
+    - [ ] Metrics endpoint accessible at `/metrics`
+    - [ ] Structured JSON logs visible
+    - [ ] OAuth flows complete successfully
+    - [ ] Token refresh works correctly
+    - [ ] PKCE cleanup scheduler initialized
+  </Tab>
+
+  <Tab title="Observability">
+    - [ ] Prometheus scraping metrics
+    - [ ] Loki receiving logs
+    - [ ] Grafana dashboards displaying data
+    - [ ] Alerts configured and firing (test)
+    - [ ] No sensitive data in logs
+  </Tab>
+
+  <Tab title="Security">
+    - [ ] Token reuse detection working
+    - [ ] PKCE state integrity validation working
+    - [ ] Audit trail populating
+    - [ ] Security events logging correctly
+    - [ ] No false positive security alerts
+  </Tab>
+</Tabs>
+
+## Support
+
+<CardGroup cols={2}>
+  <Card title="Documentation" icon="book" href="/observability/overview">
+    Full observability documentation
+  </Card>
+
+  <Card title="OAuth Security" icon="shield-halved" href="/security/oauth-2.1">
+    OAuth 2.1 security implementation
+  </Card>
+
+  <Card title="Troubleshooting" icon="wrench" href="/troubleshooting">
+    General troubleshooting guide
+  </Card>
+
+  <Card title="GitHub Issues" icon="github" href="https://github.com/VeriTeknik/pluggedin-app/issues">
+    Report migration issues
+  </Card>
+</CardGroup>
+
+## Summary
+
+✅ **Migration Complete** when:
+- All database migrations applied
+- Application running with no errors
+- Metrics endpoint accessible
+- Logs flowing to Loki
+- OAuth flows working correctly
+- Grafana dashboards showing data
+
+🎉 **You now have:**
+- P0 security fixes for race conditions
+- PKCE replay attack prevention
+- Comprehensive observability stack
+- Real-time security monitoring
+- Production-ready OAuth 2.1 implementation
