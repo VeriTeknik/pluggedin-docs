@@ -1,0 +1,471 @@
+---
+title: Health & Application Metrics
+description: Health check endpoints and Node.js application metrics for Plugged.in
+sidebarTitle: Health Checks
+---
+
+# Health Checks & Application Metrics
+
+Plugged.in exposes health check endpoints for load balancers and monitoring systems, plus comprehensive Node.js runtime metrics for performance tracking.
+
+## Health Check Endpoint
+
+### GET /api/health
+
+Returns the health status of the application with database connectivity check.
+
+```bash
+# Basic health check
+curl http://localhost:12005/api/health
+
+# Example response
+{
+  "status": "healthy",
+  "timestamp": "2025-11-10T18:00:00.000Z",
+  "checks": {
+    "service": true,
+    "database": true
+  }
+}
+```
+
+### Response Format
+
+<ResponseField name="status" type="string" required>
+  Overall health status: `healthy` or `unhealthy`
+
+  - **200 OK**: Application is healthy
+  - **503 Service Unavailable**: Application has issues
+</ResponseField>
+
+<ResponseField name="timestamp" type="string" required>
+  ISO 8601 timestamp of the health check
+</ResponseField>
+
+<ResponseField name="checks" type="object" required>
+  Individual health check results
+
+  <Expandable title="checks properties">
+    <ResponseField name="service" type="boolean">
+      Service availability (always `true` if responding)
+    </ResponseField>
+
+    <ResponseField name="database" type="boolean">
+      PostgreSQL database connectivity
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="uptime" type="number">
+  **Whitelisted IPs only**: Process uptime in seconds
+</ResponseField>
+
+<ResponseField name="version" type="string">
+  **Whitelisted IPs only**: Application version (from APP_VERSION env var)
+</ResponseField>
+
+<ResponseField name="environment" type="string">
+  **Whitelisted IPs only**: Runtime environment (development/production)
+</ResponseField>
+
+### Security & IP Restrictions
+
+<Warning>
+  Detailed health information (version, environment, uptime) is **only visible to whitelisted monitoring IPs** to prevent information disclosure.
+</Warning>
+
+Health endpoint uses the same `METRICS_ALLOWED_IPS` configuration as the metrics endpoint:
+
+```bash
+# .env configuration
+METRICS_ALLOWED_IPS="127.0.0.1,::1,172.17.0.0/16,172.18.0.0/16,185.96.168.253/32"
+```
+
+**Allowed IPs see**:
+- Full health status with version, environment, uptime
+
+**Non-whitelisted IPs see**:
+- Basic health status only (status, timestamp, checks)
+
+### HEAD /api/health
+
+Lightweight health check that returns only status code (no body).
+
+```bash
+# HEAD request for load balancers
+curl -I http://localhost:12005/api/health
+
+# Returns:
+# 200 OK - healthy
+# 503 Service Unavailable - unhealthy
+```
+
+Ideal for:
+- Load balancer health checks
+- Kubernetes liveness/readiness probes
+- High-frequency monitoring
+
+## Application Metrics Endpoint
+
+### GET /api/metrics
+
+Exposes Node.js runtime and HTTP metrics in Prometheus format.
+
+```bash
+# Access metrics (requires IP whitelist)
+curl http://localhost:12005/api/metrics
+
+# Filter specific metrics
+curl http://localhost:12005/api/metrics | grep pluggedin_http
+```
+
+<Warning>
+  The `/api/metrics` endpoint is **IP-restricted** and should only be accessible to your Prometheus/Grafana server.
+</Warning>
+
+### IP Whitelist Configuration
+
+Configure allowed IPs in `.env`:
+
+```bash
+# Development (permissive for Docker)
+METRICS_ALLOWED_IPS="127.0.0.1,::1,172.17.0.0/16,172.18.0.0/16"
+
+# Production (restrictive)
+METRICS_ALLOWED_IPS="127.0.0.1,::1,172.17.0.0/16,172.18.0.0/16,185.96.168.253/32"
+```
+
+**Supported formats**:
+- IPv4: `127.0.0.1`, `10.0.0.1`
+- IPv6: `::1`, `fe80::1`
+- CIDR: `172.17.0.0/16`, `10.0.0.0/8`
+
+### Node.js Runtime Metrics
+
+<AccordionGroup>
+  <Accordion title="Process Metrics">
+    <ResponseField name="pluggedin_process_cpu_user_seconds_total" type="Counter">
+      Total user CPU time consumed by the process
+    </ResponseField>
+
+    <ResponseField name="pluggedin_process_cpu_system_seconds_total" type="Counter">
+      Total system CPU time consumed by the process
+    </ResponseField>
+
+    <ResponseField name="pluggedin_process_start_time_seconds" type="Gauge">
+      Process start time in seconds since Unix epoch
+    </ResponseField>
+
+    <ResponseField name="pluggedin_process_resident_memory_bytes" type="Gauge">
+      Resident memory size in bytes
+    </ResponseField>
+  </Accordion>
+
+  <Accordion title="Node.js Heap Metrics">
+    <ResponseField name="pluggedin_nodejs_heap_size_total_bytes" type="Gauge">
+      Total heap size allocated for the process
+    </ResponseField>
+
+    <ResponseField name="pluggedin_nodejs_heap_size_used_bytes" type="Gauge">
+      Currently used heap size
+
+      ```promql
+      # Memory usage percentage
+      (pluggedin_nodejs_heap_size_used_bytes / pluggedin_nodejs_heap_size_total_bytes) * 100
+      ```
+    </ResponseField>
+
+    <ResponseField name="pluggedin_nodejs_external_memory_bytes" type="Gauge">
+      Memory used by C++ objects bound to JavaScript objects
+    </ResponseField>
+  </Accordion>
+
+  <Accordion title="Event Loop Metrics">
+    <ResponseField name="pluggedin_nodejs_eventloop_lag_seconds" type="Gauge">
+      Event loop lag in seconds (sampled every 10ms)
+
+      <Warning>
+        High event loop lag (> 0.1s) indicates the process is blocked or under heavy load
+      </Warning>
+
+      ```promql
+      # Alert when event loop lag > 100ms
+      pluggedin_nodejs_eventloop_lag_seconds > 0.1
+      ```
+    </ResponseField>
+
+    <ResponseField name="pluggedin_nodejs_eventloop_lag_p50_seconds" type="Gauge">
+      50th percentile event loop lag
+    </ResponseField>
+
+    <ResponseField name="pluggedin_nodejs_eventloop_lag_p90_seconds" type="Gauge">
+      90th percentile event loop lag
+    </ResponseField>
+
+    <ResponseField name="pluggedin_nodejs_eventloop_lag_p99_seconds" type="Gauge">
+      99th percentile event loop lag
+    </ResponseField>
+  </Accordion>
+
+  <Accordion title="Garbage Collection Metrics">
+    <ResponseField name="pluggedin_nodejs_gc_duration_seconds" type="Histogram">
+      Garbage collection duration by GC type
+
+      **Labels**: `kind` (minor/major/incremental/etc.)
+
+      **Buckets**: 0.001s, 0.01s, 0.1s, 1s, 2s, 5s
+
+      ```promql
+      # GC duration p95 by type
+      histogram_quantile(0.95,
+        rate(pluggedin_nodejs_gc_duration_seconds_bucket[5m])
+      )
+      ```
+    </ResponseField>
+  </Accordion>
+
+  <Accordion title="Active Resources">
+    <ResponseField name="pluggedin_nodejs_active_handles" type="Gauge">
+      Number of active handles (file descriptors, sockets, etc.)
+    </ResponseField>
+
+    <ResponseField name="pluggedin_nodejs_active_requests" type="Gauge">
+      Number of active asynchronous requests
+    </ResponseField>
+  </Accordion>
+</AccordionGroup>
+
+### HTTP Metrics
+
+<ResponseField name="pluggedin_http_requests_total" type="Counter">
+  Total HTTP requests
+
+  **Labels**: `method`, `path`, `status_code`
+
+  ```promql
+  # Request rate by endpoint
+  rate(pluggedin_http_requests_total[5m])
+
+  # Requests by status code
+  sum by (status_code) (pluggedin_http_requests_total)
+  ```
+</ResponseField>
+
+<ResponseField name="pluggedin_http_request_duration_seconds" type="Histogram">
+  HTTP request duration in seconds
+
+  **Labels**: `method`, `path`, `status_code`
+
+  **Buckets**: 0.01s, 0.05s, 0.1s, 0.5s, 1s, 2s, 5s, 10s
+
+  ```promql
+  # p50, p95, p99 latency
+  histogram_quantile(0.50, rate(pluggedin_http_request_duration_seconds_bucket[5m]))
+  histogram_quantile(0.95, rate(pluggedin_http_request_duration_seconds_bucket[5m]))
+  histogram_quantile(0.99, rate(pluggedin_http_request_duration_seconds_bucket[5m]))
+
+  # Average latency by endpoint
+  sum by (path) (rate(pluggedin_http_request_duration_seconds_sum[5m]))
+    / sum by (path) (rate(pluggedin_http_request_duration_seconds_count[5m]))
+  ```
+</ResponseField>
+
+<ResponseField name="pluggedin_http_errors_total" type="Counter">
+  Total HTTP errors (4xx + 5xx responses)
+
+  **Labels**: `method`, `path`, `error_type`
+
+  **Error types**: `client_error` (4xx), `server_error` (5xx), `rate_limit`, `unauthorized`
+
+  ```promql
+  # Error rate
+  rate(pluggedin_http_errors_total[5m])
+
+  # Error rate percentage
+  (rate(pluggedin_http_errors_total[5m]) / rate(pluggedin_http_requests_total[5m])) * 100
+  ```
+</ResponseField>
+
+## Prometheus Configuration
+
+Add to your `prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: 'pluggedin-app'
+    metrics_path: '/api/metrics'
+    scheme: 'https'  # or 'http' for local
+    static_configs:
+      - targets: ['plugged.in']  # or 'localhost:12005'
+        labels:
+          service: 'pluggedin-app'
+          environment: 'production'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+```
+
+## Alert Rules
+
+### Health Check Alerts
+
+Add to `prometheus/rules/pluggedin-app-alerts.yml`:
+
+```yaml
+groups:
+  - name: pluggedin_app_health
+    interval: 30s
+    rules:
+      - alert: PluggedinAppDown
+        expr: up{job="pluggedin-app"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: pluggedin-app
+          category: availability
+        annotations:
+          summary: "Plugged.in application is down"
+          description: "No metrics are being scraped for 2+ minutes"
+
+      - alert: PluggedinAppDatabaseDown
+        expr: pluggedin_http_errors_total{path="/api/health", status_code="503"} > 0
+        for: 3m
+        labels:
+          severity: critical
+          service: pluggedin-app
+          category: database
+        annotations:
+          summary: "Database connection lost"
+          description: "Health check returning 503 due to database issues"
+```
+
+### Performance Alerts
+
+```yaml
+  - name: pluggedin_app_performance
+    interval: 30s
+    rules:
+      - alert: HighMemoryUsage
+        expr: (pluggedin_nodejs_heap_size_used_bytes / pluggedin_nodejs_heap_size_total_bytes) > 0.80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage (>80%)"
+
+      - alert: HighEventLoopLag
+        expr: pluggedin_nodejs_eventloop_lag_seconds > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High event loop lag (>100ms)"
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(pluggedin_http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P95 latency > 2s"
+```
+
+## Grafana Dashboard
+
+### Query Examples
+
+```promql
+# Application uptime
+time() - pluggedin_process_start_time_seconds
+
+# Memory usage percentage
+(pluggedin_nodejs_heap_size_used_bytes / pluggedin_nodejs_heap_size_total_bytes) * 100
+
+# Request rate (requests/sec)
+rate(pluggedin_http_requests_total[5m])
+
+# Error rate percentage
+(rate(pluggedin_http_errors_total[5m]) / rate(pluggedin_http_requests_total[5m])) * 100
+
+# P95 latency by endpoint
+histogram_quantile(0.95,
+  sum by (path, le) (rate(pluggedin_http_request_duration_seconds_bucket[5m]))
+)
+
+# Active connections trend
+rate(pluggedin_nodejs_active_handles[5m])
+```
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Health check returns 503">
+    1. Check database connectivity: `psql $DATABASE_URL -c "SELECT 1"`
+    2. Review application logs for database errors
+    3. Verify database server is running
+    4. Check connection pool settings
+  </Accordion>
+
+  <Accordion title="Metrics endpoint returns 403 Forbidden">
+    1. Verify your IP is in `METRICS_ALLOWED_IPS`
+    2. Check IP format (IPv4, IPv6, or CIDR)
+    3. For CIDR, ensure proper notation (e.g., `172.17.0.0/16`)
+    4. Test from allowed IP: `curl -H "X-Forwarded-For: 127.0.0.1" http://localhost:12005/api/metrics`
+  </Accordion>
+
+  <Accordion title="High event loop lag">
+    1. Check for blocking synchronous operations
+    2. Review CPU usage: `pluggedin_process_cpu_user_seconds_total`
+    3. Identify long-running functions
+    4. Consider offloading heavy work to background workers
+  </Accordion>
+
+  <Accordion title="Memory usage growing over time">
+    1. Check for memory leaks with heap snapshots
+    2. Review `pluggedin_nodejs_heap_size_used_bytes` trend
+    3. Check GC metrics: `pluggedin_nodejs_gc_duration_seconds`
+    4. Consider increasing heap size or implementing memory limits
+  </Accordion>
+</AccordionGroup>
+
+## Best Practices
+
+<Card title="Health Check Frequency" icon="clock">
+  **Load Balancers**: Poll every 10-30 seconds using HEAD request
+
+  **Monitoring Systems**: Poll every 30-60 seconds using GET request
+
+  **Avoid**: Polling more frequently than 10 seconds (unnecessary load)
+</Card>
+
+<Card title="IP Whitelist Security" icon="shield">
+  **Production**: Only whitelist your specific monitoring server IPs
+
+  **Never**: Use `0.0.0.0/0` or overly broad CIDR ranges
+
+  **Review**: Audit whitelist quarterly, remove unused IPs
+</Card>
+
+<Card title="Metrics Retention" icon="database">
+  **Prometheus**: 15-30 days for detailed metrics
+
+  **Long-term**: Export to time-series database for historical analysis
+
+  **Aggregation**: Use recording rules for frequently-queried metrics
+</Card>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="OAuth Metrics" icon="shield-halved" href="/observability/metrics">
+    OAuth 2.1 specific metrics and queries
+  </Card>
+  <Card title="Grafana Dashboards" icon="chart-mixed" href="/observability/dashboards">
+    Build custom dashboards and alerts
+  </Card>
+  <Card title="Log Queries" icon="magnifying-glass" href="/observability/logs">
+    Query application logs with LogQL
+  </Card>
+  <Card title="Alert Rules" icon="bell" href="/deployment/monitoring">
+    Production-ready alert configuration
+  </Card>
+</CardGroup>

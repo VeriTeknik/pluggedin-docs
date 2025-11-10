@@ -108,6 +108,7 @@
       "group": "Observability",
       "pages": [
         "observability/overview",
+        "observability/health",
         "observability/logs",
         "observability/metrics",
         "observability/dashboards"
