@@ -182,6 +182,12 @@ For multi-arch builds, you need Docker Desktop or Docker with buildx support. Th
     - Health checks enabled
     - Port 5432 exposed
   </Card>
+  <Card title="Redis Container" icon="database">
+    - Redis 7-alpine
+    - Distributed rate limiting
+    - AOF persistence enabled
+    - Port 6379 exposed
+  </Card>
   <Card title="Migrator Container" icon="rocket">
     - One-time migration runner
     - Optimized size (288 MB)
@@ -190,6 +196,7 @@ For multi-arch builds, you need Docker Desktop or Docker with buildx support. Th
   </Card>
   <Card title="Persistent Volumes" icon="hard-drive">
     - Database data
+    - Redis data (AOF)
     - User uploads
     - Application logs
     - MCP package cache
@@ -199,11 +206,13 @@ For multi-arch builds, you need Docker Desktop or Docker with buildx support. Th
 ### What's Included
 
 - ✅ PostgreSQL 18 (latest stable) with automatic migrations
+- ✅ Redis 7 for distributed rate limiting and caching
 - ✅ Next.js 15 web application with optimized production build
-- ✅ Persistent volumes for database, uploads, logs, and MCP packages
+- ✅ Persistent volumes for database, Redis, uploads, logs, and MCP packages
 - ✅ Health checks and automatic restarts
 - ✅ Migrator container (288 MB) for database setup
 - ✅ Docker-optimized MCP isolation (no sandboxing overhead)
+- ✅ OAuth 2.1 support with proper redirect configuration
 
 ## Production Dockerfile
 
@@ -308,6 +317,8 @@ services:
       - NODE_ENV=production
       - DATABASE_URL=postgresql://pluggedin:pluggedin_secure_password@pluggedin-postgres:5432/pluggedin
       - DATABASE_SSL=false
+      - NEXTAUTH_URL=http://localhost:12005
+      - REDIS_URL=redis://pluggedin-redis:6379
       - MCP_ISOLATION_TYPE=none
       - MCP_ISOLATION_FALLBACK=firejail
       - MCP_ENABLE_NETWORK_ISOLATION=false
@@ -316,6 +327,8 @@ services:
       - MCP_UV_CACHE_DIR=/app/.cache/mcp-packages/uv-cache
     depends_on:
       pluggedin-postgres:
+        condition: service_healthy
+      pluggedin-redis:
         condition: service_healthy
 
   pluggedin-postgres:
@@ -334,6 +347,21 @@ services:
       test: ["CMD-SHELL", "pg_isready -U pluggedin -d pluggedin"]
       interval: 5s
       timeout: 5s
+      retries: 5
+
+  pluggedin-redis:
+    container_name: pluggedin-redis
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - '6379:6379'
+    volumes:
+      - pluggedin-redis:/data
+    command: redis-server --appendonly yes --appendfsync everysec
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
       retries: 5
 
   drizzle-migrate:
@@ -366,6 +394,8 @@ services:
 
 volumes:
   pluggedin-postgres:
+    driver: local
+  pluggedin-redis:
     driver: local
   mcp-cache:
     driver: local
@@ -492,7 +522,7 @@ DB_NAME=pluggedin_prod
 NEXTAUTH_URL=https://your-domain.com
 NEXTAUTH_SECRET=generate-with-openssl-rand-base64-32
 
-# Redis
+# Redis (for distributed rate limiting)
 REDIS_URL=redis://redis:6379
 
 # Application
@@ -523,6 +553,23 @@ EMAIL_SERVER_USER=your-email
 EMAIL_SERVER_PASSWORD=your-password
 EMAIL_FROM=noreply@your-domain.com
 ```
+
+<Info>
+**Redis and Edge Runtime Behavior**
+
+The rate limiter automatically detects the runtime environment:
+- **Node.js Runtime** (API routes, server actions): Uses Redis with `ioredis` for distributed rate limiting
+- **Edge Runtime** (middleware, edge functions): Falls back to in-memory rate limiting as `ioredis` requires Node.js APIs
+
+This is **normal behavior** and not an error. You may see logs like:
+```
+[RateLimit] Redis connected successfully            # ✅ Node.js runtime
+[RateLimit] Cannot load ioredis (likely Edge Runtime limitation...)  # ℹ️ Edge Runtime (expected)
+[RateLimit] Falling back to in-memory rate limiting for this context
+```
+
+For production multi-instance deployments, ensure `REDIS_URL` is configured to enable distributed rate limiting for Node.js runtime routes.
+</Info>
 
 ## Building and Running
 
