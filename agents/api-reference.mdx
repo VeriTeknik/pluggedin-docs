@@ -1,0 +1,585 @@
+---
+title: API Reference
+description: Complete REST API documentation for PAP agent management
+---
+
+# PAP Agents API Reference
+
+This document provides comprehensive API documentation for creating and managing PAP agents.
+
+## Base URL
+
+```
+https://plugged.in/api/agents
+```
+
+## Authentication
+
+All endpoints require API key authentication via the `Authorization` header:
+
+```bash
+Authorization: Bearer YOUR_API_KEY
+```
+
+<Info>
+**API Keys**: Generate API keys from your Plugged.in project settings. Keys are scoped to profiles within projects.
+</Info>
+
+---
+
+## Endpoints
+
+### List Agents
+
+Retrieve all agents for the authenticated user's active profile.
+
+<CodeGroup>
+```bash cURL
+curl https://plugged.in/api/agents \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/agents', {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY'
+  }
+});
+const agents = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://plugged.in/api/agents',
+    headers={'Authorization': 'Bearer YOUR_API_KEY'}
+)
+agents = response.json()
+```
+</CodeGroup>
+
+#### Response
+
+```json
+[
+  {
+    "uuid": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "my-agent",
+    "dns_name": "my-agent.is.plugged.in",
+    "state": "ACTIVE",
+    "kubernetes_namespace": "agents",
+    "kubernetes_deployment": "my-agent",
+    "created_at": "2025-11-13T08:00:00Z",
+    "provisioned_at": "2025-11-13T08:00:15Z",
+    "activated_at": "2025-11-13T08:00:45Z",
+    "terminated_at": null,
+    "last_heartbeat_at": "2025-11-13T08:05:30Z",
+    "metadata": {
+      "description": "My autonomous agent",
+      "image": "nginxinc/nginx-unprivileged:alpine",
+      "resources": {
+        "cpu_request": "100m",
+        "memory_request": "256Mi",
+        "cpu_limit": "1000m",
+        "memory_limit": "1Gi"
+      }
+    }
+  }
+]
+```
+
+#### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `uuid` | UUID | Unique agent identifier |
+| `name` | string | DNS-safe agent name |
+| `dns_name` | string | Full DNS hostname (`{name}.is.plugged.in`) |
+| `state` | enum | Current lifecycle state (see [Lifecycle](/agents/lifecycle)) |
+| `kubernetes_namespace` | string | Kubernetes namespace (typically "agents") |
+| `kubernetes_deployment` | string | Deployment name in Kubernetes |
+| `created_at` | timestamp | When agent was created |
+| `provisioned_at` | timestamp | When Kubernetes resources were deployed |
+| `activated_at` | timestamp | When agent sent first heartbeat |
+| `terminated_at` | timestamp | When agent was terminated (null if active) |
+| `last_heartbeat_at` | timestamp | Last heartbeat received (null if no heartbeats yet) |
+| `metadata` | object | Agent configuration and metadata |
+
+---
+
+### Create Agent
+
+Deploy a new PAP agent to Kubernetes infrastructure.
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://plugged.in/api/agents \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-agent",
+    "description": "My autonomous agent",
+    "resources": {
+      "cpu_request": "100m",
+      "memory_request": "256Mi",
+      "cpu_limit": "1000m",
+      "memory_limit": "1Gi"
+    }
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/agents', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    name: 'my-agent',
+    description: 'My autonomous agent',
+    resources: {
+      cpu_request: '100m',
+      memory_request: '256Mi',
+      cpu_limit: '1000m',
+      memory_limit: '1Gi'
+    }
+  })
+});
+const result = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://plugged.in/api/agents',
+    headers={
+        'Authorization': 'Bearer YOUR_API_KEY',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'name': 'my-agent',
+        'description': 'My autonomous agent',
+        'resources': {
+            'cpu_request': '100m',
+            'memory_request': '256Mi',
+            'cpu_limit': '1000m',
+            'memory_limit': '1Gi'
+        }
+    }
+)
+result = response.json()
+```
+</CodeGroup>
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | **Yes** | DNS-safe agent name (lowercase, alphanumeric, hyphens) |
+| `description` | string | No | Human-readable description |
+| `image` | string | No | Container image (default: `nginxinc/nginx-unprivileged:alpine`) |
+| `resources` | object | No | Resource requests and limits |
+| `resources.cpu_request` | string | No | CPU request (e.g., "100m", default: "100m") |
+| `resources.memory_request` | string | No | Memory request (e.g., "256Mi", default: "256Mi") |
+| `resources.cpu_limit` | string | No | CPU limit (e.g., "1000m", default: "1000m") |
+| `resources.memory_limit` | string | No | Memory limit (e.g., "1Gi", default: "1Gi") |
+
+<Warning>
+**DNS-Safe Names**: Agent names must match the pattern `^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`. Invalid names will return HTTP 400.
+</Warning>
+
+#### Response (Success)
+
+```json
+{
+  "agent": {
+    "uuid": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "my-agent",
+    "dns_name": "my-agent.is.plugged.in",
+    "state": "NEW",
+    "kubernetes_namespace": "agents",
+    "kubernetes_deployment": "my-agent",
+    "created_at": "2025-11-13T08:00:00Z",
+    "provisioned_at": null,
+    "activated_at": null,
+    "terminated_at": null,
+    "last_heartbeat_at": null,
+    "metadata": {
+      "description": "My autonomous agent",
+      "resources": {
+        "cpu_request": "100m",
+        "memory_request": "256Mi",
+        "cpu_limit": "1000m",
+        "memory_limit": "1Gi"
+      }
+    }
+  },
+  "deployment": {
+    "success": true,
+    "message": "Agent my-agent deployed successfully",
+    "deploymentName": "my-agent"
+  }
+}
+```
+
+#### Error Responses
+
+| Status | Error | Description |
+|--------|-------|-------------|
+| 400 | `Name is required` | Missing `name` field |
+| 400 | `Name must be DNS-safe: lowercase alphanumeric and hyphens only` | Invalid name format |
+| 401 | `Unauthorized` | Missing or invalid API key |
+| 409 | `Agent with this name already exists` | Duplicate agent name in profile |
+| 500 | `Failed to create agent` | Internal server error |
+
+---
+
+### Get Agent Details
+
+Retrieve comprehensive information about a specific agent, including recent heartbeats, metrics, and lifecycle events.
+
+<CodeGroup>
+```bash cURL
+curl https://plugged.in/api/agents/AGENT_UUID \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/agents/AGENT_UUID', {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY'
+  }
+});
+const details = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    f'https://plugged.in/api/agents/{agent_uuid}',
+    headers={'Authorization': 'Bearer YOUR_API_KEY'}
+)
+details = response.json()
+```
+</CodeGroup>
+
+#### Response
+
+```json
+{
+  "agent": {
+    "uuid": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "my-agent",
+    "dns_name": "my-agent.is.plugged.in",
+    "state": "ACTIVE",
+    "created_at": "2025-11-13T08:00:00Z",
+    "last_heartbeat_at": "2025-11-13T08:05:30Z",
+    "metadata": {...}
+  },
+  "recentHeartbeats": [
+    {
+      "id": "1001",
+      "agent_uuid": "123e4567-e89b-12d3-a456-426614174000",
+      "mode": "IDLE",
+      "uptime_seconds": 330,
+      "timestamp": "2025-11-13T08:05:30Z"
+    }
+  ],
+  "recentMetrics": [
+    {
+      "id": "2001",
+      "agent_uuid": "123e4567-e89b-12d3-a456-426614174000",
+      "cpu_percent": 12,
+      "memory_mb": 128,
+      "requests_handled": 45,
+      "custom_metrics": {},
+      "timestamp": "2025-11-13T08:05:00Z"
+    }
+  ],
+  "lifecycleEvents": [
+    {
+      "id": "3001",
+      "agent_uuid": "123e4567-e89b-12d3-a456-426614174000",
+      "event_type": "ACTIVATED",
+      "from_state": "PROVISIONED",
+      "to_state": "ACTIVE",
+      "metadata": {
+        "triggered_by": "system"
+      },
+      "timestamp": "2025-11-13T08:00:45Z"
+    }
+  ],
+  "kubernetesStatus": {
+    "ready": true,
+    "replicas": 1,
+    "readyReplicas": 1,
+    "unavailableReplicas": 0,
+    "conditions": [
+      {
+        "type": "Available",
+        "status": "True",
+        "reason": "MinimumReplicasAvailable",
+        "message": "Deployment has minimum availability."
+      }
+    ]
+  }
+}
+```
+
+#### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `agent` | object | Core agent metadata (same as list response) |
+| `recentHeartbeats` | array | Last 10 heartbeats (ordered newest first) |
+| `recentMetrics` | array | Last 10 metric reports (ordered newest first) |
+| `lifecycleEvents` | array | Complete lifecycle event history (ordered newest first) |
+| `kubernetesStatus` | object | Real-time Kubernetes deployment status (null if not deployed) |
+
+#### Error Responses
+
+| Status | Error | Description |
+|--------|-------|-------------|
+| 401 | `Unauthorized` | Missing or invalid API key |
+| 404 | `Agent not found` | Agent doesn't exist or doesn't belong to profile |
+| 500 | `Failed to fetch agent` | Internal server error |
+
+---
+
+### Delete Agent
+
+Terminate and delete an agent, removing all Kubernetes resources.
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE https://plugged.in/api/agents/AGENT_UUID \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/agents/AGENT_UUID', {
+  method: 'DELETE',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY'
+  }
+});
+const result = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.delete(
+    f'https://plugged.in/api/agents/{agent_uuid}',
+    headers={'Authorization': 'Bearer YOUR_API_KEY'}
+)
+result = response.json()
+```
+</CodeGroup>
+
+#### Response (Success)
+
+```json
+{
+  "message": "Agent terminated successfully",
+  "kubernetes": {
+    "success": true,
+    "message": "Agent my-agent deleted successfully"
+  }
+}
+```
+
+<Info>
+**State Transition**: User-initiated deletion transitions agent to **TERMINATED** state. Only the Station (control plane) can issue **KILLED** state.
+</Info>
+
+#### Cleanup Operations
+
+The DELETE operation removes:
+- Kubernetes Deployment
+- Kubernetes Service
+- Kubernetes Ingress
+- TLS Secret (Let's Encrypt certificate)
+
+The agent record remains in database with `state=TERMINATED` for audit purposes.
+
+#### Error Responses
+
+| Status | Error | Description |
+|--------|-------|-------------|
+| 401 | `Unauthorized` | Missing or invalid API key |
+| 404 | `Agent not found` | Agent doesn't exist or doesn't belong to profile |
+| 500 | `Failed to delete agent` | Internal server error |
+
+---
+
+## Common Patterns
+
+### Create and Wait for Activation
+
+```bash
+#!/bin/bash
+
+# Create agent
+RESPONSE=$(curl -s -X POST https://plugged.in/api/agents \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "test-agent"}')
+
+AGENT_UUID=$(echo $RESPONSE | jq -r '.agent.uuid')
+echo "Created agent: $AGENT_UUID"
+
+# Poll until ACTIVE
+while true; do
+  STATE=$(curl -s https://plugged.in/api/agents/$AGENT_UUID \
+    -H "Authorization: Bearer $API_KEY" \
+    | jq -r '.agent.state')
+
+  echo "Current state: $STATE"
+
+  if [ "$STATE" = "ACTIVE" ]; then
+    echo "Agent is now ACTIVE!"
+    break
+  fi
+
+  sleep 5
+done
+```
+
+### List Healthy Agents
+
+```javascript
+// Fetch all agents and filter by state
+const response = await fetch('https://plugged.in/api/agents', {
+  headers: { 'Authorization': `Bearer ${API_KEY}` }
+});
+
+const agents = await response.json();
+
+const healthy = agents.filter(agent =>
+  agent.state === 'ACTIVE' &&
+  agent.last_heartbeat_at &&
+  (Date.now() - new Date(agent.last_heartbeat_at) < 60000) // < 1 minute ago
+);
+
+console.log(`${healthy.length} healthy agents`);
+```
+
+### Bulk Termination
+
+```python
+import requests
+
+# Get all agents
+response = requests.get(
+    'https://plugged.in/api/agents',
+    headers={'Authorization': f'Bearer {API_KEY}'}
+)
+agents = response.json()
+
+# Filter agents to terminate (e.g., by name pattern)
+to_terminate = [a for a in agents if a['name'].startswith('test-')]
+
+# Terminate each
+for agent in to_terminate:
+    response = requests.delete(
+        f'https://plugged.in/api/agents/{agent["uuid"]}',
+        headers={'Authorization': f'Bearer {API_KEY}'}
+    )
+    print(f"Terminated {agent['name']}: {response.json()}")
+```
+
+---
+
+## Rate Limits
+
+API endpoints are subject to rate limits to ensure fair usage:
+
+| Tier | Requests per Minute | Burst |
+|------|---------------------|-------|
+| Free | 60 | 10 |
+| Pro | 300 | 50 |
+| Enterprise | 1000 | 100 |
+
+Rate limit headers:
+```
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 45
+X-RateLimit-Reset: 1699999999
+```
+
+<Warning>
+**429 Too Many Requests**: If you exceed rate limits, wait for the reset time indicated in `X-RateLimit-Reset` header.
+</Warning>
+
+---
+
+## Webhook Events (Coming Soon)
+
+Subscribe to agent lifecycle events via webhooks:
+
+```json
+{
+  "event": "agent.activated",
+  "agent_uuid": "...",
+  "agent_name": "my-agent",
+  "timestamp": "2025-11-13T08:00:45Z",
+  "data": {
+    "from_state": "PROVISIONED",
+    "to_state": "ACTIVE"
+  }
+}
+```
+
+**Available Events:**
+- `agent.created`
+- `agent.provisioned`
+- `agent.activated`
+- `agent.draining`
+- `agent.terminated`
+- `agent.killed`
+- `agent.unhealthy`
+
+---
+
+## SDK Support
+
+Official SDKs for popular languages (coming soon):
+
+<CardGroup cols={3}>
+  <Card title="TypeScript/Node.js" icon="js">
+    ```bash
+    npm install @pluggedin/agents-sdk
+    ```
+  </Card>
+
+  <Card title="Python" icon="python">
+    ```bash
+    pip install pluggedin-agents
+    ```
+  </Card>
+
+  <Card title="Go" icon="golang">
+    ```bash
+    go get github.com/pluggedin/agents-go
+    ```
+  </Card>
+</CardGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Lifecycle Management" icon="rotate" href="/agents/lifecycle">
+    Understand agent states and transitions
+  </Card>
+
+  <Card title="Monitoring Guide" icon="chart-line" href="/agents/monitoring">
+    Set up observability for your agents
+  </Card>
+</CardGroup>

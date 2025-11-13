@@ -1,0 +1,668 @@
+---
+title: Monitoring & Observability
+description: Comprehensive guide to monitoring PAP agents with heartbeats, metrics, logs, and tracing
+---
+
+# Monitoring & Observability
+
+Effective monitoring is crucial for maintaining healthy autonomous agents. PAP provides comprehensive observability through **heartbeats, metrics, logs, and distributed tracing**.
+
+## The Three Pillars of Agent Observability
+
+<CardGroup cols={3}>
+  <Card title="💓 Heartbeats" icon="heart-pulse">
+    **Liveness Signals**<br/>
+    Lightweight health checks proving agent is alive and responsive
+  </Card>
+
+  <Card title="📊 Metrics" icon="chart-line">
+    **Resource Telemetry**<br/>
+    CPU, memory, requests, and custom business metrics
+  </Card>
+
+  <Card title="📝 Logs" icon="file-lines">
+    **Event Streams**<br/>
+    Structured logs for debugging and audit
+  </Card>
+</CardGroup>
+
+---
+
+## Heartbeats: The Liveness Channel
+
+**Purpose**: Prove agent is alive and responsive.
+
+<Warning>
+**CRITICAL**: Heartbeats contain ONLY liveness data. Resource metrics are **FORBIDDEN** in heartbeats per PAP-RFC-001 §8.2.
+</Warning>
+
+### Heartbeat Structure
+
+```json
+{
+  "agent_uuid": "123e4567-e89b-12d3-a456-426614174000",
+  "mode": "IDLE",
+  "uptime_seconds": 3600,
+  "timestamp": "2025-11-13T08:30:00Z"
+}
+```
+
+**Allowed Fields:**
+- `mode`: EMERGENCY, IDLE, or SLEEP
+- `uptime_seconds`: How long agent has been running
+- `timestamp`: When heartbeat was sent
+
+**Forbidden in Heartbeats:**
+- ❌ CPU usage
+- ❌ Memory usage
+- ❌ Request counts
+- ❌ Any resource or business metrics
+
+### Heartbeat Modes
+
+#### IDLE Mode (Default)
+
+**Interval**: 30 seconds
+**Use Case**: Normal operation
+
+```json
+{
+  "mode": "IDLE",
+  "uptime_seconds": 1800
+}
+```
+
+#### EMERGENCY Mode
+
+**Interval**: 5 seconds
+**Use Case**: Critical operations requiring aggressive monitoring
+
+```json
+{
+  "mode": "EMERGENCY",
+  "uptime_seconds": 45
+}
+```
+
+<Warning>
+**Use EMERGENCY Sparingly**: High-frequency heartbeats increase control plane load. Only use for truly critical situations (e.g., handling financial transactions, emergency alerts).
+</Warning>
+
+#### SLEEP Mode
+
+**Interval**: 15 minutes
+**Use Case**: Background agents with low-priority work
+
+```json
+{
+  "mode": "SLEEP",
+  "uptime_seconds": 86400
+}
+```
+
+<Info>
+**SLEEP Mode Benefits**: Reduces control plane load for infrequently-used agents. Perfect for scheduled report generators or monitoring agents that only act occasionally.
+</Info>
+
+### Viewing Heartbeats
+
+Retrieve recent heartbeats via API:
+
+```bash
+curl https://plugged.in/api/agents/AGENT_UUID \
+  -H "Authorization: Bearer $API_KEY" \
+  | jq '.recentHeartbeats'
+```
+
+Response:
+```json
+[
+  {
+    "id": "1003",
+    "agent_uuid": "...",
+    "mode": "IDLE",
+    "uptime_seconds": 3630,
+    "timestamp": "2025-11-13T08:30:30Z"
+  },
+  {
+    "id": "1002",
+    "agent_uuid": "...",
+    "mode": "IDLE",
+    "uptime_seconds": 3600,
+    "timestamp": "2025-11-13T08:30:00Z"
+  }
+]
+```
+
+### Heartbeat Health Check
+
+```javascript
+function isAgentHealthy(agent) {
+  if (agent.state !== 'ACTIVE') return false;
+  if (!agent.last_heartbeat_at) return false;
+
+  const lastHeartbeat = new Date(agent.last_heartbeat_at);
+  const now = new Date();
+  const msSinceHeartbeat = now - lastHeartbeat;
+
+  // Default IDLE mode: 30s interval * 1.5 = 45s max
+  const maxInterval = 45000;
+
+  return msSinceHeartbeat < maxInterval;
+}
+```
+
+---
+
+## Metrics: The Resource Channel
+
+**Purpose**: Monitor resource usage and business metrics.
+
+<Info>
+**Separation is Key**: Metrics are sent on a **completely separate channel** from heartbeats. This separation is PAP's superpower for zombie prevention.
+</Info>
+
+### Metrics Structure
+
+```json
+{
+  "agent_uuid": "123e4567-e89b-12d3-a456-426614174000",
+  "cpu_percent": 23,
+  "memory_mb": 384,
+  "requests_handled": 152,
+  "custom_metrics": {
+    "queue_depth": 5,
+    "cache_hit_rate": 0.87,
+    "active_connections": 12
+  },
+  "timestamp": "2025-11-13T08:30:00Z"
+}
+```
+
+### Standard Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `cpu_percent` | integer | CPU usage (0-100) |
+| `memory_mb` | integer | Memory usage in megabytes |
+| `requests_handled` | integer | Total requests processed since start |
+| `custom_metrics` | object | Agent-specific business metrics |
+
+### Viewing Metrics
+
+Retrieve recent metrics via API:
+
+```bash
+curl https://plugged.in/api/agents/AGENT_UUID \
+  -H "Authorization: Bearer $API_KEY" \
+  | jq '.recentMetrics'
+```
+
+Response:
+```json
+[
+  {
+    "id": "2005",
+    "agent_uuid": "...",
+    "cpu_percent": 23,
+    "memory_mb": 384,
+    "requests_handled": 152,
+    "custom_metrics": {
+      "queue_depth": 5
+    },
+    "timestamp": "2025-11-13T08:30:00Z"
+  }
+]
+```
+
+### Metric Collection Frequency
+
+**Recommended**: 60 seconds
+
+Unlike heartbeats, metrics can be sent less frequently:
+- More frequent = finer granularity, higher storage
+- Less frequent = reduced load, coarser data
+
+<Tip>
+**Adaptive Frequency**: Send metrics more frequently during high activity, less during idle periods to optimize storage.
+</Tip>
+
+### Alerting on Metrics
+
+**High CPU Alert:**
+```javascript
+if (metrics.cpu_percent > 80) {
+  alert('Agent CPU usage critical: ' + metrics.cpu_percent + '%');
+}
+```
+
+**Memory Leak Detection:**
+```javascript
+// Check if memory consistently increases
+const recentMetrics = agent.recentMetrics.slice(0, 10);
+const memoryTrend = recentMetrics.every((m, i) =>
+  i === 0 || m.memory_mb > recentMetrics[i - 1].memory_mb
+);
+
+if (memoryTrend) {
+  alert('Possible memory leak detected');
+}
+```
+
+---
+
+## Logs: The Event Stream
+
+**Purpose**: Detailed event logs for debugging and audit.
+
+### Log Access (Current)
+
+For now, server administrators can access logs via kubectl:
+
+```bash
+# Get recent logs
+kubectl logs deployment/AGENT_NAME -n agents --tail=100 --timestamps
+
+# Follow logs in real-time
+kubectl logs deployment/AGENT_NAME -n agents -f
+
+# Get logs from previous container (after crash)
+kubectl logs deployment/AGENT_NAME -n agents --previous
+```
+
+### Log API (Coming Soon)
+
+Future API endpoint for log retrieval:
+
+```bash
+curl https://plugged.in/api/agents/AGENT_UUID/logs?tail=100 \
+  -H "Authorization: Bearer $API_KEY"
+```
+
+### Structured Logging Best Practices
+
+**Use structured JSON logs:**
+
+```javascript
+console.log(JSON.stringify({
+  level: 'info',
+  timestamp: new Date().toISOString(),
+  agent_uuid: 'agent-uuid',
+  event: 'request_processed',
+  duration_ms: 45,
+  status: 200,
+  trace_id: 'trace-123'
+}));
+```
+
+**Benefits:**
+- Parseable by log aggregators
+- Searchable by field
+- Compatible with OpenTelemetry
+
+### Log Levels
+
+| Level | Use Case | Example |
+|-------|----------|---------|
+| `error` | Failures requiring attention | `Database connection failed` |
+| `warn` | Potential issues | `Retry attempt 3 of 5` |
+| `info` | Normal operations | `Request completed successfully` |
+| `debug` | Detailed debugging | `Cache lookup: key=foo, hit=true` |
+
+---
+
+## Kubernetes-Level Monitoring
+
+### Pod Health
+
+Check pod status:
+
+```bash
+kubectl get pods -n agents -l app=AGENT_NAME
+```
+
+Healthy pod:
+```
+NAME                         READY   STATUS    RESTARTS   AGE
+my-agent-65bf69d8c-abc123    1/1     Running   0          5m
+```
+
+Unhealthy indicators:
+- `CrashLoopBackOff`: Pod keeps crashing
+- `ImagePullBackOff`: Cannot pull container image
+- `Pending`: Not scheduled (quota/resources)
+- `RESTARTS > 0`: Pod restarted (check logs)
+
+### Resource Usage
+
+Check actual resource consumption:
+
+```bash
+kubectl top pod -n agents -l app=AGENT_NAME
+```
+
+Output:
+```
+NAME                         CPU(cores)   MEMORY(bytes)
+my-agent-65bf69d8c-abc123    23m          384Mi
+```
+
+### Events
+
+View recent Kubernetes events:
+
+```bash
+kubectl get events -n agents \
+  --field-selector involvedObject.name=AGENT_NAME \
+  --sort-by='.lastTimestamp'
+```
+
+---
+
+## Distributed Tracing
+
+PAP supports OpenTelemetry for distributed tracing across agents and tools.
+
+### Trace Context Propagation
+
+All PAP messages carry:
+```json
+{
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "span_id": "00f067aa0ba902b7"
+}
+```
+
+### Tracing Agent-to-Tool Calls
+
+```javascript
+// Agent makes MCP tool call
+const span = tracer.startSpan('mcp.invoke', {
+  attributes: {
+    'mcp.server': 'filesystem',
+    'mcp.tool': 'read_file',
+    'mcp.arguments': JSON.stringify({path: '/docs/file.pdf'})
+  }
+});
+
+try {
+  const result = await mcpClient.invoke('filesystem', 'read_file', {
+    path: '/docs/file.pdf'
+  });
+  span.setStatus({ code: SpanStatusCode.OK });
+} catch (error) {
+  span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
+} finally {
+  span.end();
+}
+```
+
+### Viewing Traces (Future)
+
+Integration with Jaeger/Zipkin/Tempo for trace visualization showing:
+- Agent request flow
+- Tool invocations
+- Database queries
+- External API calls
+
+---
+
+## Alerting Strategies
+
+### Critical Alerts (Immediate Response)
+
+1. **Agent Unhealthy**:
+   ```javascript
+   if (now - last_heartbeat > 45000 && state === 'ACTIVE') {
+     pagerDuty.alert('Agent UNHEALTHY: ' + agent.name);
+   }
+   ```
+
+2. **Agent Killed**:
+   ```javascript
+   if (lifecycleEvents.latest().to_state === 'KILLED') {
+     slack.alert('Agent KILLED: ' + agent.name + ' - Reason: ' + event.metadata.kill_reason);
+   }
+   ```
+
+3. **Resource Exhaustion**:
+   ```javascript
+   if (metrics.memory_mb > 0.9 * limits.memory_mb) {
+     alert('Agent approaching memory limit');
+   }
+   ```
+
+### Warning Alerts (Monitor)
+
+1. **High Error Rate**:
+   ```javascript
+   const errorRate = recentMetrics.reduce((sum, m) =>
+     sum + (m.custom_metrics?.error_count || 0), 0
+   ) / recentMetrics.length;
+
+   if (errorRate > 0.05) {
+     warn('Agent error rate elevated: ' + (errorRate * 100) + '%');
+   }
+   ```
+
+2. **Slow Response Times**:
+   ```javascript
+   if (metrics.custom_metrics.avg_response_ms > 1000) {
+     warn('Agent response time degraded');
+   }
+   ```
+
+### Informational (Logging)
+
+1. **State Changes**:
+   ```javascript
+   lifecycleEvents.forEach(event => {
+     if (event.timestamp > lastCheck) {
+       log(`Agent ${agent.name}: ${event.from_state} → ${event.to_state}`);
+     }
+   });
+   ```
+
+---
+
+## Dashboard Recommendations
+
+### Agent Health Dashboard
+
+**Metrics to Display:**
+
+1. **Agent Count by State**
+   - ACTIVE count (green)
+   - PROVISIONED count (yellow)
+   - TERMINATED count (grey)
+   - KILLED count (red)
+
+2. **Heartbeat Status**
+   - Agents with recent heartbeat (< 1min ago)
+   - Agents with stale heartbeat (1-2min ago)
+   - Agents missing heartbeat (> 2min ago)
+
+3. **Resource Utilization**
+   - CPU usage histogram
+   - Memory usage histogram
+   - Agents approaching limits
+
+4. **Request Throughput**
+   - Requests per minute per agent
+   - Error rate per agent
+
+### Individual Agent Dashboard
+
+**Sections:**
+
+1. **Status Overview**
+   - Current state
+   - Uptime
+   - Last heartbeat time
+
+2. **Resource Graphs** (Time Series)
+   - CPU usage over time
+   - Memory usage over time
+
+3. **Throughput** (Time Series)
+   - Requests handled per minute
+   - Error rate
+
+4. **Recent Events**
+   - Lifecycle events (last 24h)
+   - Log errors (last 1h)
+
+5. **Kubernetes Health**
+   - Pod status
+   - Restart count
+   - Resource quota usage
+
+---
+
+## Monitoring Tools Integration
+
+### Prometheus
+
+**Metrics Endpoint** (Future):
+```bash
+curl https://AGENT_NAME.is.plugged.in/metrics
+```
+
+Example output:
+```
+# HELP agent_cpu_percent Agent CPU usage
+# TYPE agent_cpu_percent gauge
+agent_cpu_percent{agent="my-agent"} 23
+
+# HELP agent_memory_mb Agent memory usage
+# TYPE agent_memory_mb gauge
+agent_memory_mb{agent="my-agent"} 384
+
+# HELP agent_requests_total Total requests handled
+# TYPE agent_requests_total counter
+agent_requests_total{agent="my-agent"} 152
+```
+
+### Grafana
+
+Import Plugged.in Agent dashboard (future):
+```bash
+# Dashboard JSON available at
+curl https://plugged.in/grafana-dashboards/agents.json
+```
+
+### Datadog / New Relic
+
+Configure agent to export to APM:
+
+```javascript
+// OpenTelemetry exporter
+const { NodeTracerProvider } = require('@opentelemetry/sdk-trace-node');
+const { DatadogExporter } = require('@opentelemetry/exporter-datadog');
+
+const provider = new NodeTracerProvider();
+provider.addSpanProcessor(new BatchSpanProcessor(new DatadogExporter({
+  agentUrl: 'http://datadog-agent:8126'
+})));
+```
+
+---
+
+## Troubleshooting with Monitoring Data
+
+### Problem: Agent Not Processing Requests
+
+**Diagnosis:**
+1. Check heartbeats: Are they arriving?
+2. Check metrics: Is CPU/memory normal?
+3. Check logs: Any errors?
+4. Check Kubernetes: Is pod healthy?
+
+**Resolution Path:**
+```bash
+# 1. Check state
+curl https://plugged.in/api/agents/UUID | jq '.agent.state'
+
+# 2. Check heartbeats
+curl https://plugged.in/api/agents/UUID | jq '.recentHeartbeats[0]'
+
+# 3. Check pod status
+kubectl get pod -n agents -l app=AGENT_NAME
+
+# 4. Check logs
+kubectl logs deployment/AGENT_NAME -n agents --tail=50
+```
+
+### Problem: High CPU Usage
+
+**Diagnosis:**
+1. Check metrics: CPU consistently > 80%?
+2. Check logs: Infinite loop? Expensive operation?
+3. Check traces: Which operations are slow?
+
+**Resolution:**
+- Optimize hot code paths
+- Increase CPU limit
+- Scale horizontally (future)
+
+### Problem: Memory Leak
+
+**Diagnosis:**
+1. Check metrics: Memory steadily increasing?
+2. Check logs: Out of memory errors?
+3. Take heap snapshot (future feature)
+
+**Resolution:**
+- Identify leaking resources
+- Fix and redeploy
+- Restart agent as temporary fix
+
+---
+
+## Best Practices Summary
+
+<Check>
+**DO**: Keep heartbeats lightweight (mode + uptime only)
+</Check>
+
+<Check>
+**DO**: Send comprehensive metrics on separate channel
+</Check>
+
+<Check>
+**DO**: Use structured JSON logging
+</Check>
+
+<Check>
+**DO**: Include trace_id in all logs
+</Check>
+
+<Check>
+**DO**: Set up alerts for missed heartbeats
+</Check>
+
+<Warning>
+**DON'T**: Mix metrics with heartbeats
+</Warning>
+
+<Warning>
+**DON'T**: Use EMERGENCY mode for normal operations
+</Warning>
+
+<Warning>
+**DON'T**: Log sensitive data (passwords, tokens)
+</Warning>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Lifecycle Management" icon="rotate" href="/agents/lifecycle">
+    Understand agent states and transitions
+  </Card>
+
+  <Card title="Architecture Deep Dive" icon="sitemap" href="/agents/architecture">
+    Learn about PAP's dual-profile design
+  </Card>
+</CardGroup>

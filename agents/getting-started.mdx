@@ -1,0 +1,398 @@
+---
+title: Getting Started with PAP Agents
+description: Deploy your first autonomous agent in minutes
+---
+
+# Getting Started with PAP Agents
+
+This guide will walk you through creating and managing your first PAP agent using the Plugged.in API.
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+<Check>An active Plugged.in account with a project and profile configured</Check>
+<Check>An API key generated from your Plugged.in dashboard</Check>
+<Check>Access to the PAP agent infrastructure (currently in early access)</Check>
+
+<Info>
+**Don't have an API key?** Navigate to your project settings in Plugged.in and create a new API key under "API Keys & Authentication". Save it securely—it won't be shown again!
+</Info>
+
+## Quick Start: Deploy Your First Agent
+
+### Step 1: Set Up Your Environment
+
+Save your API key as an environment variable:
+
+```bash
+export PLUGGEDIN_API_KEY="your-api-key-here"
+```
+
+### Step 2: Create an Agent
+
+Use the Plugged.in API to create your first agent:
+
+```bash
+curl -X POST https://plugged.in/api/agents \
+  -H "Authorization: Bearer $PLUGGEDIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-first-agent",
+    "description": "My first autonomous agent"
+  }'
+```
+
+<Tip>
+**Agent names must be DNS-safe**: lowercase letters, numbers, and hyphens only. They'll become part of your agent's URL: `{name}.is.plugged.in`
+</Tip>
+
+### Step 3: Wait for Provisioning
+
+The API returns immediately with the agent record and deployment status:
+
+```json
+{
+  "agent": {
+    "uuid": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "my-first-agent",
+    "dns_name": "my-first-agent.is.plugged.in",
+    "state": "NEW",
+    "created_at": "2025-11-13T08:00:00Z"
+  },
+  "deployment": {
+    "success": true,
+    "message": "Agent my-first-agent deployed successfully",
+    "deploymentName": "my-first-agent"
+  }
+}
+```
+
+The agent transitions through states automatically:
+1. **NEW** → Agent created in database
+2. **PROVISIONED** → Kubernetes deployment created
+3. **ACTIVE** → Agent is running and healthy (after first heartbeat)
+
+### Step 4: Verify Your Agent
+
+Check your agent's status:
+
+```bash
+curl https://plugged.in/api/agents/$AGENT_UUID \
+  -H "Authorization: Bearer $PLUGGEDIN_API_KEY"
+```
+
+Or access it directly via HTTPS:
+
+```bash
+curl https://my-first-agent.is.plugged.in
+```
+
+<Check>
+**Success!** If you see a response, your agent is live with automatic Let's Encrypt TLS certificate.
+</Check>
+
+## Understanding Agent Configuration
+
+### Basic Configuration
+
+When creating an agent, you can specify:
+
+```json
+{
+  "name": "my-agent",           // Required: DNS-safe name
+  "description": "Description", // Optional: Human-readable description
+  "image": "custom/image:tag",  // Optional: Container image (default: nginx-unprivileged)
+  "resources": {                // Optional: Resource limits
+    "cpu_request": "100m",
+    "memory_request": "256Mi",
+    "cpu_limit": "1000m",
+    "memory_limit": "1Gi"
+  }
+}
+```
+
+### Resource Recommendations
+
+<CardGroup cols={3}>
+  <Card title="Light Agent" icon="feather">
+    **CPU**: 100m request, 500m limit<br/>
+    **Memory**: 128Mi request, 512Mi limit<br/>
+    <em>For simple monitoring or webhook agents</em>
+  </Card>
+
+  <Card title="Standard Agent" icon="microchip">
+    **CPU**: 250m request, 1000m limit<br/>
+    **Memory**: 256Mi request, 1Gi limit<br/>
+    <em>Recommended for most use cases</em>
+  </Card>
+
+  <Card title="Heavy Agent" icon="server">
+    **CPU**: 500m request, 2000m limit<br/>
+    **Memory**: 512Mi request, 2Gi limit<br/>
+    <em>For complex workflows or ML inference</em>
+  </Card>
+</CardGroup>
+
+<Warning>
+**Resource Quotas**: The `agents` namespace has limits (40 CPU, 200Gi memory, 100 pods max). Contact support if you need higher limits.
+</Warning>
+
+## Managing Your Agents
+
+### List All Agents
+
+Retrieve all agents in your active profile:
+
+```bash
+curl https://plugged.in/api/agents \
+  -H "Authorization: Bearer $PLUGGEDIN_API_KEY"
+```
+
+Response:
+```json
+[
+  {
+    "uuid": "...",
+    "name": "my-first-agent",
+    "dns_name": "my-first-agent.is.plugged.in",
+    "state": "ACTIVE",
+    "created_at": "2025-11-13T08:00:00Z",
+    "last_heartbeat_at": "2025-11-13T08:05:32Z"
+  }
+]
+```
+
+### Get Agent Details
+
+View comprehensive agent information including heartbeats, metrics, and lifecycle events:
+
+```bash
+curl https://plugged.in/api/agents/$AGENT_UUID \
+  -H "Authorization: Bearer $PLUGGEDIN_API_KEY"
+```
+
+Response includes:
+- Agent metadata and current state
+- Recent heartbeats (last 10)
+- Recent metrics (last 10)
+- Complete lifecycle event history
+- Real-time Kubernetes deployment status
+
+### Terminate an Agent
+
+When you're done with an agent, terminate it to free resources:
+
+```bash
+curl -X DELETE https://plugged.in/api/agents/$AGENT_UUID \
+  -H "Authorization: Bearer $PLUGGEDIN_API_KEY"
+```
+
+<Info>
+**Graceful Shutdown**: Agents support graceful draining. In the future, you'll be able to set agents to DRAINING state to complete in-flight work before termination.
+</Info>
+
+## Agent Lifecycle States
+
+Understanding agent states is crucial for management:
+
+```
+NEW → PROVISIONED → ACTIVE ↔ DRAINING → TERMINATED
+                       ↓ (error)
+                     KILLED
+```
+
+| State | Description | Typical Duration |
+|-------|-------------|------------------|
+| **NEW** | Created in database, awaiting provisioning | < 1 second |
+| **PROVISIONED** | Kubernetes resources deployed, waiting for first heartbeat | 10-30 seconds |
+| **ACTIVE** | Running and accepting requests | Indefinite |
+| **DRAINING** | Gracefully shutting down, completing work | 30-120 seconds |
+| **TERMINATED** | Cleanly shut down, resources released | Permanent |
+| **KILLED** | Forcefully terminated by Station | Permanent |
+
+<Warning>
+**KILLED vs TERMINATED**: Only the Station (control plane) can KILL an agent. User-initiated deletion results in TERMINATED state. KILLED indicates a control-plane decision (e.g., policy violation, zombie detection).
+</Warning>
+
+## Monitoring Your Agents
+
+### Heartbeats (Liveness)
+
+PAP agents send heartbeats to signal liveness:
+
+- **EMERGENCY** mode: Every 5 seconds (for critical situations)
+- **IDLE** mode: Every 30 seconds (default)
+- **SLEEP** mode: Every 15 minutes (for low-priority background agents)
+
+<Info>
+**Zombie Detection**: Missing one heartbeat interval triggers `AGENT_UNHEALTHY` (error code 480). This aggressive detection is possible because heartbeats contain NO resource data—only mode and uptime.
+</Info>
+
+### Metrics (Resource Telemetry)
+
+Separate from heartbeats, agents emit metrics approximately every 60 seconds:
+
+- CPU usage percentage
+- Memory usage in MB
+- Requests handled count
+- Custom metrics (agent-specific)
+
+View recent metrics:
+```bash
+curl https://plugged.in/api/agents/$AGENT_UUID \
+  -H "Authorization: Bearer $PLUGGEDIN_API_KEY" | jq '.recentMetrics'
+```
+
+### Logs
+
+Retrieve agent logs for debugging:
+
+```bash
+# Via Plugged.in API (coming soon)
+curl https://plugged.in/api/agents/$AGENT_UUID/logs \
+  -H "Authorization: Bearer $PLUGGEDIN_API_KEY"
+```
+
+For now, server administrators can access logs via kubectl:
+```bash
+kubectl logs deployment/my-first-agent -n agents --tail=100 --timestamps
+```
+
+## Common Patterns
+
+### 1. Deploy a Monitoring Agent
+
+```bash
+curl -X POST https://plugged.in/api/agents \
+  -H "Authorization: Bearer $PLUGGEDIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "github-monitor",
+    "description": "Monitors GitHub repos for changes",
+    "resources": {
+      "cpu_request": "50m",
+      "memory_request": "128Mi",
+      "cpu_limit": "200m",
+      "memory_limit": "256Mi"
+    }
+  }'
+```
+
+### 2. Deploy a Research Assistant
+
+```bash
+curl -X POST https://plugged.in/api/agents \
+  -H "Authorization: Bearer $PLUGGEDIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "research-bot",
+    "description": "Continuous research and knowledge synthesis",
+    "resources": {
+      "cpu_request": "500m",
+      "memory_request": "1Gi",
+      "cpu_limit": "2000m",
+      "memory_limit": "4Gi"
+    }
+  }'
+```
+
+### 3. Deploy a Scheduled Report Generator
+
+```bash
+curl -X POST https://plugged.in/api/agents \
+  -H "Authorization: Bearer $PLUGGEDIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "weekly-report",
+    "description": "Generates weekly summary reports",
+    "resources": {
+      "cpu_request": "100m",
+      "memory_request": "256Mi",
+      "cpu_limit": "500m",
+      "memory_limit": "512Mi"
+    }
+  }'
+```
+
+## Troubleshooting
+
+### Agent Stuck in NEW State
+
+**Problem**: Agent never transitions to PROVISIONED.
+
+**Solution**: Check deployment status:
+```bash
+kubectl get deployment my-agent -n agents -o yaml
+```
+
+Common causes:
+- Image pull failure (if using custom image)
+- Resource quota exceeded
+- Invalid container configuration
+
+### Agent Stuck in PROVISIONED State
+
+**Problem**: Agent doesn't transition to ACTIVE.
+
+**Solution**: Agent hasn't sent its first heartbeat. Check pod logs:
+```bash
+kubectl logs deployment/my-agent -n agents
+```
+
+Common causes:
+- Application not starting
+- Heartbeat endpoint misconfigured
+- Network connectivity issues
+
+### No HTTPS Access
+
+**Problem**: Cannot access `https://{agent}.is.plugged.in`
+
+**Solution**: Check certificate status:
+```bash
+kubectl get certificate my-agent-tls -n agents -o yaml
+```
+
+Common causes:
+- Certificate still provisioning (wait 1-2 minutes)
+- DNS not propagated
+- cert-manager issue
+
+<Tip>
+**DNS Propagation**: New agents may take 30-60 seconds for DNS to propagate globally. Test locally first: `curl https://{agent}.is.plugged.in --resolve {agent}.is.plugged.in:443:185.96.168.254`
+</Tip>
+
+## Next Steps
+
+Now that you've deployed your first agent:
+
+<CardGroup cols={2}>
+  <Card title="Explore Architecture" icon="sitemap" href="/agents/architecture">
+    Understand PAP's dual-profile design and protocol details
+  </Card>
+
+  <Card title="API Reference" icon="code" href="/agents/api-reference">
+    Complete API documentation with all endpoints and parameters
+  </Card>
+
+  <Card title="Lifecycle Deep Dive" icon="rotate" href="/agents/lifecycle">
+    Master agent state management and transitions
+  </Card>
+
+  <Card title="Monitoring Guide" icon="chart-line" href="/agents/monitoring">
+    Set up comprehensive observability for your agents
+  </Card>
+</CardGroup>
+
+## Need Help?
+
+<CardGroup cols={2}>
+  <Card title="Join Discord" icon="discord" href="https://discord.gg/plugged-in">
+    Get help from the community and Plugged.in team
+  </Card>
+
+  <Card title="GitHub Issues" icon="github" href="https://github.com/VeriTeknik/pluggedin-app/issues">
+    Report bugs or request features
+  </Card>
+</CardGroup>

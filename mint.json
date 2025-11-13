@@ -69,6 +69,17 @@
       ]
     },
     {
+      "group": "PAP Agents",
+      "pages": [
+        "agents/overview",
+        "agents/getting-started",
+        "agents/architecture",
+        "agents/api-reference",
+        "agents/lifecycle",
+        "agents/monitoring"
+      ]
+    },
+    {
       "group": "SDKs",
       "pages": [
         "sdks/javascript",

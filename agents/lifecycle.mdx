@@ -1,0 +1,583 @@
+---
+title: Agent Lifecycle
+description: Understanding PAP agent states, transitions, and management
+---
+
+# Agent Lifecycle Management
+
+PAP agents follow a **normative state machine** defined in PAP-RFC-001 v1.0. Understanding these states and transitions is crucial for effective agent management.
+
+## The Normative State Machine
+
+```
+NEW → PROVISIONED → ACTIVE ↔ DRAINING → TERMINATED
+                       ↓ (control plane decision)
+                     KILLED
+```
+
+<Info>
+**Normative**: These states and transitions are **protocol-mandated**. Invalid transitions are rejected to maintain system integrity.
+</Info>
+
+## State Definitions
+
+### NEW
+
+**Initial state** when an agent is created in the database but not yet deployed.
+
+**Characteristics:**
+- Agent record exists in database
+- No Kubernetes resources yet
+- No heartbeats
+- No external access
+
+**Typical Duration:** < 1 second
+
+**Next States:**
+- `PROVISIONED` (automatic upon successful K8s deployment)
+- `TERMINATED` (if user deletes before provisioning completes)
+
+**Example:**
+```json
+{
+  "state": "NEW",
+  "created_at": "2025-11-13T08:00:00Z",
+  "provisioned_at": null,
+  "last_heartbeat_at": null
+}
+```
+
+---
+
+### PROVISIONED
+
+**Infrastructure ready** - Kubernetes resources deployed, waiting for first heartbeat.
+
+**Characteristics:**
+- Kubernetes Deployment created
+- Service and Ingress configured
+- TLS certificate provisioning (Let's Encrypt)
+- Pod starting up
+- Agent initializing but not yet healthy
+
+**Typical Duration:** 10-30 seconds
+
+**Next States:**
+- `ACTIVE` (upon first heartbeat)
+- `TERMINATED` (if user deletes)
+- `KILLED` (if provisioning fails repeatedly)
+
+**What's Happening:**
+1. Container image pulling
+2. Application startup
+3. Health probes initializing
+4. Heartbeat mechanism activating
+
+**Example:**
+```json
+{
+  "state": "PROVISIONED",
+  "created_at": "2025-11-13T08:00:00Z",
+  "provisioned_at": "2025-11-13T08:00:15Z",
+  "activated_at": null,
+  "kubernetes_deployment": "my-agent",
+  "metadata": {
+    "kubernetes_pod_phase": "Running"
+  }
+}
+```
+
+<Warning>
+**Stuck in PROVISIONED?** If an agent doesn't transition to ACTIVE within 2 minutes, check pod logs for startup errors.
+</Warning>
+
+---
+
+### ACTIVE
+
+**Running and healthy** - Agent is operational and accepting requests.
+
+**Characteristics:**
+- Receiving regular heartbeats
+- Emitting metrics
+- Accessible via `https://{agent}.is.plugged.in`
+- TLS certificate active
+- Processing requests
+
+**Duration:** Indefinite (until user terminates or error occurs)
+
+**Next States:**
+- `DRAINING` (graceful shutdown initiated)
+- `TERMINATED` (immediate user deletion)
+- `KILLED` (Station decision - zombie, policy violation, etc.)
+
+**Heartbeat Requirements:**
+- **IDLE mode**: Every 30 seconds (default)
+- **EMERGENCY mode**: Every 5 seconds (critical operations)
+- **SLEEP mode**: Every 15 minutes (background tasks)
+
+**Example:**
+```json
+{
+  "state": "ACTIVE",
+  "created_at": "2025-11-13T08:00:00Z",
+  "provisioned_at": "2025-11-13T08:00:15Z",
+  "activated_at": "2025-11-13T08:00:45Z",
+  "last_heartbeat_at": "2025-11-13T08:05:30Z",
+  "metadata": {
+    "heartbeat_mode": "IDLE",
+    "uptime_seconds": 330
+  }
+}
+```
+
+---
+
+### DRAINING
+
+**Gracefully shutting down** - Agent is completing in-flight work before termination.
+
+**Characteristics:**
+- No new requests accepted
+- Existing requests being completed
+- Still sending heartbeats
+- Still emitting metrics
+- Traefik removes from routing
+
+**Typical Duration:** 30-120 seconds
+
+**Next States:**
+- `TERMINATED` (after drain complete)
+- `KILLED` (if drain timeout exceeded)
+
+**Use Cases:**
+- Completing multi-step workflows
+- Finishing file uploads/downloads
+- Flushing buffered data
+- Saving state
+
+<Note>
+**Current Implementation**: DRAINING state is defined in protocol but not yet exposed in API. Coming in future release.
+</Note>
+
+**Example (Future):**
+```json
+{
+  "state": "DRAINING",
+  "draining_started_at": "2025-11-13T09:00:00Z",
+  "drain_deadline": "2025-11-13T09:02:00Z",
+  "in_flight_requests": 3
+}
+```
+
+---
+
+### TERMINATED
+
+**Cleanly shut down** - User-initiated termination completed successfully.
+
+**Characteristics:**
+- All Kubernetes resources deleted
+- TLS certificate removed
+- Agent no longer accessible
+- Heartbeats stopped
+- Record preserved for audit
+
+**Duration:** Permanent
+
+**Next States:** None (terminal state)
+
+**Preservation:**
+- Agent record remains in database
+- Lifecycle events preserved
+- Historical metrics/heartbeats preserved (per retention policy)
+
+**Example:**
+```json
+{
+  "state": "TERMINATED",
+  "created_at": "2025-11-13T08:00:00Z",
+  "provisioned_at": "2025-11-13T08:00:15Z",
+  "activated_at": "2025-11-13T08:00:45Z",
+  "terminated_at": "2025-11-13T09:00:00Z",
+  "metadata": {
+    "termination_reason": "user_requested",
+    "triggered_by": "user-123e4567"
+  }
+}
+```
+
+---
+
+### KILLED
+
+**Forcefully terminated** - Station (control plane) forcibly terminated agent.
+
+**Characteristics:**
+- Control plane decision (NOT user-initiated)
+- Immediate termination (no drain period)
+- Resources forcefully removed
+- Indicates policy violation or zombie
+
+**Duration:** Permanent
+
+**Next States:** None (terminal state)
+
+**Reasons for KILL:**
+- Zombie detected (missed heartbeats)
+- Policy violation (resource abuse, security breach)
+- Compliance requirement
+- Emergency station action
+
+**Example:**
+```json
+{
+  "state": "KILLED",
+  "created_at": "2025-11-13T08:00:00Z",
+  "terminated_at": "2025-11-13T09:15:00Z",
+  "metadata": {
+    "kill_reason": "ZOMBIE_DETECTED",
+    "last_heartbeat": "2025-11-13T09:13:45Z",
+    "missed_intervals": 3,
+    "triggered_by": "station"
+  }
+}
+```
+
+<Warning>
+**KILLED Indicates Problems**: If your agent was KILLED, review lifecycle events to understand why. Common causes:
+- Application crash preventing heartbeats
+- Network connectivity issues
+- Resource exhaustion preventing heartbeat processing
+</Warning>
+
+---
+
+## State Transitions
+
+### Valid Transitions
+
+| From | To | Trigger | Automatic? |
+|------|----|---------| -----------|
+| `NEW` | `PROVISIONED` | K8s deployment created | ✅ Yes |
+| `NEW` | `TERMINATED` | User deletes during provisioning | No |
+| `PROVISIONED` | `ACTIVE` | First heartbeat received | ✅ Yes |
+| `PROVISIONED` | `KILLED` | Provisioning timeout or failure | ✅ Yes |
+| `PROVISIONED` | `TERMINATED` | User deletes | No |
+| `ACTIVE` | `DRAINING` | Graceful shutdown initiated | No (future) |
+| `ACTIVE` | `TERMINATED` | User deletes | No |
+| `ACTIVE` | `KILLED` | Station decision (zombie, policy) | ✅ Yes |
+| `DRAINING` | `TERMINATED` | Drain completed | ✅ Yes |
+| `DRAINING` | `KILLED` | Drain timeout exceeded | ✅ Yes |
+
+### Invalid Transitions
+
+These transitions are **rejected** by the protocol:
+
+❌ `TERMINATED` → any state (cannot revive)
+❌ `KILLED` → any state (cannot revive)
+❌ `NEW` → `ACTIVE` (must go through PROVISIONED)
+❌ `PROVISIONED` → `DRAINING` (must be ACTIVE first)
+❌ `DRAINING` → `ACTIVE` (drain is one-way)
+
+<Warning>
+**Immutability of Terminal States**: Once an agent reaches TERMINATED or KILLED, it cannot transition to any other state. To reuse an agent name, the old agent must be TERMINATED and a new agent created.
+</Warning>
+
+---
+
+## Lifecycle Events
+
+All state transitions are logged immutably in the `agent_lifecycle_events` table.
+
+### Event Structure
+
+```json
+{
+  "id": "3001",
+  "agent_uuid": "123e4567-e89b-12d3-a456-426614174000",
+  "event_type": "PROVISIONED",
+  "from_state": "NEW",
+  "to_state": "PROVISIONED",
+  "metadata": {
+    "triggered_by": "system",
+    "kubernetes_deployment": "my-agent",
+    "namespace": "agents"
+  },
+  "timestamp": "2025-11-13T08:00:15Z"
+}
+```
+
+### Event Types
+
+| Event Type | Description | Typical Trigger |
+|-----------|-------------|-----------------|
+| `CREATED` | Agent created | User API call |
+| `PROVISIONED` | K8s resources deployed | Automatic |
+| `ACTIVATED` | First heartbeat received | Automatic |
+| `DRAINING_STARTED` | Graceful shutdown initiated | User or Station |
+| `TERMINATED` | Clean shutdown completed | Automatic after drain or user deletion |
+| `KILLED` | Forceful termination | Station decision |
+| `ERROR` | Error occurred (non-state-changing) | Various |
+
+### Retrieving Lifecycle Events
+
+```bash
+curl https://plugged.in/api/agents/AGENT_UUID \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  | jq '.lifecycleEvents'
+```
+
+Example output:
+```json
+[
+  {
+    "event_type": "ACTIVATED",
+    "from_state": "PROVISIONED",
+    "to_state": "ACTIVE",
+    "timestamp": "2025-11-13T08:00:45Z",
+    "metadata": {"triggered_by": "system"}
+  },
+  {
+    "event_type": "PROVISIONED",
+    "from_state": "NEW",
+    "to_state": "PROVISIONED",
+    "timestamp": "2025-11-13T08:00:15Z",
+    "metadata": {"kubernetes_deployment": "my-agent"}
+  },
+  {
+    "event_type": "CREATED",
+    "from_state": null,
+    "to_state": "NEW",
+    "timestamp": "2025-11-13T08:00:00Z",
+    "metadata": {"triggered_by": "user-123e4567"}
+  }
+]
+```
+
+---
+
+## Zombie Detection
+
+PAP's **killer feature** for zombie prevention.
+
+### What is a Zombie?
+
+A **zombie agent** is one that appears running (Kubernetes pod healthy) but is actually non-functional (not processing requests, not responsive).
+
+**Causes:**
+- Application deadlock
+- Network partition from control plane
+- Resource starvation (CPU throttling)
+- Infinite loop in application code
+
+### Detection Algorithm
+
+```javascript
+if (now - last_heartbeat > heartbeat_interval * 1.5) {
+  agent.state = 'KILLED';
+  agent.metadata.kill_reason = 'ZOMBIE_DETECTED';
+  cleanupKubernetesResources();
+  logLifecycleEvent('KILLED', {reason: 'zombie'});
+}
+```
+
+**Thresholds:**
+- IDLE mode (30s heartbeat): Zombie after 45 seconds
+- EMERGENCY mode (5s heartbeat): Zombie after 7.5 seconds
+- SLEEP mode (15min heartbeat): Zombie after 22.5 minutes
+
+<Info>
+**Why 1.5x?** Tolerates one missed heartbeat due to transient network issues, but catches real zombies quickly.
+</Info>
+
+### Preventing Zombies
+
+**Best Practices:**
+
+1. **Robust heartbeat emission**:
+   ```javascript
+   setInterval(async () => {
+     try {
+       await sendHeartbeat();
+     } catch (error) {
+       console.error('Heartbeat failed:', error);
+       // Retry immediately
+       setTimeout(() => sendHeartbeat(), 1000);
+     }
+   }, 30000);
+   ```
+
+2. **Monitor event loop**:
+   ```javascript
+   const start = Date.now();
+   setImmediate(() => {
+     const lag = Date.now() - start;
+     if (lag > 1000) {
+       console.warn(`Event loop lag: ${lag}ms`);
+     }
+   });
+   ```
+
+3. **Resource limits**:
+   - Set appropriate CPU/memory limits
+   - Monitor for throttling
+   - Add alerts for resource exhaustion
+
+4. **Separate heartbeat thread** (advanced):
+   - Dedicated thread/process for heartbeats
+   - Independent of main application logic
+   - Guarantees heartbeat even if app hangs
+
+---
+
+## State Management Best Practices
+
+### 1. Poll for State Changes
+
+After creating an agent, poll until ACTIVE:
+
+```javascript
+async function waitForActive(agentUUID, timeout = 120000) {
+  const start = Date.now();
+
+  while (Date.now() - start < timeout) {
+    const response = await fetch(`https://plugged.in/api/agents/${agentUUID}`, {
+      headers: { 'Authorization': `Bearer ${API_KEY}` }
+    });
+
+    const { agent } = await response.json();
+
+    if (agent.state === 'ACTIVE') {
+      return agent;
+    }
+
+    if (agent.state === 'KILLED' || agent.state === 'TERMINATED') {
+      throw new Error(`Agent entered terminal state: ${agent.state}`);
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 5000));
+  }
+
+  throw new Error('Timeout waiting for agent to become ACTIVE');
+}
+```
+
+### 2. Handle Terminal States
+
+```python
+def is_terminal(state):
+    return state in ['TERMINATED', 'KILLED']
+
+def is_operational(state):
+    return state == 'ACTIVE'
+
+def needs_intervention(state):
+    # Agent stuck in transitional state
+    return state in ['NEW', 'PROVISIONED'] and time_in_state > 120
+```
+
+### 3. Monitor State Transitions
+
+```bash
+# Get recent lifecycle events
+curl https://plugged.in/api/agents/AGENT_UUID \
+  -H "Authorization: Bearer $API_KEY" \
+  | jq '.lifecycleEvents | .[] | select(.timestamp > "2025-11-13T08:00:00Z")'
+```
+
+### 4. Graceful Shutdown (Future)
+
+```javascript
+// Future API (not yet implemented)
+async function gracefulShutdown(agentUUID, drainTimeout = 120) {
+  // Initiate drain
+  await fetch(`https://plugged.in/api/agents/${agentUUID}/drain`, {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${API_KEY}` },
+    body: JSON.stringify({ timeout: drainTimeout })
+  });
+
+  // Poll for TERMINATED
+  await waitForTerminated(agentUUID, drainTimeout + 30);
+}
+```
+
+---
+
+## Troubleshooting State Issues
+
+### Agent Stuck in NEW
+
+**Symptoms:** Agent created but never reaches PROVISIONED.
+
+**Causes:**
+- Kubernetes API unavailable
+- Quota exceeded in agents namespace
+- Invalid image specified
+
+**Resolution:**
+```bash
+# Check deployment status
+kubectl get deployment AGENT_NAME -n agents -o yaml
+
+# Check namespace quota
+kubectl get resourcequota -n agents
+
+# Check events
+kubectl get events -n agents --sort-by='.lastTimestamp'
+```
+
+### Agent Stuck in PROVISIONED
+
+**Symptoms:** Infrastructure deployed but never ACTIVE.
+
+**Causes:**
+- Application not starting
+- Heartbeat endpoint misconfigured
+- Pod crashlooping
+
+**Resolution:**
+```bash
+# Check pod logs
+kubectl logs deployment/AGENT_NAME -n agents --tail=100
+
+# Check pod status
+kubectl get pods -n agents -l app=AGENT_NAME
+
+# Describe pod for events
+kubectl describe pod POD_NAME -n agents
+```
+
+### Unexpected KILLED State
+
+**Symptoms:** Agent killed without user action.
+
+**Causes:**
+- Zombie detection (missed heartbeats)
+- Policy violation
+- Resource limits exceeded
+
+**Resolution:**
+```bash
+# Check lifecycle events
+curl https://plugged.in/api/agents/AGENT_UUID \
+  -H "Authorization: Bearer $API_KEY" \
+  | jq '.lifecycleEvents | .[] | select(.to_state == "KILLED")'
+
+# Look for kill_reason in metadata
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Monitoring Guide" icon="chart-line" href="/agents/monitoring">
+    Set up comprehensive observability for agents
+  </Card>
+
+  <Card title="API Reference" icon="code" href="/agents/api-reference">
+    Complete API documentation for lifecycle operations
+  </Card>
+</CardGroup>

@@ -1,0 +1,195 @@
+---
+title: PAP Agents Overview
+description: Autonomous agents powered by the Plugged.in Agent Protocol (PAP)
+---
+
+# PAP Agents: Autonomous AI Infrastructure
+
+<img src="/images/pap-agents-hero.png" alt="PAP Agents" style={{display: 'none'}} />
+
+## What are PAP Agents?
+
+**PAP Agents** are autonomous, long-running AI agents deployed on Plugged.in infrastructure using the **Plugged.in Agent Protocol (PAP)**, a comprehensive framework for agent lifecycle management. PAP agents combine the power of AI models with persistent context, tools (via MCP), and your knowledge base to execute tasks autonomously while maintaining organizational governance.
+
+<Warning>
+**PAP Agents are currently in early access.** The infrastructure is production-ready, but agent runtime capabilities are being actively developed. This documentation reflects the current v1.0 implementation.
+</Warning>
+
+## The Three Pillars in Action
+
+PAP agents unify Plugged.in's three pillars into autonomous execution:
+
+<CardGroup cols={3}>
+  <Card title="🧠 Memory" icon="brain">
+    **Focus-Aware Context**<br/>
+    Agents maintain short-term session memory and access long-term project context, understanding their current task and historical patterns.
+  </Card>
+
+  <Card title="📚 Knowledge" icon="book-open">
+    **RAG-Powered Access**<br/>
+    Direct access to your document library through semantic search, enabling agents to query PDFs, docs, and files on demand.
+  </Card>
+
+  <Card title="🔧 Tools" icon="wrench">
+    **MCP Tool Integration**<br/>
+    Full access to your configured MCP servers and tools, allowing agents to interact with external systems, databases, and APIs.
+  </Card>
+</CardGroup>
+
+## Key Features
+
+### Autonomous Operation
+- **Long-running execution**: Unlike ephemeral conversations, agents persist across sessions
+- **Scheduled tasks**: Trigger agents on schedules or events
+- **Self-healing**: Automatic recovery from transient failures
+
+### Lifecycle Management
+- **Normative state machine**: NEW → PROVISIONED → ACTIVE ↔ DRAINING → TERMINATED
+- **Graceful shutdown**: Drain mode allows agents to complete in-flight work
+- **Kill authority**: Station (control plane) maintains exclusive termination rights
+
+### Zombie Prevention (The Superpower)
+PAP enforces **strict heartbeat/metrics separation** to prevent control plane saturation:
+
+<Info>
+**Heartbeat (Liveness Only)**
+- Contains ONLY: `mode` (EMERGENCY/IDLE/SLEEP) and `uptime_seconds`
+- **FORBIDDEN**: CPU, memory, or any resource data
+- Intervals: EMERGENCY=5s, IDLE=30s, SLEEP=15min
+- Detection: One missed interval → AGENT_UNHEALTHY
+</Info>
+
+<Info>
+**Metrics (Resource Telemetry - Separate Channel)**
+- Contains: `cpu_percent`, `memory_mb`, `requests_handled`, `custom_metrics`
+- Completely separate from heartbeat channel
+- Independent frequency (typically 60s)
+</Info>
+
+This separation ensures large telemetry payloads cannot starve the control path, enabling aggressive zombie detection without false positives.
+
+### Security & Isolation
+- **Profile-scoped**: Each agent belongs to a specific profile (project context)
+- **Non-root containers**: All agents run as unprivileged user (UID 1001)
+- **Network isolation**: Kubernetes NetworkPolicy enforcement
+- **Resource limits**: Configurable CPU/memory quotas per agent
+
+### DNS & Routing
+- **SNI-based routing**: Single IP address, hostname-based routing via Traefik
+- **Automatic TLS**: Let's Encrypt certificates managed by cert-manager
+- **DNS pattern**: `{agent-name}.is.plugged.in` (e.g., `focus.is.plugged.in`)
+
+## Agent Types (Coming Soon)
+
+While the infrastructure is ready, specific agent types are being developed:
+
+### Focus Agent
+Context-aware assistant that maintains focus on your current task, understanding the immediate work at hand and suggesting relevant tools/documents.
+
+### Memory Agent
+Manages short-term session context and long-term project patterns, providing continuity across sessions and learning from historical interactions.
+
+### Workflow Agent
+Executes multi-step workflows autonomously, coordinating between tools and knowledge base to accomplish complex goals.
+
+### Custom Agents
+Deploy your own agent logic using the PAP protocol, with full access to Plugged.in's Knowledge, Tools, and Memory layers.
+
+## Protocol Compliance
+
+PAP agents implement the **Plugged.in Agent Protocol v1.0** (PAP-RFC-001), ensuring:
+
+- **Dual-profile architecture**:
+  - **PAP-CP**: gRPC/mTLS for control plane operations (provisioning, lifecycle, heartbeats)
+  - **PAP-Hooks**: JSON-RPC 2.0/WebSocket for tool invocations and ecosystem integration
+
+- **Interoperability**:
+  - Native MCP tool support via PAP-Hooks
+  - A2A (Agent-to-Agent) peer communication
+  - OpenTelemetry tracing with distributed trace IDs
+
+- **Standardized error codes**: HTTP-aligned error codes (400-series client, 480-series agent-specific, 500-series server)
+
+## Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Continuous Monitoring" icon="monitor">
+    Deploy agents that monitor repositories, APIs, or data sources 24/7, alerting you to changes or anomalies.
+  </Card>
+
+  <Card title="Scheduled Reports" icon="calendar">
+    Generate periodic reports by querying your knowledge base and external tools on a schedule.
+  </Card>
+
+  <Card title="Integration Workflows" icon="arrows-split-up-and-left">
+    Automate data synchronization between systems, transforming and routing data as needed.
+  </Card>
+
+  <Card title="Research Assistants" icon="magnifying-glass">
+    Deploy focused agents that continuously research topics, synthesize findings, and update your knowledge base.
+  </Card>
+</CardGroup>
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Plugged.in Station                          │
+│              (Control Plane / Management API)                   │
+│                                                                 │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐         │
+│  │  Lifecycle   │  │  Heartbeat   │  │   Metrics    │         │
+│  │  Manager     │  │  Monitor     │  │  Collector   │         │
+│  └──────────────┘  └──────────────┘  └──────────────┘         │
+└─────────────────────────────────────────────────────────────────┘
+                            ↕ PAP-CP (gRPC/mTLS)
+┌─────────────────────────────────────────────────────────────────┐
+│                      is.plugged.in Cluster                       │
+│                      (K3s on 185.96.168.254)                    │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │  Traefik (SNI Router) + cert-manager (Let's Encrypt)    │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐           │
+│  │   Agent 1   │  │   Agent 2   │  │   Agent N   │           │
+│  │   (Pod)     │  │   (Pod)     │  │   (Pod)     │           │
+│  │             │  │             │  │             │           │
+│  │ PAP-Hooks   │  │ PAP-Hooks   │  │ PAP-Hooks   │           │
+│  │ (WebSocket) │  │ (WebSocket) │  │ (WebSocket) │           │
+│  └─────────────┘  └─────────────┘  └─────────────┘           │
+└─────────────────────────────────────────────────────────────────┘
+           ↕ MCP Tools          ↕ Knowledge Base          ↕ Memory
+```
+
+## Getting Started
+
+Ready to deploy your first agent? Check out the [Getting Started](/agents/getting-started) guide.
+
+## Learn More
+
+<CardGroup cols={2}>
+  <Card title="Architecture" icon="sitemap" href="/agents/architecture">
+    Deep dive into PAP's dual-profile architecture, lifecycle management, and zombie prevention
+  </Card>
+
+  <Card title="API Reference" icon="code" href="/agents/api-reference">
+    Complete REST API documentation for creating and managing agents
+  </Card>
+
+  <Card title="Lifecycle Management" icon="rotate" href="/agents/lifecycle">
+    Understanding agent states, transitions, and the normative state machine
+  </Card>
+
+  <Card title="Monitoring" icon="chart-line" href="/agents/monitoring">
+    Heartbeats, metrics, logs, and observability best practices
+  </Card>
+</CardGroup>
+
+## Protocol Documentation
+
+For protocol implementers and advanced users, refer to:
+- **PAP-RFC-001 v1.0**: Complete protocol specification (`/PAP/docs/rfc/pap-rfc-001-v1.0.md`)
+- **PAP-Hooks Spec**: JSON-RPC 2.0 open I/O profile (`/PAP/docs/pap-hooks-spec.md`)
+- **Service Registry**: DNS-based agent discovery (`/PAP/docs/service-registry.md`)
+- **Academic Paper**: "The Plugged.in Agent Protocol (PAP): A Comprehensive Framework for Autonomous Agent Lifecycle Management" (Draft v0.3 for arXiv cs.DC)

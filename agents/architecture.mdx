@@ -1,0 +1,553 @@
+---
+title: PAP Architecture
+description: Technical deep dive into the Plugged.in Agent Protocol
+---
+
+# PAP Architecture: Technical Deep Dive
+
+The **Plugged.in Agent Protocol (PAP)** establishes the physical and logical substrate for autonomous agent operation—how agents live, breathe, migrate, and die across infrastructure.
+
+<Info>
+**Protocol vs. Orchestration**: PAP defines the **substrate layer** (lifecycle, heartbeats, infrastructure), while MCP/A2A handle **orchestration logic** (tool invocation, peer communication). PAP makes agent infrastructure a first-class concern.
+</Info>
+
+## Core Philosophy
+
+**"Autonomy without anarchy"** - Agents operate independently yet remain under organizational governance through protocol-level controls.
+
+## System Components
+
+### Station (Control Plane)
+
+The **Station** is Plugged.in's central authority for agent management, currently implemented as the REST API at `plugged.in/api/agents`.
+
+**Responsibilities:**
+- **Lifecycle Authority**: Exclusive rights to provision, activate, and kill agents
+- **Policy Enforcement**: Resource quotas, security policies, compliance rules
+- **Zombie Detection**: Monitors heartbeats and terminates unhealthy agents
+- **Routing**: Directs requests to appropriate agent instances
+- **Audit Trail**: Immutable logging of all lifecycle events
+
+**Future Evolution**: Station will expand to include:
+- gRPC endpoints for PAP-CP protocol
+- Distributed control plane for multi-region deployments
+- Advanced scheduling and placement logic
+
+### Satellites (Agents)
+
+**Satellites** are the autonomous agent instances running on infrastructure.
+
+**Characteristics:**
+- **Self-contained**: Each agent is a Kubernetes Deployment with Service and Ingress
+- **Self-healing**: Kubernetes restarts failed pods automatically
+- **Telemetry emission**: Separate heartbeat and metrics channels
+- **Protocol compliance**: Implement PAP-CP for control and PAP-Hooks for I/O
+- **Station respect**: Accept kill commands and policy mandates
+
+### Proxy (mcp.plugged.in)
+
+The **Proxy** acts as a gateway for external access (future implementation).
+
+**Planned Responsibilities:**
+- TLS termination and certificate management
+- Signature validation for PAP-CP messages
+- Rate limiting and quota enforcement
+- Request logging and traffic analysis
+- DDoS protection and abuse prevention
+
+### Registry (Service Discovery)
+
+DNS-based service discovery for agent location and routing.
+
+**Current Implementation:**
+- Pattern: `{agent}.is.plugged.in`
+- DNS: BIND9 with wildcard records
+- TLS: cert-manager with Let's Encrypt
+- Routing: Traefik SNI-based routing
+
+**Future Enhancements:**
+- DNSSEC for DNS security
+- SRV records for load balancing
+- Multi-region routing with GeoDNS
+
+## Dual-Profile Architecture
+
+PAP separates control plane operations from application I/O through two distinct profiles:
+
+### PAP-CP (Control Plane Profile)
+
+**Purpose**: Infrastructure management and lifecycle control
+
+**Characteristics:**
+- **Transport**: gRPC over HTTP/2 with TLS 1.3 + mTLS
+- **Wire Format**: Protocol Buffers v3
+- **Security**: Ed25519 signatures REQUIRED, nonce-based replay protection
+- **Endpoint**: `grpc://pap.plugged.in:50051` (future)
+
+**Message Types:**
+```protobuf
+message Envelope {
+  string message_id = 1;      // UUID v4
+  string trace_id = 2;        // OpenTelemetry trace ID
+  string span_id = 3;         // OpenTelemetry span ID
+  int64 timestamp = 4;        // Unix milliseconds
+  int64 deadline_ms = 5;      // Request deadline
+  string sender_id = 6;       // Agent/Station UUID
+  string recipient_id = 7;    // Target agent UUID
+
+  oneof payload {
+    InvokeRequest invoke = 10;
+    InvokeResponse response = 11;
+    Event event = 12;
+    Error error = 13;
+  }
+
+  Signature signature = 20;   // Ed25519 signature
+  string nonce = 21;          // Replay protection
+}
+```
+
+**Use Cases:**
+- Agent provisioning and termination
+- Heartbeat reporting (liveness only!)
+- Metrics reporting (separate channel)
+- Lifecycle state transitions
+- Policy enforcement
+
+### PAP-Hooks (Open I/O Profile)
+
+**Purpose**: Tool invocations, MCP access, ecosystem integration
+
+**Characteristics:**
+- **Transport**: JSON-RPC 2.0 over WebSocket or HTTP SSE
+- **Wire Format**: UTF-8 JSON with schema validation
+- **Security**: OAuth 2.1 with JWT RECOMMENDED
+- **Endpoint**: `wss://{agent}.{region}.a.plugged.in/hooks`
+
+**Message Format:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": "msg-123",
+  "method": "tools/call",
+  "params": {
+    "name": "filesystem/read",
+    "arguments": {
+      "path": "/docs/report.pdf"
+    }
+  }
+}
+```
+
+**Use Cases:**
+- MCP tool invocations
+- A2A (Agent-to-Agent) delegation
+- External API access
+- Real-time event subscriptions
+- Streaming responses
+
+<Warning>
+**Profile Separation is Critical**: Mixing control plane and application traffic leads to control plane saturation. PAP-CP must remain lightweight and reliable.
+</Warning>
+
+## The Zombie Prevention Superpower
+
+PAP's killer feature: **strict heartbeat/metrics separation**.
+
+### Problem: Control Plane Saturation
+
+Traditional agent systems mix liveness signals with telemetry:
+
+```json
+// ❌ BAD: Heartbeat contains resource data
+{
+  "agent_id": "...",
+  "timestamp": "...",
+  "status": "healthy",
+  "cpu_percent": 87.3,
+  "memory_mb": 2048,
+  "disk_io": {...},
+  "network_stats": {...},
+  "custom_metrics": {...}
+}
+```
+
+**Consequences:**
+- Large payloads saturate control plane
+- Network issues delay liveness signals
+- Cannot be aggressive with zombie detection
+- False positives from metric collection failures
+
+### Solution: Channel Separation
+
+PAP enforces **strict separation**:
+
+#### Heartbeat Channel (Liveness Only)
+
+```json
+{
+  "agent_id": "...",
+  "mode": "IDLE",
+  "uptime_seconds": 3600
+}
+```
+
+**Rules:**
+- Payload: ONLY `mode` and `uptime_seconds`
+- Size: ~100 bytes
+- Frequency: 5s (EMERGENCY), 30s (IDLE), 15min (SLEEP)
+- Transport: Separate UDP/gRPC stream (future)
+- **FORBIDDEN**: Any resource or business metrics
+
+**Benefits:**
+- Lightweight (no saturation risk)
+- Fast transmission (predictable latency)
+- Aggressive detection (one missed → unhealthy)
+- No false positives
+
+#### Metrics Channel (Telemetry)
+
+```json
+{
+  "agent_id": "...",
+  "cpu_percent": 87.3,
+  "memory_mb": 2048,
+  "requests_handled": 1523,
+  "custom_metrics": {...}
+}
+```
+
+**Rules:**
+- Payload: All resource and business metrics
+- Size: Unlimited
+- Frequency: Independent (typically 60s)
+- Transport: Separate HTTP/gRPC endpoint
+- **FORBIDDEN**: Mixing with heartbeat channel
+
+**Benefits:**
+- Rich telemetry without control plane impact
+- Can send large payloads safely
+- Independent failure domains
+- Buffering and batching allowed
+
+### Zombie Detection Algorithm
+
+```
+if (now - last_heartbeat > interval * 1.5) {
+  agent.state = AGENT_UNHEALTHY (480)
+  trigger_kill_process()
+}
+```
+
+**Thresholds:**
+- EMERGENCY mode: 7.5 seconds
+- IDLE mode: 45 seconds
+- SLEEP mode: 22.5 minutes
+
+<Info>
+**Why 1.5x?**: Allows one missed heartbeat due to transient network issues, but catches actual zombies quickly.
+</Info>
+
+## Infrastructure Layer
+
+### Kubernetes Deployment
+
+Each agent consists of three Kubernetes resources:
+
+#### 1. Deployment
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-name
+  namespace: agents
+  labels:
+    pap-agent: "true"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-name
+  template:
+    metadata:
+      labels:
+        app: agent-name
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+      - name: agent
+        image: agent-runtime:latest
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 1000m
+            memory: 1Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: [ALL]
+```
+
+**Key Features:**
+- Single replica (agents are stateful)
+- Non-root execution (UID 1001)
+- Capabilities dropped (minimal privileges)
+- Resource limits enforced
+
+#### 2. Service
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-name
+  namespace: agents
+spec:
+  selector:
+    app: agent-name
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: ClusterIP
+```
+
+**Purpose**: Internal cluster networking
+
+#### 3. Ingress
+
+```yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: agent-name
+  namespace: agents
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+  - hosts:
+    - agent-name.is.plugged.in
+    secretName: agent-name-tls
+  rules:
+  - host: agent-name.is.plugged.in
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: agent-name
+            port:
+              number: 80
+```
+
+**Features:**
+- Automatic TLS via cert-manager
+- Let's Encrypt certificates
+- SNI-based routing via Traefik
+- Per-agent DNS hostname
+
+### Network Architecture
+
+```
+Internet (HTTPS/443)
+        ↓
+Traefik Ingress (185.96.168.254)
+   - SNI Router
+   - TLS Termination
+        ↓
+┌─────────────────────────────────┐
+│      agents namespace           │
+│                                 │
+│  Service (ClusterIP)            │
+│         ↓                       │
+│  Pod (agent container)          │
+│    - UID 1001 (non-root)        │
+│    - Port 8080                  │
+│    - NetworkPolicy isolated     │
+└─────────────────────────────────┘
+```
+
+**Security Layers:**
+1. **TLS**: All external traffic encrypted (Let's Encrypt)
+2. **NetworkPolicy**: Pod-level isolation
+3. **RBAC**: ServiceAccount with minimal permissions
+4. **SecurityContext**: Non-root, no privileges
+5. **ResourceQuota**: Namespace-level limits
+
+### DNS Infrastructure
+
+Agents use DNS for discovery and routing:
+
+**BIND9 Configuration:**
+```
+$TTL    300
+@       IN      SOA     ns1.is.plugged.in. admin.plugged.in. (
+                        2026111301      ; Serial
+                        3600            ; Refresh
+                        1800            ; Retry
+                        604800          ; Expire
+                        300 )           ; Negative Cache TTL
+
+*       IN      A       185.96.168.254  ; Wildcard DNS
+```
+
+**DNS Pattern**: `{agent-name}.is.plugged.in` → `185.96.168.254`
+
+**Future**: DNSSEC for DNS security (planned)
+
+## Security Model
+
+### Authentication Hierarchy
+
+1. **User → Station**: API key authentication
+2. **Station → Agent**: Ed25519 signatures + mTLS (PAP-CP)
+3. **Agent → Tools/MCP**: OAuth 2.1 tokens (PAP-Hooks)
+4. **Agent → Agent**: Mutual authentication with Station mediation
+
+### Authorization Model
+
+**Profile-Based Isolation:**
+- Each agent belongs to exactly one profile
+- Profile acts as security boundary
+- Agents cannot access other profiles' data
+
+**Kill Authority:**
+- ONLY Station can issue KILL command
+- User deletion → TERMINATED (graceful)
+- Station kill → KILLED (forced)
+
+### Audit Trail
+
+All lifecycle events logged immutably:
+
+```sql
+CREATE TABLE agent_lifecycle_events (
+  id BIGSERIAL PRIMARY KEY,
+  agent_uuid UUID NOT NULL,
+  event_type TEXT NOT NULL,
+  from_state agent_state,
+  to_state agent_state,
+  metadata JSONB,
+  timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+**Retention**: Permanent (compliance requirement)
+
+## Protocol Interoperability
+
+PAP integrates with existing protocols:
+
+### MCP (Model Context Protocol)
+
+**Integration Point**: PAP-Hooks profile
+
+Agents access MCP tools through PAP-Hooks:
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "mcp/invoke",
+  "params": {
+    "server": "filesystem",
+    "tool": "read_file",
+    "arguments": {"path": "/docs/report.pdf"}
+  }
+}
+```
+
+### A2A (Agent-to-Agent)
+
+**Integration Point**: PAP-Hooks profile with Station routing
+
+Agent delegation via Station:
+```json
+{
+  "jsonrpc": "2.0",
+  "method": "agent/delegate",
+  "params": {
+    "target_agent": "research-agent-uuid",
+    "task": "Summarize paper",
+    "context": {...}
+  }
+}
+```
+
+### OpenTelemetry
+
+**Distributed Tracing:**
+- All PAP messages carry `trace_id` and `span_id`
+- Spans propagate across agent boundaries
+- Compatible with Jaeger, Zipkin, Tempo
+
+## Performance Characteristics
+
+### Latency Targets (PAP-RFC-001 §11)
+
+| Operation | P50 | P95 | P99 |
+|-----------|-----|-----|-----|
+| Heartbeat processing | < 10ms | < 50ms | < 100ms |
+| Agent provisioning | < 30s | < 60s | < 120s |
+| Invoke (synchronous) | < 100ms | < 500ms | < 1s |
+| Invoke (async) | < 10ms ack | < 5s result | < 30s result |
+
+### Scalability
+
+**Current Limits (Single Cluster):**
+- 100 pods per namespace (agents namespace)
+- 40 CPU cores total
+- 200Gi memory total
+
+**Future Scaling:**
+- Multi-region deployment
+- Horizontal Station scaling
+- Distributed agent registry
+
+## Failure Modes & Recovery
+
+### Agent Failures
+
+**Detection**: Missed heartbeat → AGENT_UNHEALTHY (480)
+
+**Recovery**:
+1. Kubernetes restarts pod automatically
+2. Agent sends first heartbeat → PROVISIONED → ACTIVE
+3. If persistent failure → Station issues KILL
+
+### Station Failures
+
+**Impact**: Control plane unavailable, but agents continue operating
+
+**Recovery**:
+- Agents buffer heartbeats/metrics locally
+- Resume reporting when Station available
+- No data loss (buffered telemetry)
+
+### Network Partitions
+
+**Scenario**: Agent isolated from Station
+
+**Behavior**:
+- Agent continues local operation
+- Station marks agent AGENT_UNHEALTHY after timeout
+- Upon reconnection, agent state reconciled
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="code" href="/agents/api-reference">
+    Complete REST API documentation for agent management
+  </Card>
+
+  <Card title="Lifecycle Management" icon="rotate" href="/agents/lifecycle">
+    Deep dive into agent state machine and transitions
+  </Card>
+</CardGroup>
