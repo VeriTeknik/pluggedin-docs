@@ -276,7 +276,7 @@ const final = finalProcess(JSON.parse(step2.value));
 
 <CardGroup cols={2}>
   <Card title="Entry Size" icon="weight-hanging">
-    Maximum 256 KB per entry value
+    Maximum 2 MB per entry value
   </Card>
 
   <Card title="Default TTL" icon="hourglass-half">
@@ -311,7 +311,7 @@ Clipboard entries are scoped to your profile and project. Never store sensitive 
 
 - **Encryption**: Content encrypted at rest
 - **TTL Enforcement**: Automatic cleanup of expired entries
-- **Size Limits**: 256 KB maximum prevents abuse
+- **Size Limits**: 2 MB maximum prevents abuse
 - **Sanitization**: Content validated before storage
 
 ## Cleanup & Maintenance
