@@ -1,0 +1,730 @@
+---
+title: Clipboard API
+description: Complete API reference for clipboard (memory) operations
+sidebarTitle: Clipboard
+---
+
+# Clipboard API Reference
+
+The Clipboard API provides persistent key-value storage for MCP tools and AI agents. Access data using named keys or stack-like indexed operations.
+
+<Info>
+All clipboard endpoints require authentication. Include your API key in the Authorization header.
+</Info>
+
+## Base URL
+
+<Tabs>
+  <Tab title="Cloud Platform">
+    ```
+    https://plugged.in/api/clipboard
+    ```
+  </Tab>
+  <Tab title="Self-Hosted">
+    ```
+    https://your-domain.com/api/clipboard
+    ```
+  </Tab>
+  <Tab title="Local Development">
+    ```
+    http://localhost:12005/api/clipboard
+    ```
+  </Tab>
+</Tabs>
+
+## Rate Limiting
+
+| Operation | Limit | Window |
+|-----------|-------|--------|
+| Read operations | 100 requests | 1 minute |
+| Write operations | 60 requests | 1 minute |
+| Delete operations | 30 requests | 1 minute |
+
+## Endpoints
+
+### List Clipboard Entries
+
+Retrieve all clipboard entries for the authenticated profile.
+
+```bash
+GET /api/clipboard
+```
+
+<CodeGroup>
+```bash cURL
+curl "https://plugged.in/api/clipboard" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/clipboard', {
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY'
+  }
+});
+const { entries } = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.get(
+  'https://plugged.in/api/clipboard',
+  headers={'Authorization': 'Bearer YOUR_API_KEY'}
+)
+entries = response.json()['entries']
+```
+
+```go Go
+req, _ := http.NewRequest("GET", "https://plugged.in/api/clipboard", nil)
+req.Header.Set("Authorization", "Bearer YOUR_API_KEY")
+resp, _ := http.DefaultClient.Do(req)
+```
+</CodeGroup>
+
+**Response:**
+```json
+{
+  "success": true,
+  "entries": [
+    {
+      "uuid": "550e8400-e29b-41d4-a716-446655440000",
+      "name": "user_preferences",
+      "idx": null,
+      "value": "{\"theme\":\"dark\",\"lang\":\"en\"}",
+      "contentType": "application/json",
+      "encoding": "utf-8",
+      "sizeBytes": 32,
+      "visibility": "private",
+      "createdByTool": "pluggedin_clipboard_set",
+      "createdByModel": "claude-3-opus",
+      "createdAt": "2024-01-15T10:30:00Z",
+      "updatedAt": "2024-01-15T10:30:00Z",
+      "expiresAt": "2024-01-16T10:30:00Z"
+    },
+    {
+      "uuid": "660f9511-f3ac-52e5-b827-557766551111",
+      "name": null,
+      "idx": 0,
+      "value": "Latest stack item",
+      "contentType": "text/plain",
+      "encoding": "utf-8",
+      "sizeBytes": 17,
+      "visibility": "private",
+      "createdAt": "2024-01-15T11:00:00Z",
+      "updatedAt": "2024-01-15T11:00:00Z",
+      "expiresAt": "2024-01-16T11:00:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### Get Clipboard Entry
+
+Retrieve a specific entry by name or index.
+
+```bash
+POST /api/clipboard/get
+```
+
+<CodeGroup>
+```bash cURL (by name)
+curl -X POST "https://plugged.in/api/clipboard/get" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "user_preferences"}'
+```
+
+```bash cURL (by index)
+curl -X POST "https://plugged.in/api/clipboard/get" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"idx": 0}'
+```
+
+```javascript JavaScript
+// By name
+const response = await fetch('https://plugged.in/api/clipboard/get', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ name: 'user_preferences' })
+});
+
+// By index
+const response = await fetch('https://plugged.in/api/clipboard/get', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ idx: 0 })
+});
+```
+
+```python Python
+import requests
+
+# By name
+response = requests.post(
+  'https://plugged.in/api/clipboard/get',
+  headers={'Authorization': 'Bearer YOUR_API_KEY'},
+  json={'name': 'user_preferences'}
+)
+
+# By index
+response = requests.post(
+  'https://plugged.in/api/clipboard/get',
+  headers={'Authorization': 'Bearer YOUR_API_KEY'},
+  json={'idx': 0}
+)
+```
+</CodeGroup>
+
+**Request Body:**
+```json
+{
+  "name": "string (optional)",
+  "idx": "integer (optional)"
+}
+```
+
+<Note>
+Provide either `name` or `idx`, not both. If neither is provided, returns an error.
+</Note>
+
+**Response:**
+```json
+{
+  "success": true,
+  "entry": {
+    "uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "user_preferences",
+    "value": "{\"theme\":\"dark\",\"lang\":\"en\"}",
+    "contentType": "application/json",
+    "encoding": "utf-8",
+    "sizeBytes": 32,
+    "visibility": "private",
+    "createdAt": "2024-01-15T10:30:00Z",
+    "updatedAt": "2024-01-15T10:30:00Z",
+    "expiresAt": "2024-01-16T10:30:00Z"
+  }
+}
+```
+
+---
+
+### Set Named Entry
+
+Create or update a named clipboard entry.
+
+```bash
+POST /api/clipboard
+```
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://plugged.in/api/clipboard" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "user_preferences",
+    "value": "{\"theme\":\"dark\",\"lang\":\"en\"}",
+    "contentType": "application/json",
+    "encoding": "utf-8",
+    "visibility": "private",
+    "ttlSeconds": 86400
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/clipboard', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    name: 'user_preferences',
+    value: JSON.stringify({ theme: 'dark', lang: 'en' }),
+    contentType: 'application/json',
+    encoding: 'utf-8',
+    visibility: 'private',
+    ttlSeconds: 86400
+  })
+});
+```
+
+```python Python
+import requests
+import json
+
+response = requests.post(
+  'https://plugged.in/api/clipboard',
+  headers={'Authorization': 'Bearer YOUR_API_KEY'},
+  json={
+    'name': 'user_preferences',
+    'value': json.dumps({'theme': 'dark', 'lang': 'en'}),
+    'contentType': 'application/json',
+    'encoding': 'utf-8',
+    'visibility': 'private',
+    'ttlSeconds': 86400
+  }
+)
+```
+</CodeGroup>
+
+**Request Body:**
+```json
+{
+  "name": "string (required)",
+  "value": "string (required)",
+  "contentType": "string (default: text/plain)",
+  "encoding": "utf-8 | base64 | hex (default: utf-8)",
+  "visibility": "private | workspace | public (default: private)",
+  "createdByTool": "string (optional)",
+  "createdByModel": "string (optional)",
+  "ttlSeconds": "integer (optional, default: 86400)"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "entry": {
+    "uuid": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "user_preferences",
+    "value": "{\"theme\":\"dark\",\"lang\":\"en\"}",
+    "contentType": "application/json",
+    "encoding": "utf-8",
+    "sizeBytes": 32,
+    "visibility": "private",
+    "createdAt": "2024-01-15T10:30:00Z",
+    "updatedAt": "2024-01-15T10:30:00Z",
+    "expiresAt": "2024-01-16T10:30:00Z"
+  }
+}
+```
+
+---
+
+### Push to Stack
+
+Add a new entry to the indexed stack (LIFO).
+
+```bash
+POST /api/clipboard/push
+```
+
+<CodeGroup>
+```bash cURL
+curl -X POST "https://plugged.in/api/clipboard/push" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "value": "Step 1 processing result",
+    "contentType": "text/plain",
+    "encoding": "utf-8",
+    "ttlSeconds": 3600
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/clipboard/push', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    value: 'Step 1 processing result',
+    contentType: 'text/plain',
+    encoding: 'utf-8',
+    ttlSeconds: 3600
+  })
+});
+```
+
+```python Python
+import requests
+
+response = requests.post(
+  'https://plugged.in/api/clipboard/push',
+  headers={'Authorization': 'Bearer YOUR_API_KEY'},
+  json={
+    'value': 'Step 1 processing result',
+    'contentType': 'text/plain',
+    'encoding': 'utf-8',
+    'ttlSeconds': 3600
+  }
+)
+```
+</CodeGroup>
+
+**Request Body:**
+```json
+{
+  "value": "string (required)",
+  "contentType": "string (default: text/plain)",
+  "encoding": "utf-8 | base64 | hex (default: utf-8)",
+  "visibility": "private | workspace | public (default: private)",
+  "createdByTool": "string (optional)",
+  "createdByModel": "string (optional)",
+  "ttlSeconds": "integer (optional, default: 86400)"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "entry": {
+    "uuid": "770g0622-g4bd-63f6-c938-668877662222",
+    "idx": 0,
+    "value": "Step 1 processing result",
+    "contentType": "text/plain",
+    "encoding": "utf-8",
+    "sizeBytes": 24,
+    "visibility": "private",
+    "createdAt": "2024-01-15T12:00:00Z",
+    "updatedAt": "2024-01-15T12:00:00Z",
+    "expiresAt": "2024-01-15T13:00:00Z"
+  }
+}
+```
+
+<Note>
+When a new entry is pushed, existing indexed entries have their indices incremented (i.e., the newest entry is always at index 0).
+</Note>
+
+---
+
+### Pop from Stack
+
+Remove and return the most recent indexed entry (index 0).
+
+```bash
+DELETE /api/clipboard/pop
+```
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE "https://plugged.in/api/clipboard/pop" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/clipboard/pop', {
+  method: 'DELETE',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY'
+  }
+});
+const { entry } = await response.json();
+console.log('Popped value:', entry.value);
+```
+
+```python Python
+import requests
+
+response = requests.delete(
+  'https://plugged.in/api/clipboard/pop',
+  headers={'Authorization': 'Bearer YOUR_API_KEY'}
+)
+entry = response.json().get('entry')
+print('Popped value:', entry['value'])
+```
+</CodeGroup>
+
+**Response:**
+```json
+{
+  "success": true,
+  "entry": {
+    "uuid": "770g0622-g4bd-63f6-c938-668877662222",
+    "idx": 0,
+    "value": "Step 1 processing result",
+    "contentType": "text/plain",
+    "encoding": "utf-8",
+    "sizeBytes": 24,
+    "visibility": "private",
+    "createdAt": "2024-01-15T12:00:00Z",
+    "updatedAt": "2024-01-15T12:00:00Z"
+  }
+}
+```
+
+<Warning>
+Pop removes the entry from storage. If you need to read without removing, use the GET endpoint with `idx: 0`.
+</Warning>
+
+---
+
+### Delete Entry
+
+Delete a specific entry by name or index.
+
+```bash
+DELETE /api/clipboard
+```
+
+<CodeGroup>
+```bash cURL (by name)
+curl -X DELETE "https://plugged.in/api/clipboard" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "user_preferences"}'
+```
+
+```bash cURL (by index)
+curl -X DELETE "https://plugged.in/api/clipboard" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"idx": 0}'
+```
+
+```javascript JavaScript
+// Delete by name
+await fetch('https://plugged.in/api/clipboard', {
+  method: 'DELETE',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ name: 'user_preferences' })
+});
+```
+
+```python Python
+import requests
+
+# Delete by name
+response = requests.delete(
+  'https://plugged.in/api/clipboard',
+  headers={'Authorization': 'Bearer YOUR_API_KEY'},
+  json={'name': 'user_preferences'}
+)
+```
+</CodeGroup>
+
+**Request Body:**
+```json
+{
+  "name": "string (optional)",
+  "idx": "integer (optional)"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "deleted": true
+}
+```
+
+---
+
+### Clear All Entries
+
+Delete all clipboard entries for the profile.
+
+```bash
+DELETE /api/clipboard/all
+```
+
+<CodeGroup>
+```bash cURL
+curl -X DELETE "https://plugged.in/api/clipboard/all" \
+  -H "Authorization: Bearer YOUR_API_KEY"
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/clipboard/all', {
+  method: 'DELETE',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY'
+  }
+});
+const { deletedCount } = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.delete(
+  'https://plugged.in/api/clipboard/all',
+  headers={'Authorization': 'Bearer YOUR_API_KEY'}
+)
+deleted_count = response.json()['deletedCount']
+```
+</CodeGroup>
+
+**Response:**
+```json
+{
+  "success": true,
+  "deletedCount": 5
+}
+```
+
+<Warning>
+This action is irreversible. All clipboard entries for the profile will be permanently deleted.
+</Warning>
+
+---
+
+## Data Types
+
+### ClipboardEntry
+
+```typescript
+interface ClipboardEntry {
+  uuid: string;                    // Unique identifier
+  name?: string;                   // Semantic key (named access)
+  idx?: number;                    // Stack index (indexed access)
+  value: string;                   // Content value
+  contentType: string;             // MIME type
+  encoding: "utf-8" | "base64" | "hex";
+  sizeBytes: number;               // Value size in bytes
+  visibility: "private" | "workspace" | "public";
+  createdByTool?: string;          // Creating MCP tool name
+  createdByModel?: string;         // Creating AI model name
+  createdAt: string;               // ISO 8601 timestamp
+  updatedAt: string;               // ISO 8601 timestamp
+  expiresAt?: string;              // TTL expiration time
+}
+```
+
+### Visibility Levels
+
+| Level | Description |
+|-------|-------------|
+| `private` | Only accessible by the owner |
+| `workspace` | Shared within the workspace |
+| `public` | Accessible via API with authentication |
+
+### Encoding Options
+
+| Encoding | Use Case |
+|----------|----------|
+| `utf-8` | Text, JSON, and string data |
+| `base64` | Binary data (images, files) |
+| `hex` | Cryptographic data, hashes |
+
+---
+
+## Error Responses
+
+### Not Found
+
+```json
+{
+  "success": false,
+  "error": "Entry not found"
+}
+```
+
+### Validation Error
+
+```json
+{
+  "success": false,
+  "error": "Validation error",
+  "details": {
+    "name": "Name is required for set operation"
+  }
+}
+```
+
+### Size Limit Exceeded
+
+```json
+{
+  "success": false,
+  "error": "Value exceeds maximum size of 256KB"
+}
+```
+
+### Rate Limited
+
+```json
+{
+  "success": false,
+  "error": "Rate limit exceeded",
+  "retryAfter": 60
+}
+```
+
+---
+
+## Limits & Constraints
+
+| Constraint | Value |
+|------------|-------|
+| Max entry size | 256 KB |
+| Default TTL | 24 hours (86400 seconds) |
+| Max TTL | 30 days |
+| Name length | 1-255 characters |
+| Valid name chars | alphanumeric, underscore, hyphen |
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Descriptive Names">
+    Choose meaningful names that describe the data:
+    - Good: `last_api_response`, `user_session_context`
+    - Bad: `temp`, `x`, `data1`
+  </Accordion>
+
+  <Accordion title="Set Appropriate TTLs">
+    Match TTL to your use case:
+    - Temporary processing: 5-15 minutes
+    - Session data: 1-4 hours
+    - Cache data: 24 hours
+  </Accordion>
+
+  <Accordion title="Use Correct Content Types">
+    Set content types for proper handling:
+    - `application/json` for structured data
+    - `text/plain` for simple strings
+    - `image/png` for base64-encoded images
+  </Accordion>
+
+  <Accordion title="Handle Expiration">
+    Check for null responses and handle expired entries gracefully:
+    ```typescript
+    const entry = await client.clipboard.getByName('cache_key');
+    if (!entry) {
+      // Entry expired or doesn't exist - refresh cache
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Memory Feature" icon="clipboard" href="/platform/memory">
+    Platform overview of the Memory feature
+  </Card>
+
+  <Card title="JavaScript SDK" icon="js" href="/sdks/javascript#clipboard">
+    Clipboard methods in JavaScript
+  </Card>
+
+  <Card title="Python SDK" icon="python" href="/sdks/python#clipboard">
+    Clipboard methods in Python
+  </Card>
+
+  <Card title="Go SDK" icon="golang" href="/sdks/go#clipboard">
+    Clipboard methods in Go
+  </Card>
+</CardGroup>

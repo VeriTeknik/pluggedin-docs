@@ -63,6 +63,7 @@
       "pages": [
         "platform/overview",
         "platform/document-library",
+        "platform/memory",
         "platform/registry",
         "platform/sharing-servers",
         "platform/user-management"
@@ -136,6 +137,7 @@
       "pages": [
         "api/reference",
         "api/authentication",
+        "api/clipboard",
         "api/oauth"
       ]
     },

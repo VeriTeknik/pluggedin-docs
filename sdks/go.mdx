@@ -692,6 +692,150 @@ Complete working examples are available in the [GitHub repository](https://githu
 
 Upload helpers now emit descriptive errors because binary ingestion is no longer exposed via the public API.
 
+### Clipboard Service Methods
+
+| Method | Description |
+|--------|-------------|
+| `List(ctx)` | List all clipboard entries |
+| `Get(ctx, filters)` | Get entry by name or index |
+| `GetByName(ctx, name)` | Get entry by name |
+| `GetByIndex(ctx, idx)` | Get entry by stack index |
+| `Set(ctx, request)` | Create or update named entry |
+| `Push(ctx, request)` | Push value to indexed stack |
+| `Pop(ctx)` | Pop and remove most recent entry |
+| `Delete(ctx, request)` | Delete specific entry |
+| `DeleteByName(ctx, name)` | Delete entry by name |
+| `DeleteByIndex(ctx, idx)` | Delete entry by index |
+| `ClearAll(ctx)` | Delete all entries |
+
+## Clipboard (Memory) Service
+
+The Clipboard service provides persistent key-value storage for MCP tools and AI agents.
+
+### Named Access
+
+```go
+ctx := context.Background()
+
+// Set a named entry
+entry, err := client.Clipboard.Set(ctx, &pluggedin.ClipboardSetRequest{
+    Name:        "user_preferences",
+    Value:       `{"theme": "dark", "lang": "en"}`,
+    ContentType: "application/json",
+    Encoding:    pluggedin.EncodingUTF8,
+    Visibility:  pluggedin.ClipboardVisibilityPrivate,
+    TTLSeconds:  86400, // 24 hours
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Created entry: %s\n", entry.UUID)
+
+// Get by name
+entry, err = client.Clipboard.GetByName(ctx, "user_preferences")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Value: %s\n", entry.Value)
+
+// Delete by name
+deleted, err := client.Clipboard.DeleteByName(ctx, "user_preferences")
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Deleted: %v\n", deleted)
+```
+
+### Indexed (Stack) Access
+
+```go
+ctx := context.Background()
+
+// Push to stack
+_, err := client.Clipboard.Push(ctx, &pluggedin.ClipboardPushRequest{
+    Value:       "Step 1 result",
+    ContentType: "text/plain",
+})
+
+_, err = client.Clipboard.Push(ctx, &pluggedin.ClipboardPushRequest{
+    Value:       "Step 2 result",
+    ContentType: "text/plain",
+})
+
+// Get by index (0 = most recent)
+latest, err := client.Clipboard.GetByIndex(ctx, 0)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Latest: %s\n", latest.Value) // "Step 2 result"
+
+// Pop removes and returns the most recent
+popped, err := client.Clipboard.Pop(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Popped: %s\n", popped.Value) // "Step 2 result"
+```
+
+### List All Entries
+
+```go
+ctx := context.Background()
+
+entries, err := client.Clipboard.List(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, entry := range entries {
+    var nameOrIdx string
+    if entry.Name != nil {
+        nameOrIdx = *entry.Name
+    } else if entry.Idx != nil {
+        nameOrIdx = fmt.Sprintf("idx:%d", *entry.Idx)
+    }
+    fmt.Printf("%s: %s\n", nameOrIdx, entry.Value)
+    if entry.ExpiresAt != nil {
+        fmt.Printf("  Expires: %s\n", entry.ExpiresAt.Format(time.RFC3339))
+    }
+}
+```
+
+### Type Definitions
+
+```go
+// ClipboardEntry represents a clipboard entry
+type ClipboardEntry struct {
+    UUID           string              `json:"uuid"`
+    Name           *string             `json:"name,omitempty"`
+    Idx            *int                `json:"idx,omitempty"`
+    Value          string              `json:"value"`
+    ContentType    string              `json:"contentType"`
+    Encoding       ClipboardEncoding   `json:"encoding"`
+    SizeBytes      int                 `json:"sizeBytes"`
+    Visibility     ClipboardVisibility `json:"visibility"`
+    CreatedByTool  *string             `json:"createdByTool,omitempty"`
+    CreatedByModel *string             `json:"createdByModel,omitempty"`
+    CreatedAt      time.Time           `json:"createdAt"`
+    UpdatedAt      time.Time           `json:"updatedAt"`
+    ExpiresAt      *time.Time          `json:"expiresAt,omitempty"`
+}
+
+// Encoding options
+const (
+    EncodingUTF8   ClipboardEncoding = "utf-8"
+    EncodingBase64 ClipboardEncoding = "base64"
+    EncodingHex    ClipboardEncoding = "hex"
+)
+
+// Visibility options
+const (
+    ClipboardVisibilityPrivate   ClipboardVisibility = "private"
+    ClipboardVisibilityWorkspace ClipboardVisibility = "workspace"
+    ClipboardVisibilityPublic    ClipboardVisibility = "public"
+)
+```
+
 ## Support
 
 - **Go Package**: [https://pkg.go.dev/github.com/veriteknik/pluggedinkit-go](https://pkg.go.dev/github.com/veriteknik/pluggedinkit-go)

@@ -629,6 +629,123 @@ Complete working examples are available in the [GitHub repository](https://githu
 
 Upload helpers now raise descriptive errors because binary ingestion is no longer available via the public API.
 
+### Clipboard Methods
+
+| Method | Description |
+|--------|-------------|
+| `list()` | List all clipboard entries |
+| `get(name, idx)` | Get entry by name or index |
+| `set(...)` | Create or update named entry |
+| `push(...)` | Push value to indexed stack |
+| `pop()` | Pop and remove most recent entry |
+| `delete(name, idx)` | Delete specific entry |
+| `clear_all()` | Delete all entries |
+
+## Clipboard (Memory) Service
+
+The Clipboard service provides persistent key-value storage for MCP tools and AI agents. Both sync and async clients are supported.
+
+### Named Access (Sync)
+
+```python
+# Set a named entry
+entry = client.clipboard.set(
+    name="user_preferences",
+    value='{"theme": "dark", "lang": "en"}',
+    content_type="application/json",
+    encoding="utf-8",
+    visibility="private",
+    ttl_seconds=86400  # 24 hours
+)
+print(f"Created entry: {entry.uuid}")
+
+# Get by name
+entry = client.clipboard.get(name="user_preferences")
+print(f"Value: {entry.value}")
+
+# Delete by name
+deleted = client.clipboard.delete(name="user_preferences")
+print(f"Deleted: {deleted}")
+```
+
+### Named Access (Async)
+
+```python
+import asyncio
+from pluggedinkit import AsyncPluggedInClient
+
+async def clipboard_operations():
+    async with AsyncPluggedInClient(api_key="your-key") as client:
+        # Set entry
+        entry = await client.clipboard.set(
+            name="session_data",
+            value="session info",
+            content_type="text/plain"
+        )
+
+        # Get entry
+        entry = await client.clipboard.get(name="session_data")
+        print(f"Session: {entry.value}")
+
+asyncio.run(clipboard_operations())
+```
+
+### Indexed (Stack) Access
+
+```python
+# Push to stack
+client.clipboard.push(
+    value="Step 1 result",
+    content_type="text/plain"
+)
+
+client.clipboard.push(
+    value="Step 2 result",
+    content_type="text/plain"
+)
+
+# Get by index (0 = most recent)
+latest = client.clipboard.get(idx=0)
+print(f"Latest: {latest.value}")  # "Step 2 result"
+
+# Pop removes and returns the most recent
+popped = client.clipboard.pop()
+print(f"Popped: {popped.value}")  # "Step 2 result"
+```
+
+### List All Entries
+
+```python
+entries = client.clipboard.list()
+for entry in entries:
+    name_or_idx = entry.name or f"idx:{entry.idx}"
+    print(f"{name_or_idx}: {entry.value}")
+    if entry.expires_at:
+        print(f"  Expires: {entry.expires_at}")
+```
+
+### Pydantic Models
+
+```python
+from pluggedinkit.types import (
+    ClipboardEntry,
+    ClipboardSetRequest,
+    ClipboardPushRequest,
+    ClipboardEncoding,
+    ClipboardVisibility
+)
+
+# All types are Pydantic models with validation
+request = ClipboardSetRequest(
+    name="cache_key",
+    value="cached data",
+    content_type="text/plain",
+    encoding=ClipboardEncoding.UTF8,
+    visibility=ClipboardVisibility.PRIVATE,
+    ttl_seconds=3600
+)
+```
+
 ## Support
 
 - **PyPI Package**: [https://pypi.org/project/pluggedinkit/](https://pypi.org/project/pluggedinkit/)

@@ -440,6 +440,102 @@ Complete working examples are available in the [GitHub repository](https://githu
 
 All binary upload helpers now throw descriptive errors because the public API no longer exposes direct upload endpoints. Use the web interface or upcoming ingestion pipeline for file uploads.
 
+### Clipboard Methods
+
+| Method | Description |
+|--------|-------------|
+| `list()` | List all clipboard entries |
+| `get(filters)` | Get entry by name or index |
+| `getByName(name)` | Get entry by name |
+| `getByIndex(idx)` | Get entry by stack index |
+| `set(request)` | Create or update named entry |
+| `push(request)` | Push value to indexed stack |
+| `pop()` | Pop and remove most recent entry |
+| `delete(request)` | Delete specific entry |
+| `clearAll()` | Delete all entries |
+
+## Clipboard (Memory) Service
+
+The Clipboard service provides persistent key-value storage for MCP tools and AI agents.
+
+### Named Access
+
+```typescript
+// Set a named entry
+await client.clipboard.set({
+  name: 'user_preferences',
+  value: JSON.stringify({ theme: 'dark', lang: 'en' }),
+  contentType: 'application/json',
+  encoding: 'utf-8',
+  visibility: 'private',
+  ttlSeconds: 86400  // 24 hours
+});
+
+// Get by name
+const entry = await client.clipboard.getByName('user_preferences');
+console.log('Preferences:', JSON.parse(entry.value));
+
+// Delete by name
+await client.clipboard.delete({ name: 'user_preferences' });
+```
+
+### Indexed (Stack) Access
+
+```typescript
+// Push to stack
+await client.clipboard.push({
+  value: 'Step 1 result',
+  contentType: 'text/plain'
+});
+
+await client.clipboard.push({
+  value: 'Step 2 result',
+  contentType: 'text/plain'
+});
+
+// Get by index (0 = most recent)
+const latest = await client.clipboard.getByIndex(0);
+console.log('Latest:', latest.value); // "Step 2 result"
+
+// Pop removes and returns the most recent
+const popped = await client.clipboard.pop();
+console.log('Popped:', popped.value); // "Step 2 result"
+```
+
+### List All Entries
+
+```typescript
+const entries = await client.clipboard.list();
+for (const entry of entries) {
+  console.log(`${entry.name || `idx:${entry.idx}`}: ${entry.value}`);
+  console.log(`  Expires: ${entry.expiresAt}`);
+}
+```
+
+### TypeScript Types
+
+```typescript
+import type {
+  ClipboardEntry,
+  ClipboardSetRequest,
+  ClipboardPushRequest,
+  ClipboardGetFilters,
+  ClipboardDeleteRequest,
+  ClipboardEncoding,
+  ClipboardVisibility
+} from 'pluggedinkit-js';
+
+// All types are fully documented
+const request: ClipboardSetRequest = {
+  name: 'cache_key',
+  value: 'cached data',
+  contentType: 'text/plain',
+  encoding: 'utf-8',      // 'utf-8' | 'base64' | 'hex'
+  visibility: 'private',  // 'private' | 'workspace' | 'public'
+  ttlSeconds: 3600
+};
+```
+
 ## Support
 
 - **NPM Package**: [https://www.npmjs.com/package/pluggedinkit-js](https://www.npmjs.com/package/pluggedinkit-js)

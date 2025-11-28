@@ -1,0 +1,416 @@
+---
+title: Memory (Named Clipboard)
+description: Persistent key-value storage for MCP tools and AI agents with named and indexed access
+sidebarTitle: Memory
+icon: 'clipboard'
+---
+
+# Memory (Named Clipboard)
+
+The Memory feature provides persistent key-value storage that MCP tools and AI agents can use to share data between tool invocations. With support for both named (semantic keys) and indexed (array-like) access patterns, it enables sophisticated data persistence workflows.
+
+## Overview
+
+<CardGroup cols={2}>
+  <Card title="Named Storage" icon="tag">
+    Store and retrieve data using semantic keys like "user_preferences" or "session_context"
+  </Card>
+
+  <Card title="Indexed Storage" icon="list-ol">
+    Push and pop data in stack-like fashion for sequential processing
+  </Card>
+
+  <Card title="Profile Isolation" icon="shield-halved">
+    Data is scoped to your profile, ensuring complete isolation between users
+  </Card>
+
+  <Card title="TTL Expiration" icon="clock">
+    Automatic cleanup of expired entries with configurable time-to-live
+  </Card>
+</CardGroup>
+
+## Access Patterns
+
+<Tabs>
+  <Tab title="Named Access">
+    **How it works**: Store data with semantic keys for direct retrieval.
+
+    **Example Keys**: `user_preferences`, `last_search_results`, `conversation_context`
+
+    **Best for**:
+    - Configuration and preferences
+    - Caching frequently used data
+    - Sharing state between tools
+    - Key-based lookups
+
+    ```typescript
+    // Set a named entry
+    await clipboard.set({
+      name: "user_preferences",
+      value: JSON.stringify({ theme: "dark", lang: "en" }),
+      contentType: "application/json"
+    });
+
+    // Get by name
+    const prefs = await clipboard.get({ name: "user_preferences" });
+    ```
+  </Tab>
+
+  <Tab title="Indexed Access">
+    **How it works**: Push data to a stack and retrieve by index (0 = most recent).
+
+    **Example Use Cases**: Processing queues, undo stacks, sequential data
+
+    **Best for**:
+    - LIFO (Last-In-First-Out) workflows
+    - Undo/redo operations
+    - Processing pipelines
+    - Temporary data storage
+
+    ```typescript
+    // Push to stack
+    await clipboard.push({
+      value: "Step 1 result",
+      contentType: "text/plain"
+    });
+
+    // Pop most recent (index 0)
+    const latest = await clipboard.pop();
+    ```
+  </Tab>
+</Tabs>
+
+## Quick Start
+
+<Steps>
+  <Step title="Access Memory Page">
+    Navigate to **Memory** in the sidebar to view your clipboard entries
+  </Step>
+
+  <Step title="Create Named Entry">
+    Click **+ New Entry** and provide a name, value, and optional settings
+  </Step>
+
+  <Step title="Use in MCP Tools">
+    MCP tools can read and write to your clipboard using the clipboard tools
+  </Step>
+
+  <Step title="Monitor & Clean">
+    View all entries, check expiration times, and delete unused data
+  </Step>
+</Steps>
+
+## MCP Tools
+
+The following MCP tools are available for clipboard operations:
+
+### Named Operations
+
+| Tool | Description |
+|------|-------------|
+| `pluggedin_clipboard_set` | Set or update a named clipboard entry |
+| `pluggedin_clipboard_get` | Retrieve entry by name or index |
+| `pluggedin_clipboard_delete` | Delete a specific entry |
+| `pluggedin_clipboard_list` | List all clipboard entries |
+
+### Stack Operations
+
+| Tool | Description |
+|------|-------------|
+| `pluggedin_clipboard_push` | Push value to indexed stack |
+| `pluggedin_clipboard_pop` | Pop and remove the most recent entry |
+
+## Data Structure
+
+### Clipboard Entry
+
+```typescript
+interface ClipboardEntry {
+  uuid: string;                    // Unique identifier
+  name?: string;                   // Semantic key (for named access)
+  idx?: number;                    // Stack index (for indexed access)
+  value: string;                   // Entry content
+  contentType: string;             // MIME type (default: "text/plain")
+  encoding: "utf-8" | "base64" | "hex";  // Content encoding
+  sizeBytes: number;               // Content size in bytes
+  visibility: "private" | "workspace" | "public";
+  createdByTool?: string;          // Tool that created entry
+  createdByModel?: string;         // AI model that created entry
+  createdAt: Date;
+  updatedAt: Date;
+  expiresAt?: Date;                // TTL expiration time
+}
+```
+
+## Content Types & Encoding
+
+<Tabs>
+  <Tab title="Text Content">
+    For plain text and JSON data:
+
+    ```typescript
+    {
+      value: "Hello, World!",
+      contentType: "text/plain",
+      encoding: "utf-8"
+    }
+    ```
+
+    **Supported types**: `text/plain`, `application/json`, `text/markdown`, `text/html`
+  </Tab>
+
+  <Tab title="Binary Content">
+    For images, files, and binary data using base64:
+
+    ```typescript
+    {
+      value: "iVBORw0KGgoAAAANSUhEUgAA...",  // base64 encoded
+      contentType: "image/png",
+      encoding: "base64"
+    }
+    ```
+
+    **Supported encodings**: `base64`, `hex`
+  </Tab>
+</Tabs>
+
+## Usage Examples
+
+### Sharing Data Between Tools
+
+<CodeGroup>
+```typescript JavaScript SDK
+import { PluggedInClient } from 'pluggedinkit';
+
+const client = new PluggedInClient({ apiKey: 'your-api-key' });
+
+// Tool A: Save search results
+await client.clipboard.set({
+  name: 'last_search_results',
+  value: JSON.stringify({ results: [...], query: 'test' }),
+  contentType: 'application/json',
+  ttlSeconds: 3600  // Expire in 1 hour
+});
+
+// Tool B: Retrieve and use results
+const entry = await client.clipboard.getByName('last_search_results');
+const results = JSON.parse(entry.value);
+```
+
+```python Python SDK
+from pluggedinkit import PluggedInClient
+import json
+
+client = PluggedInClient(api_key="your-api-key")
+
+# Tool A: Save search results
+client.clipboard.set(
+    name="last_search_results",
+    value=json.dumps({"results": [...], "query": "test"}),
+    content_type="application/json",
+    ttl_seconds=3600  # Expire in 1 hour
+)
+
+# Tool B: Retrieve and use results
+entry = client.clipboard.get(name="last_search_results")
+results = json.loads(entry.value)
+```
+
+```go Go SDK
+package main
+
+import (
+    "context"
+    "encoding/json"
+    pluggedinkit "github.com/veriteknik/pluggedinkit-go"
+)
+
+func main() {
+    client := pluggedinkit.NewClient("your-api-key")
+    ctx := context.Background()
+
+    // Tool A: Save search results
+    data, _ := json.Marshal(map[string]interface{}{
+        "results": []string{...},
+        "query": "test",
+    })
+
+    client.Clipboard.Set(ctx, &pluggedinkit.ClipboardSetRequest{
+        Name:        "last_search_results",
+        Value:       string(data),
+        ContentType: "application/json",
+        TTLSeconds:  3600,
+    })
+
+    // Tool B: Retrieve and use results
+    entry, _ := client.Clipboard.GetByName(ctx, "last_search_results")
+    var results map[string]interface{}
+    json.Unmarshal([]byte(entry.Value), &results)
+}
+```
+</CodeGroup>
+
+### Processing Pipeline with Stack
+
+```typescript
+// Step 1: Push initial data
+await client.clipboard.push({
+  value: JSON.stringify({ step: 1, data: 'raw input' }),
+  contentType: 'application/json'
+});
+
+// Step 2: Process and push result
+const step1 = await client.clipboard.pop();
+const processed = processData(JSON.parse(step1.value));
+await client.clipboard.push({
+  value: JSON.stringify({ step: 2, data: processed }),
+  contentType: 'application/json'
+});
+
+// Step 3: Final processing
+const step2 = await client.clipboard.pop();
+const final = finalProcess(JSON.parse(step2.value));
+```
+
+## Limits & Quotas
+
+<CardGroup cols={2}>
+  <Card title="Entry Size" icon="weight-hanging">
+    Maximum 256 KB per entry value
+  </Card>
+
+  <Card title="Default TTL" icon="hourglass-half">
+    24 hours if not specified
+  </Card>
+
+  <Card title="Rate Limits" icon="gauge-high">
+    Standard API rate limits apply
+  </Card>
+
+  <Card title="Profile Scope" icon="user">
+    Entries isolated per profile
+  </Card>
+</CardGroup>
+
+## Security & Isolation
+
+### Access Control
+
+<Warning>
+Clipboard entries are scoped to your profile and project. Never store sensitive credentials in clipboard entries.
+</Warning>
+
+- **Profile Isolation**: Each profile has its own clipboard namespace
+- **Project Scope**: Entries are associated with the current project
+- **Visibility Levels**:
+  - `private`: Only accessible by you
+  - `workspace`: Shared within your workspace
+  - `public`: Accessible via API with authentication
+
+### Data Protection
+
+- **Encryption**: Content encrypted at rest
+- **TTL Enforcement**: Automatic cleanup of expired entries
+- **Size Limits**: 256 KB maximum prevents abuse
+- **Sanitization**: Content validated before storage
+
+## Cleanup & Maintenance
+
+### Automatic Cleanup
+
+Expired entries are automatically removed by the system cleanup job. You can also manually manage entries:
+
+```typescript
+// Delete specific entry
+await client.clipboard.delete({ name: 'old_entry' });
+
+// Clear all entries (use with caution)
+await client.clipboard.clearAll();
+```
+
+### Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Meaningful Names">
+    Choose descriptive names for named entries:
+    - Good: `user_session_context`, `last_api_response`
+    - Bad: `temp`, `data1`, `x`
+  </Accordion>
+
+  <Accordion title="Set Appropriate TTLs">
+    - Short-term data: 5-15 minutes
+    - Session data: 1-4 hours
+    - Cache data: 24 hours (default)
+    - Persistent config: Set long TTL or refresh regularly
+  </Accordion>
+
+  <Accordion title="Choose Right Access Pattern">
+    - Named: For data you need to retrieve by key
+    - Indexed: For sequential processing or temporary storage
+  </Accordion>
+
+  <Accordion title="Content Type Matters">
+    Set appropriate content types for proper handling:
+    - `application/json` for structured data
+    - `text/plain` for simple strings
+    - `image/png`, `application/pdf` for binary (base64 encoded)
+  </Accordion>
+</AccordionGroup>
+
+## Monitoring
+
+### Memory Page Features
+
+The Memory page in the web interface provides:
+
+- **Entry List**: View all clipboard entries with metadata
+- **Filters**: Filter by name, content type, or visibility
+- **Quick Actions**: Copy, edit, or delete entries
+- **Expiration Info**: See when entries will expire
+- **Usage Stats**: Track clipboard usage
+
+## API Reference
+
+### Core Endpoints
+
+```typescript
+// List all entries
+GET /api/clipboard
+
+// Get entry by name or index
+POST /api/clipboard/get
+
+// Set named entry
+POST /api/clipboard
+
+// Push to stack
+POST /api/clipboard/push
+
+// Pop from stack
+DELETE /api/clipboard/pop
+
+// Delete entry
+DELETE /api/clipboard
+```
+
+See [Clipboard API Reference](/api/clipboard) for complete documentation.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="API Reference" icon="code" href="/api/clipboard">
+    Complete clipboard API documentation
+  </Card>
+
+  <Card title="JavaScript SDK" icon="js" href="/sdks/javascript#clipboard">
+    Clipboard methods in JavaScript
+  </Card>
+
+  <Card title="Python SDK" icon="python" href="/sdks/python#clipboard">
+    Clipboard methods in Python
+  </Card>
+
+  <Card title="Go SDK" icon="golang" href="/sdks/go#clipboard">
+    Clipboard methods in Go
+  </Card>
+</CardGroup>
