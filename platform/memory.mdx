@@ -136,11 +136,26 @@ interface ClipboardEntry {
   visibility: "private" | "workspace" | "public";
   createdByTool?: string;          // Tool that created entry
   createdByModel?: string;         // AI model that created entry
+  source?: "ui" | "sdk" | "mcp";   // Entry source (auto-set)
   createdAt: Date;
   updatedAt: Date;
   expiresAt?: Date;                // TTL expiration time
 }
 ```
+
+### Source Types
+
+The `source` field indicates how the clipboard entry was created:
+
+| Source | Description |
+|--------|-------------|
+| `ui` | Created via the web interface (default) |
+| `sdk` | Created via one of the official SDKs |
+| `mcp` | Created via MCP proxy tools |
+
+<Note>
+The `source` field is automatically set based on how the entry was created. You cannot override this value.
+</Note>
 
 ## Content Types & Encoding
 

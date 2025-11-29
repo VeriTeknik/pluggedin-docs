@@ -98,6 +98,7 @@ resp, _ := http.DefaultClient.Do(req)
       "visibility": "private",
       "createdByTool": "pluggedin_clipboard_set",
       "createdByModel": "claude-3-opus",
+      "source": "mcp",
       "createdAt": "2024-01-15T10:30:00Z",
       "updatedAt": "2024-01-15T10:30:00Z",
       "expiresAt": "2024-01-16T10:30:00Z"
@@ -111,6 +112,7 @@ resp, _ := http.DefaultClient.Do(req)
       "encoding": "utf-8",
       "sizeBytes": 17,
       "visibility": "private",
+      "source": "ui",
       "createdAt": "2024-01-15T11:00:00Z",
       "updatedAt": "2024-01-15T11:00:00Z",
       "expiresAt": "2024-01-16T11:00:00Z"
@@ -209,6 +211,7 @@ Provide either `name` or `idx`, not both. If neither is provided, returns an err
     "encoding": "utf-8",
     "sizeBytes": 32,
     "visibility": "private",
+    "source": "sdk",
     "createdAt": "2024-01-15T10:30:00Z",
     "updatedAt": "2024-01-15T10:30:00Z",
     "expiresAt": "2024-01-16T10:30:00Z"
@@ -304,6 +307,7 @@ response = requests.post(
     "encoding": "utf-8",
     "sizeBytes": 32,
     "visibility": "private",
+    "source": "sdk",
     "createdAt": "2024-01-15T10:30:00Z",
     "updatedAt": "2024-01-15T10:30:00Z",
     "expiresAt": "2024-01-16T10:30:00Z"
@@ -391,6 +395,7 @@ response = requests.post(
     "encoding": "utf-8",
     "sizeBytes": 24,
     "visibility": "private",
+    "source": "sdk",
     "createdAt": "2024-01-15T12:00:00Z",
     "updatedAt": "2024-01-15T12:00:00Z",
     "expiresAt": "2024-01-15T13:00:00Z"
@@ -453,6 +458,7 @@ print('Popped value:', entry['value'])
     "encoding": "utf-8",
     "sizeBytes": 24,
     "visibility": "private",
+    "source": "mcp",
     "createdAt": "2024-01-15T12:00:00Z",
     "updatedAt": "2024-01-15T12:00:00Z"
   }
@@ -595,11 +601,26 @@ interface ClipboardEntry {
   visibility: "private" | "workspace" | "public";
   createdByTool?: string;          // Creating MCP tool name
   createdByModel?: string;         // Creating AI model name
+  source?: "ui" | "sdk" | "mcp";   // Entry source (auto-set)
   createdAt: string;               // ISO 8601 timestamp
   updatedAt: string;               // ISO 8601 timestamp
   expiresAt?: string;              // TTL expiration time
 }
 ```
+
+### Source Types
+
+The `source` field indicates how the clipboard entry was created:
+
+| Source | Description |
+|--------|-------------|
+| `ui` | Created via the web interface (default) |
+| `sdk` | Created via one of the official SDKs |
+| `mcp` | Created via MCP proxy tools |
+
+<Note>
+The `source` field is automatically set based on how the entry was created. You cannot override this value when creating entries.
+</Note>
 
 ### Visibility Levels
 
