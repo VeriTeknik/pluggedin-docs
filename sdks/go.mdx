@@ -814,12 +814,23 @@ type ClipboardEntry struct {
     Encoding       ClipboardEncoding   `json:"encoding"`
     SizeBytes      int                 `json:"sizeBytes"`
     Visibility     ClipboardVisibility `json:"visibility"`
+    Source         ClipboardSource     `json:"source"`
     CreatedByTool  *string             `json:"createdByTool,omitempty"`
     CreatedByModel *string             `json:"createdByModel,omitempty"`
     CreatedAt      time.Time           `json:"createdAt"`
     UpdatedAt      time.Time           `json:"updatedAt"`
     ExpiresAt      *time.Time          `json:"expiresAt,omitempty"`
 }
+
+// Source options - tracks where entries originate
+const (
+    ClipboardSourceUI  ClipboardSource = "ui"   // Created via web interface
+    ClipboardSourceSDK ClipboardSource = "sdk"  // Created via SDK (automatically set)
+    ClipboardSourceMCP ClipboardSource = "mcp"  // Created via MCP tools
+)
+
+// The SDK automatically sets Source to ClipboardSourceSDK for all entries.
+// DefaultClipboardSource is ClipboardSourceUI for backward compatibility.
 
 // Encoding options
 const (

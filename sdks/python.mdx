@@ -732,7 +732,9 @@ from pluggedinkit.types import (
     ClipboardSetRequest,
     ClipboardPushRequest,
     ClipboardEncoding,
-    ClipboardVisibility
+    ClipboardVisibility,
+    ClipboardSource,
+    DEFAULT_CLIPBOARD_SOURCE
 )
 
 # All types are Pydantic models with validation
@@ -744,6 +746,15 @@ request = ClipboardSetRequest(
     visibility=ClipboardVisibility.PRIVATE,
     ttl_seconds=3600
 )
+
+# ClipboardSource tracks where entries originate
+class ClipboardSource(str, Enum):
+    UI = "ui"      # Created via web interface
+    SDK = "sdk"    # Created via SDK (automatically set)
+    MCP = "mcp"    # Created via MCP tools
+
+# The SDK automatically sets source to ClipboardSource.SDK for all entries.
+# DEFAULT_CLIPBOARD_SOURCE is ClipboardSource.UI for backward compatibility.
 ```
 
 ## Support

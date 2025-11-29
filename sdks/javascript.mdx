@@ -521,9 +521,12 @@ import type {
   ClipboardPushRequest,
   ClipboardGetFilters,
   ClipboardDeleteRequest,
+  ClipboardSource,
   ClipboardEncoding,
   ClipboardVisibility
 } from 'pluggedinkit-js';
+
+import { DEFAULT_CLIPBOARD_SOURCE } from 'pluggedinkit-js';
 
 // All types are fully documented
 const request: ClipboardSetRequest = {
@@ -534,6 +537,12 @@ const request: ClipboardSetRequest = {
   visibility: 'private',  // 'private' | 'workspace' | 'public'
   ttlSeconds: 3600
 };
+
+// ClipboardSource tracks where entries originate
+type ClipboardSource = 'ui' | 'sdk' | 'mcp';
+
+// The SDK automatically sets source to 'sdk' for all entries you create.
+// DEFAULT_CLIPBOARD_SOURCE is 'ui' for backward compatibility with older entries.
 ```
 
 ## Support
