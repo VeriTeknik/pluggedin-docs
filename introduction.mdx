@@ -33,8 +33,9 @@ Plugged.in changes this by creating **one governed layer** where your knowledge,
   </Card>
 
   <Card title="🧠 Memory" icon="brain">
-    **🚧 IN DEVELOPMENT**<br/>
-    The missing piece is persistent context that evolves with you. Plugged.in's memory layer will provide focus-aware AI that understands your current task (Focus Agent), retains session context (Short-term Memory), and builds long-term understanding of your projects, preferences, and patterns—all while keeping you in control of what's remembered and for how long.
+    **✅ IN PRODUCTION (v2.20.0)**<br/>
+    Persistent clipboard storage for AI workflows. Store named key-value pairs or use stack-based indexed storage. Features TTL expiration, multiple content types (text, JSON, base64), and cross-platform access via MCP tools and SDKs. Profile-isolated and secure.<br/>
+    <em>Coming soon: Focus Agent, Short-term & Long-term Memory tiers.</em>
   </Card>
 </CardGroup>
 
@@ -116,7 +117,7 @@ Plugged.in serves as the central hub connecting various AI clients and tools wit
     - Mobile App Integration
 
     **Advanced Features**
-    - Persistent Memory System
+    - Focus Agent & Memory Tiers
     - Enhanced Knowledge Sharing
   </Accordion>
 </AccordionGroup>
@@ -129,14 +130,14 @@ Plugged.in serves as the central hub connecting various AI clients and tools wit
 
 <Tabs>
   <Tab title="Web Application">
-    **pluggedin-app** (v2.10.3)
+    **pluggedin-app** (v2.20.0)
     - Next.js 15 web application
     - Social platform for MCP management
     - User profiles and sharing capabilities
     - Multi-language support
   </Tab>
   <Tab title="MCP Proxy">
-    **pluggedin-mcp** (v1.10.2)
+    **pluggedin-mcp** (v1.11.0)
     - TypeScript MCP proxy server
     - Unified interface aggregating multiple MCP servers
     - Support for STDIO, SSE, and HTTP transports
@@ -154,6 +155,16 @@ Plugged.in serves as the central hub connecting various AI clients and tools wit
     - Performance optimizations including database indexing
     - Enhanced encryption system overhaul
     - Improved error handling and type safety
+  </Accordion>
+
+  <Accordion title="Memory Clipboard (v2.20.0)">
+    - Named entries for key-value storage (upsert behavior)
+    - Indexed stack for push/pop operations
+    - TTL expiration support
+    - Multiple content types: text/plain, application/json, base64
+    - Source tracking: UI, SDK, MCP origin
+    - Profile isolation with secure access
+    - MCP tools: pluggedin_clipboard_set, pluggedin_clipboard_get, pluggedin_clipboard_push, pluggedin_clipboard_pop, pluggedin_clipboard_delete, pluggedin_clipboard_list
   </Accordion>
 
   <Accordion title="AI Document Exchange (v2.8.0)">
