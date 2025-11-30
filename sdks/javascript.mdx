@@ -370,6 +370,99 @@ const client = new PluggedInClient({
 });
 ```
 
+## PAP Agents
+
+The SDK provides full support for managing PAP (Plugged.in Agent Protocol) agents:
+
+### Creating Agents
+
+```typescript
+const result = await client.agents.create({
+  name: 'my-agent',
+  description: 'My autonomous PAP agent',
+  resources: {
+    cpu_request: '100m',
+    memory_request: '256Mi',
+    cpu_limit: '1000m',
+    memory_limit: '1Gi'
+  }
+});
+
+console.log(`Agent created: ${result.agent.uuid}`);
+console.log(`DNS: ${result.agent.dns_name}`); // my-agent.is.plugged.in
+```
+
+### Listing and Managing Agents
+
+```typescript
+// List all agents
+const agents = await client.agents.list();
+
+// Get agent details
+const details = await client.agents.get(agentId);
+console.log(details.recentHeartbeats);
+console.log(details.recentMetrics);
+console.log(details.lifecycleEvents);
+
+// Export agent data
+const exportData = await client.agents.export(agentId, {
+  include_telemetry: true,
+  telemetry_limit: 1000
+});
+
+// Delete agent
+await client.agents.delete(agentId);
+```
+
+### Heartbeats and Metrics
+
+<Warning>
+**CRITICAL**: Heartbeats contain ONLY liveness data. Resource telemetry goes in metrics (separate channel). This separation is PAP's zombie prevention superpower.
+</Warning>
+
+```typescript
+// Send heartbeat (liveness only)
+await client.agents.heartbeat(agentId, {
+  mode: 'IDLE', // or 'EMERGENCY', 'SLEEP'
+  uptime_seconds: process.uptime()
+});
+
+// Send metrics (resource telemetry)
+await client.agents.metrics(agentId, {
+  cpu_percent: 12.5,
+  memory_mb: 128,
+  requests_handled: 45,
+  custom_metrics: {
+    queue_depth: 3,
+    cache_hit_rate: 0.85
+  }
+});
+```
+
+### Agent States
+
+Agents follow the PAP lifecycle state machine:
+
+```
+NEW → PROVISIONED → ACTIVE ↔ DRAINING → TERMINATED
+                       ↓ (error)
+                     KILLED
+```
+
+```typescript
+// Poll until agent is active
+while (true) {
+  const details = await client.agents.get(agentId);
+  if (details.agent.state === 'ACTIVE') {
+    console.log('Agent is ready!');
+    break;
+  }
+  await new Promise(resolve => setTimeout(resolve, 5000));
+}
+```
+
+See [PAP Agents Documentation](/agents/overview) for complete details on the Plugged.in Agent Protocol.
+
 ## Rate Limiting
 
 The SDK automatically handles rate limiting with exponential backoff:
@@ -453,6 +546,20 @@ All binary upload helpers now throw descriptive errors because the public API no
 | `pop()` | Pop and remove most recent entry |
 | `delete(request)` | Delete specific entry |
 | `clearAll()` | Delete all entries |
+
+### Agent Methods
+
+| Method | Description |
+|--------|-------------|
+| `list()` | List all PAP agents for the active profile |
+| `create(request)` | Create and deploy a new agent |
+| `get(agentId)` | Get detailed agent information including telemetry |
+| `delete(agentId)` | Terminate and delete an agent |
+| `export(agentId, options)` | Export complete agent data including telemetry history |
+| `heartbeat(agentId, data)` | Submit heartbeat (liveness only - zombie prevention) |
+| `metrics(agentId, data)` | Submit metrics (resource telemetry - separate from heartbeat) |
+
+See [PAP Agents API Reference](/agents/api-reference) for complete endpoint documentation.
 
 ## Clipboard (Memory) Service
 

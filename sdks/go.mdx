@@ -376,6 +376,136 @@ if err != nil {
 }
 ```
 
+## PAP Agents
+
+The SDK provides full support for managing PAP (Plugged.in Agent Protocol) agents:
+
+### Creating Agents
+
+```go
+result, err := client.Agents.Create(ctx, pluggedinkit.CreateAgentRequest{
+    Name:        "my-agent",
+    Description: stringPtr("My autonomous PAP agent"),
+    Resources: &pluggedinkit.ResourceRequirements{
+        CPURequest:    stringPtr("100m"),
+        MemoryRequest: stringPtr("256Mi"),
+        CPULimit:      stringPtr("1000m"),
+        MemoryLimit:   stringPtr("1Gi"),
+    },
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+fmt.Printf("Agent created: %s\n", result.Agent.UUID)
+fmt.Printf("DNS: %s\n", result.Agent.DNSName) // my-agent.is.plugged.in
+
+func stringPtr(s string) *string { return &s }
+```
+
+### Listing and Managing Agents
+
+```go
+// List all agents
+agents, err := client.Agents.List(ctx)
+
+// Get agent details
+details, err := client.Agents.Get(ctx, agentID)
+fmt.Println(details.RecentHeartbeats)
+fmt.Println(details.RecentMetrics)
+fmt.Println(details.LifecycleEvents)
+
+// Export agent data
+exportData, err := client.Agents.Export(ctx, agentID, true, 1000)
+
+// Delete agent
+deleteResp, err := client.Agents.Delete(ctx, agentID)
+```
+
+### Heartbeats and Metrics
+
+> **CRITICAL**: Heartbeats contain ONLY liveness data. Resource telemetry goes in metrics (separate channel). This separation is PAP's zombie prevention superpower.
+
+```go
+// Send heartbeat (liveness only)
+_, err = client.Agents.Heartbeat(ctx, agentID, "IDLE", 330.0)
+
+// Send metrics (resource telemetry)
+customMetrics := map[string]interface{}{
+    "queue_depth": 3,
+    "cache_hit_rate": 0.85,
+}
+_, err = client.Agents.Metrics(ctx, agentID, 12.5, 128, 45, customMetrics)
+```
+
+### Concurrent Agent Operations
+
+```go
+func monitorAgents(client *pluggedinkit.Client, agentIDs []string) {
+    ctx := context.Background()
+
+    var wg sync.WaitGroup
+
+    for _, agentID := range agentIDs {
+        wg.Add(1)
+        go func(id string) {
+            defer wg.Done()
+
+            // Send heartbeat and metrics concurrently
+            errChan := make(chan error, 2)
+
+            go func() {
+                _, err := client.Agents.Heartbeat(ctx, id, "IDLE", 330.0)
+                errChan <- err
+            }()
+
+            go func() {
+                _, err := client.Agents.Metrics(ctx, id, 10.0, 100, 20, nil)
+                errChan <- err
+            }()
+
+            // Wait for both to complete
+            for i := 0; i < 2; i++ {
+                if err := <-errChan; err != nil {
+                    log.Printf("Error for agent %s: %v", id, err)
+                }
+            }
+        }(agentID)
+    }
+
+    wg.Wait()
+}
+```
+
+### Agent States
+
+Agents follow the PAP lifecycle state machine:
+
+```
+NEW → PROVISIONED → ACTIVE ↔ DRAINING → TERMINATED
+                       ↓ (error)
+                     KILLED
+```
+
+```go
+// Poll until agent is active
+for {
+    details, err := client.Agents.Get(ctx, agentID)
+    if err != nil {
+        return err
+    }
+
+    if details.Agent.State == "ACTIVE" {
+        fmt.Println("Agent is ready!")
+        break
+    }
+
+    time.Sleep(5 * time.Second)
+}
+```
+
+See [PAP Agents Documentation](/agents/overview) for complete details on the Plugged.in Agent Protocol.
+
 ## Context and Cancellation
 
 All SDK methods accept a context for cancellation and timeout control:

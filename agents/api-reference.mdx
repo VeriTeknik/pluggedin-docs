@@ -417,6 +417,249 @@ The agent record remains in database with `state=TERMINATED` for audit purposes.
 
 ---
 
+### Export Agent Data
+
+Export complete agent data including telemetry history for backup or analysis.
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://plugged.in/api/agents/AGENT_UUID/export \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "include_telemetry": true,
+    "telemetry_limit": 1000
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/agents/AGENT_UUID/export', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    include_telemetry: true,
+    telemetry_limit: 1000
+  })
+});
+const exportData = await response.json();
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    f'https://plugged.in/api/agents/{agent_uuid}/export',
+    headers={
+        'Authorization': 'Bearer YOUR_API_KEY',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'include_telemetry': True,
+        'telemetry_limit': 1000
+    }
+)
+export_data = response.json()
+```
+</CodeGroup>
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `include_telemetry` | boolean | No | Include heartbeat and metrics history (default: true) |
+| `telemetry_limit` | integer | No | Maximum telemetry records to include (default: 100) |
+
+#### Response
+
+Returns complete agent data including configuration, lifecycle events, and telemetry:
+
+```json
+{
+  "agent": {
+    "uuid": "...",
+    "name": "my-agent",
+    "dns_name": "my-agent.is.plugged.in",
+    "state": "ACTIVE",
+    ...
+  },
+  "heartbeats": [...],
+  "metrics": [...],
+  "lifecycle_events": [...],
+  "metadata": {
+    "exported_at": "2025-11-13T08:15:00Z",
+    "triggered_by": "user-uuid",
+    "total_heartbeats": 250,
+    "total_metrics": 240
+  }
+}
+```
+
+---
+
+### Submit Heartbeat
+
+Agents send heartbeats to signal liveness. **Heartbeats contain ONLY liveness data** (zombie prevention).
+
+<Warning>
+**CRITICAL**: Heartbeats must contain ONLY `mode` and `uptime_seconds`. Never include resource data (CPU, memory) in heartbeats—use the Metrics endpoint instead. This separation is the core of PAP's zombie prevention.
+</Warning>
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://plugged.in/api/agents/AGENT_UUID/heartbeat \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "IDLE",
+    "uptime_seconds": 330
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/agents/AGENT_UUID/heartbeat', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    mode: 'IDLE',
+    uptime_seconds: process.uptime()
+  })
+});
+```
+
+```python Python
+import requests
+import time
+
+response = requests.post(
+    f'https://plugged.in/api/agents/{agent_uuid}/heartbeat',
+    headers={
+        'Authorization': 'Bearer YOUR_API_KEY',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'mode': 'IDLE',
+        'uptime_seconds': time.process_time()
+    }
+)
+```
+</CodeGroup>
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `mode` | enum | **Yes** | Heartbeat mode: `EMERGENCY` (5s), `IDLE` (30s), `SLEEP` (15min) |
+| `uptime_seconds` | number | **Yes** | Agent uptime in seconds |
+
+<Info>
+**Heartbeat Intervals**:
+- **EMERGENCY**: Every 5 seconds (for critical situations)
+- **IDLE**: Every 30 seconds (default)
+- **SLEEP**: Every 15 minutes (for low-priority background agents)
+
+Missing one interval triggers `AGENT_UNHEALTHY` (error code 480).
+</Info>
+
+#### Response
+
+```json
+{
+  "message": "Heartbeat recorded"
+}
+```
+
+---
+
+### Submit Metrics
+
+Agents send metrics separately from heartbeats. **Metrics contain resource telemetry only.**
+
+<Info>
+**Separation is Key**: Metrics are sent on a separate channel from heartbeats (typically every 60 seconds). This ensures large telemetry payloads cannot starve the control path.
+</Info>
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://plugged.in/api/agents/AGENT_UUID/metrics \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cpu_percent": 12.5,
+    "memory_mb": 128,
+    "requests_handled": 45,
+    "custom_metrics": {
+      "queue_depth": 3,
+      "cache_hit_rate": 0.85
+    }
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://plugged.in/api/agents/AGENT_UUID/metrics', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer YOUR_API_KEY',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    cpu_percent: cpuUsage,
+    memory_mb: memoryUsage,
+    requests_handled: requestCount,
+    custom_metrics: {
+      queue_depth: 3,
+      cache_hit_rate: 0.85
+    }
+  })
+});
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    f'https://plugged.in/api/agents/{agent_uuid}/metrics',
+    headers={
+        'Authorization': 'Bearer YOUR_API_KEY',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'cpu_percent': cpu_percent,
+        'memory_mb': memory_mb,
+        'requests_handled': request_count,
+        'custom_metrics': {
+            'queue_depth': 3,
+            'cache_hit_rate': 0.85
+        }
+    }
+)
+```
+</CodeGroup>
+
+#### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `cpu_percent` | number | **Yes** | CPU usage percentage (0-100) |
+| `memory_mb` | number | **Yes** | Memory usage in megabytes |
+| `requests_handled` | integer | **Yes** | Total requests handled since start |
+| `custom_metrics` | object | No | Agent-specific custom metrics |
+
+#### Response
+
+```json
+{
+  "message": "Metrics recorded"
+}
+```
+
+---
+
 ## Common Patterns
 
 ### Create and Wait for Activation
@@ -548,27 +791,198 @@ Subscribe to agent lifecycle events via webhooks:
 
 ## SDK Support
 
-Official SDKs for popular languages (coming soon):
+Official Plugged.in SDKs now include agent management:
 
 <CardGroup cols={3}>
-  <Card title="TypeScript/Node.js" icon="js">
+  <Card title="TypeScript/Node.js" icon="js" href="/sdks/javascript">
     ```bash
-    npm install @pluggedin/agents-sdk
+    npm install pluggedinkit-js
     ```
+    Access via `client.agents`
   </Card>
 
-  <Card title="Python" icon="python">
+  <Card title="Python" icon="python" href="/sdks/python">
     ```bash
-    pip install pluggedin-agents
+    pip install pluggedinkit
     ```
+    Access via `client.agents`
   </Card>
 
-  <Card title="Go" icon="golang">
+  <Card title="Go" icon="golang" href="/sdks/go">
     ```bash
-    go get github.com/pluggedin/agents-go
+    go get github.com/pluggedin/pluggedinkit-go
     ```
+    Access via `client.Agents`
   </Card>
 </CardGroup>
+
+### SDK Examples
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { PluggedInClient } from 'pluggedinkit-js';
+
+    const client = new PluggedInClient({
+      apiKey: process.env.PLUGGEDIN_API_KEY
+    });
+
+    // Create an agent
+    const result = await client.agents.create({
+      name: 'my-agent',
+      description: 'My first PAP agent',
+      resources: {
+        cpu_request: '100m',
+        memory_request: '256Mi',
+        cpu_limit: '1000m',
+        memory_limit: '1Gi'
+      }
+    });
+
+    console.log(`Agent created: ${result.agent.uuid}`);
+    console.log(`DNS: ${result.agent.dns_name}`);
+
+    // List all agents
+    const agents = await client.agents.list();
+
+    // Get agent details
+    const details = await client.agents.get(agentId);
+
+    // Send heartbeat (from within agent)
+    await client.agents.heartbeat(agentId, {
+      mode: 'IDLE',
+      uptime_seconds: process.uptime()
+    });
+
+    // Send metrics (from within agent)
+    await client.agents.metrics(agentId, {
+      cpu_percent: 12.5,
+      memory_mb: 128,
+      requests_handled: 45
+    });
+
+    // Export agent data
+    const exportData = await client.agents.export(agentId, {
+      include_telemetry: true,
+      telemetry_limit: 1000
+    });
+
+    // Delete agent
+    await client.agents.delete(agentId);
+    ```
+  </Tab>
+
+  <Tab title="Python">
+    ```python
+    from pluggedinkit import PluggedInClient
+
+    client = PluggedInClient(api_key=os.getenv('PLUGGEDIN_API_KEY'))
+
+    # Create an agent
+    result = client.agents.create({
+        'name': 'my-agent',
+        'description': 'My first PAP agent',
+        'resources': {
+            'cpu_request': '100m',
+            'memory_request': '256Mi',
+            'cpu_limit': '1000m',
+            'memory_limit': '1Gi'
+        }
+    })
+
+    print(f"Agent created: {result['agent']['uuid']}")
+    print(f"DNS: {result['agent']['dns_name']}")
+
+    # List all agents
+    agents = client.agents.list()
+
+    # Get agent details
+    details = client.agents.get(agent_id)
+
+    # Send heartbeat (from within agent)
+    client.agents.heartbeat(
+        agent_id,
+        mode='IDLE',
+        uptime_seconds=time.process_time()
+    )
+
+    # Send metrics (from within agent)
+    client.agents.metrics(
+        agent_id,
+        cpu_percent=12.5,
+        memory_mb=128,
+        requests_handled=45
+    )
+
+    # Export agent data
+    export_data = client.agents.export(
+        agent_id,
+        include_telemetry=True,
+        telemetry_limit=1000
+    )
+
+    # Delete agent
+    client.agents.delete(agent_id)
+    ```
+  </Tab>
+
+  <Tab title="Go">
+    ```go
+    package main
+
+    import (
+        "context"
+        "fmt"
+        "os"
+
+        "github.com/pluggedin/pluggedinkit-go"
+    )
+
+    func main() {
+        client := pluggedinkit.NewClient(os.Getenv("PLUGGEDIN_API_KEY"))
+        ctx := context.Background()
+
+        // Create an agent
+        result, err := client.Agents.Create(ctx, pluggedinkit.CreateAgentRequest{
+            Name:        "my-agent",
+            Description: strPtr("My first PAP agent"),
+            Resources: &pluggedinkit.ResourceRequirements{
+                CPURequest:    strPtr("100m"),
+                MemoryRequest: strPtr("256Mi"),
+                CPULimit:      strPtr("1000m"),
+                MemoryLimit:   strPtr("1Gi"),
+            },
+        })
+        if err != nil {
+            panic(err)
+        }
+
+        fmt.Printf("Agent created: %s\n", result.Agent.UUID)
+        fmt.Printf("DNS: %s\n", result.Agent.DNSName)
+
+        // List all agents
+        agents, err := client.Agents.List(ctx)
+
+        // Get agent details
+        details, err := client.Agents.Get(ctx, agentID)
+
+        // Send heartbeat (from within agent)
+        _, err = client.Agents.Heartbeat(ctx, agentID, "IDLE", 330.0)
+
+        // Send metrics (from within agent)
+        _, err = client.Agents.Metrics(ctx, agentID, 12.5, 128, 45, nil)
+
+        // Export agent data
+        exportData, err := client.Agents.Export(ctx, agentID, true, 1000)
+
+        // Delete agent
+        _, err = client.Agents.Delete(ctx, agentID)
+    }
+
+    func strPtr(s string) *string { return &s }
+    ```
+  </Tab>
+</Tabs>
 
 ---
 

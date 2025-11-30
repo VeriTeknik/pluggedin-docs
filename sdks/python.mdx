@@ -387,6 +387,119 @@ except PluggedInError as e:
     # Generic error handling
 ```
 
+## PAP Agents
+
+The SDK provides full support for managing PAP (Plugged.in Agent Protocol) agents:
+
+### Creating Agents
+
+```python
+result = client.agents.create({
+    'name': 'my-agent',
+    'description': 'My autonomous PAP agent',
+    'resources': {
+        'cpu_request': '100m',
+        'memory_request': '256Mi',
+        'cpu_limit': '1000m',
+        'memory_limit': '1Gi'
+    }
+})
+
+print(f"Agent created: {result['agent']['uuid']}")
+print(f"DNS: {result['agent']['dns_name']}")  # my-agent.is.plugged.in
+```
+
+### Listing and Managing Agents
+
+```python
+# List all agents
+agents = client.agents.list()
+
+# Get agent details
+details = client.agents.get(agent_id)
+print(details['recentHeartbeats'])
+print(details['recentMetrics'])
+print(details['lifecycleEvents'])
+
+# Export agent data
+export_data = client.agents.export(
+    agent_id,
+    include_telemetry=True,
+    telemetry_limit=1000
+)
+
+# Delete agent
+client.agents.delete(agent_id)
+```
+
+### Heartbeats and Metrics
+
+> **CRITICAL**: Heartbeats contain ONLY liveness data. Resource telemetry goes in metrics (separate channel). This separation is PAP's zombie prevention superpower.
+
+```python
+# Send heartbeat (liveness only)
+client.agents.heartbeat(
+    agent_id,
+    mode='IDLE',  # or 'EMERGENCY', 'SLEEP'
+    uptime_seconds=time.process_time()
+)
+
+# Send metrics (resource telemetry)
+client.agents.metrics(
+    agent_id,
+    cpu_percent=12.5,
+    memory_mb=128,
+    requests_handled=45,
+    custom_metrics={
+        'queue_depth': 3,
+        'cache_hit_rate': 0.85
+    }
+)
+```
+
+### Async Agent Operations
+
+```python
+from pluggedinkit import AsyncPluggedInClient
+
+async with AsyncPluggedInClient(api_key="your-key") as client:
+    # Create agent
+    result = await client.agents.create({
+        'name': 'async-agent',
+        'description': 'Async PAP agent'
+    })
+
+    # Send heartbeat and metrics concurrently
+    await asyncio.gather(
+        client.agents.heartbeat(agent_id, mode='IDLE', uptime_seconds=330),
+        client.agents.metrics(agent_id, cpu_percent=10, memory_mb=100, requests_handled=20)
+    )
+```
+
+### Agent States
+
+Agents follow the PAP lifecycle state machine:
+
+```
+NEW → PROVISIONED → ACTIVE ↔ DRAINING → TERMINATED
+                       ↓ (error)
+                     KILLED
+```
+
+```python
+# Poll until agent is active
+import time
+
+while True:
+    details = client.agents.get(agent_id)
+    if details['agent']['state'] == 'ACTIVE':
+        print('Agent is ready!')
+        break
+    time.sleep(5)
+```
+
+See [PAP Agents Documentation](/agents/overview) for complete details on the Plugged.in Agent Protocol.
+
 ## Type Safety with Pydantic
 
 The SDK uses Pydantic models for comprehensive type safety:
