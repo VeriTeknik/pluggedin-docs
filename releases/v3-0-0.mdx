@@ -1,0 +1,110 @@
+---
+title: 'Version 3.0.0'
+description: 'Major Platform Release — Agent Architecture, Embedded Vector Search & Universal MCP Hub'
+---
+
+# Version 3.0.0 - Major Platform Release
+
+Released: February 2026
+
+## Overview
+
+Version 3.0.0 is a major milestone that transforms plugged.in from an MCP management platform into a comprehensive AI Infrastructure Platform with autonomous agent lifecycle management, embedded vector search, and universal tool orchestration.
+
+## Key Features
+
+### PAP Agent Protocol & Lifecycle Management
+- **Plugged.in Agent Protocol (PAP)**: Comprehensive framework for autonomous agent lifecycle management
+- **Dual-Profile Architecture**: gRPC control plane (PAP-CP) + JSON-RPC I/O plane (PAP-Hooks)
+- **Agent State Machine**: NEW -> PROVISIONED -> ACTIVE -> DRAINING -> TERMINATED lifecycle
+- **Zombie Prevention**: Strict heartbeat/metrics separation prevents control plane saturation
+- **DNS-Based Identity**: Verifiable agent identities via `{agent}.{region}.a.plugged.in`
+- **Ed25519 Signatures**: All control plane messages cryptographically signed
+
+### Model Router (Unified LLM Gateway)
+- **Multi-Provider Routing**: OpenAI, Anthropic, Google, xAI, DeepSeek support
+- **OpenAI-Compatible API**: Drop-in replacement for any OpenAI SDK
+- **JWT Authentication**: Per-agent token generation with 1-year expiry
+- **Cost Tracking**: Per-request cost and latency headers
+- **Model Aliases**: `claude` -> `claude-sonnet-4`, `gemini` -> `gemini-2.0-flash`
+
+### Embedded Vector Search (zvec)
+- **In-Process Vector Engine**: No external vector database needed
+- **HNSW Indexing**: High-recall approximate nearest neighbor search
+- **Multi-Format Document Support**: PDF, TXT, Markdown with automatic chunking
+- **Semantic Search**: Natural language queries across your knowledge base
+
+### Agent Templates & Marketplace
+- **Docker-Based Deployment**: Kubernetes-native agent deployment
+- **Template Marketplace**: Browse, install, and configure agent templates
+- **ADL Configuration**: Agent Description Language for configurable agents
+- **Health Monitoring**: Integrated health checks and metrics collection
+
+### Memory Clipboard System
+- **Persistent Key-Value Storage**: Named and indexed access patterns
+- **Stack Operations**: Push/pop for sequential processing
+- **TTL Expiration**: Automatic cleanup with configurable TTL
+- **Source Tracking**: Track whether entries came from UI, SDK, or MCP
+
+### MCP Proxy Enhancements
+- **Streamable HTTP Transport**: Modern HTTP streaming for remote MCP servers
+- **OAuth 2.1 Integration**: Automatic token refresh with 15-minute pre-expiry rotation
+- **Sandbox Isolation**: bubblewrap/firejail for STDIO server sandboxing
+- **13 Built-in Static Tools**: Discover, search, clipboard, documents, notifications
+
+### Official SDKs
+- **JavaScript/TypeScript SDK** (v1.0.1): Full-featured with TypeScript types
+- **Python SDK** (v1.0.1): Sync and async clients with Pydantic models
+- **Go SDK** (v1.0.1): Full type safety with Go 1.24+
+
+## Technical Details
+
+- **50+ Database Tables**: Comprehensive schema with 3000+ line Drizzle ORM definition
+- **6 Languages**: English, Turkish, Chinese, Hindi, Japanese, Dutch
+- **Rate Limiting**: Tiered Redis-backed with in-memory fallback
+- **AES-256-GCM Encryption**: For all sensitive configuration fields
+
+## Migration Notes
+
+### From v2.x
+1. Pull latest changes and install dependencies
+2. Run database migrations: `pnpm db:generate && pnpm db:migrate`
+3. Configure new environment variables for agent features (optional)
+4. No breaking changes to existing MCP server configurations
+
+### New Environment Variables
+```bash
+# Model Router (required for agents)
+MODEL_ROUTER_JWT_SECRET=<secret>
+
+# Feature Flags (optional)
+ENABLE_RAG=true
+ENABLE_NOTIFICATIONS=true
+```
+
+### Upgrade Steps
+```bash
+# Pull latest changes
+git pull origin main
+
+# Install dependencies
+pnpm install
+
+# Generate and apply database migrations
+pnpm db:generate
+pnpm db:migrate
+
+# Build and restart
+pnpm build
+pnpm start
+```
+
+## What's Next
+
+- Collective Best Practices system (v3.1.0)
+- Long-term memory with intelligent forgetting
+- Claude Code native plugin
+
+---
+
+For questions or issues, please visit our [GitHub Discussions](https://github.com/orgs/VeriTeknik/discussions) or contact us at team@plugged.in.

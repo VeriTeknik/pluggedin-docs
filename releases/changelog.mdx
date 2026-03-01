@@ -11,19 +11,111 @@ All notable changes to the Plugged.in platform are documented here. The project 
 ## Latest Releases
 
 <CardGroup cols={3}>
-  <Card title="v2.12.0" icon="shield-halved">
+  <Card title="v3.1.0" icon="brain">
     **Current Stable**
+    Collective Best Practices & Intelligent Memory
+  </Card>
+  <Card title="v3.0.0" icon="rocket">
+    Agent Architecture & Vector Search
+    Major Platform Release
+  </Card>
+  <Card title="v2.12.0" icon="shield-halved">
     Enhanced Security & Performance
   </Card>
-  <Card title="v2.11.1" icon="magnifying-glass">
-    AI Search & Versioning
-    Performance Optimizations
-  </Card>
-  <Card title="v2.8.0" icon="robot">
-    AI Document Exchange
-    RAG v2 System
-  </Card>
 </CardGroup>
+
+## Version 3.1.x Series
+
+### [3.1.0] - 2026-03-01
+<Badge variant="success">Current Version</Badge>
+
+#### Added
+- **Collective Best Practices (CBP)**
+  - Privacy-preserving pattern aggregation with HMAC-SHA256
+  - k-anonymity (k>=3) for community patterns
+  - Success rate tracking and contextual injection
+  - Feedback loop for quality improvement
+
+- **Concentric Memory Rings**
+  - Human cognition-inspired memory architecture
+  - Five ring types: Fresh, Procedures, Practice, Long-term, Shocks
+  - Intelligent forgetting with configurable decay engine
+  - Progressive 3-layer retrieval for token efficiency
+
+- **Claude Code Plugin**
+  - Native MCP integration with zero configuration
+  - Memory lifecycle hooks with automatic session management
+  - 9 built-in skills and 2 agents
+  - CBP post-error suggestions
+
+- **Shared Vector Infrastructure (pgvector)**
+  - PostgreSQL pgvector extension for native vector search
+  - HNSW indexing with cosine distance similarity
+  - 1536-dimension embeddings via OpenAI or Google Gemini
+
+- **Z-Reports (Session Summaries)**
+  - End-of-session compressed summaries
+  - Success rate calculation
+  - Eligible for promotion to long-term memory
+
+- **New MCP Tools**
+  - `pluggedin_memory_session_start` / `pluggedin_memory_session_end`
+  - `pluggedin_memory_observe` / `pluggedin_memory_search` / `pluggedin_memory_details`
+  - `pluggedin_cbp_query` / `pluggedin_cbp_feedback`
+
+#### Security
+- 6 rounds of code review hardening
+- HMAC-SHA256 privacy for collective patterns
+- Advisory lock-based race condition prevention
+- Transaction safety for all memory operations
+
+## Version 3.0.x Series
+
+### [3.0.0] - 2026-02-01
+<Badge variant="warning">Major Release</Badge>
+
+#### Added
+- **PAP Agent Protocol & Lifecycle Management**
+  - Comprehensive framework for autonomous agent lifecycle
+  - Dual-profile architecture: gRPC (PAP-CP) + JSON-RPC (PAP-Hooks)
+  - Agent state machine with zombie prevention
+  - DNS-based identity with Ed25519 signatures
+
+- **Model Router (Unified LLM Gateway)**
+  - Multi-provider routing: OpenAI, Anthropic, Google, xAI, DeepSeek
+  - OpenAI-compatible API with JWT authentication
+  - Per-request cost tracking and model aliases
+
+- **Embedded Vector Search (zvec)**
+  - In-process vector engine with HNSW indexing
+  - Multi-format document support with automatic chunking
+  - Semantic natural language queries
+
+- **Agent Templates & Marketplace**
+  - Docker-based Kubernetes-native deployment
+  - Template marketplace with ADL configuration
+  - Integrated health checks and metrics collection
+
+- **Memory Clipboard System**
+  - Persistent key-value storage with named and indexed access
+  - Stack operations with TTL expiration
+  - Source tracking (UI, SDK, MCP)
+
+- **MCP Proxy Enhancements**
+  - Streamable HTTP transport for remote servers
+  - OAuth 2.1 with automatic token refresh
+  - Sandbox isolation with bubblewrap/firejail
+  - 13 built-in static tools
+
+- **Official SDKs**
+  - JavaScript/TypeScript SDK (v1.0.1)
+  - Python SDK (v1.0.1) with sync/async clients
+  - Go SDK (v1.0.1) with full type safety
+
+#### Changed
+- Platform evolution from MCP management to AI Infrastructure Platform
+- 50+ database tables with 3000+ line Drizzle ORM schema
+- AES-256-GCM encryption for sensitive configuration fields
 
 ## Version 2.12.x Series
 
@@ -386,14 +478,16 @@ Plugged.in follows [Semantic Versioning](https://semver.org/):
 
 | Version | Status | Support Until |
 |---------|--------|--------------|
-| 2.10.x | **Current** | Active development |
-| 2.9.x | Supported | January 2026 |
-| 2.8.x | Supported | January 2026 |
-| 2.7.x | Maintenance | July 2025 |
-| < 2.7.0 | End of Life | - |
+| 3.1.x | **Current** | Active development |
+| 3.0.x | Supported | September 2026 |
+| 2.12.x | Maintenance | June 2026 |
+| 2.10.x - 2.11.x | Maintenance | March 2026 |
+| < 2.10.0 | End of Life | - |
 
 ## Migration Guides
 
+- [Migrating to v3.1.0](/releases/v3-1-0#migration-notes)
+- [Migrating to v3.0.0](/releases/v3-0-0#migration-notes)
 - [Migrating to v2.10.0](/releases/v2-10-0#migration)
 - [Migrating to v2.8.0](/releases/v2-8-0#migration)
 - [Migrating to v2.7.0](/releases/v2-7-0#migration)

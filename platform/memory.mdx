@@ -1,35 +1,234 @@
 ---
-title: Memory (Named Clipboard)
-description: Persistent key-value storage for MCP tools and AI agents with named and indexed access
+title: Memory & Intelligent Knowledge
+description: Human cognition-inspired memory system with concentric rings, collective best practices, and persistent clipboard storage
 sidebarTitle: Memory
-icon: 'clipboard'
+icon: 'brain'
 ---
 
-# Memory (Named Clipboard)
+# Memory & Intelligent Knowledge
 
-The Memory feature provides persistent key-value storage that MCP tools and AI agents can use to share data between tool invocations. With support for both named (semantic keys) and indexed (array-like) access patterns, it enables sophisticated data persistence workflows.
+The Memory system in plugged.in provides two complementary capabilities: an **Intelligent Memory** architecture inspired by human cognition (v3.1.0+), and a **Persistent Clipboard** for key-value storage between tool invocations. Together they give AI agents the ability to learn, remember, and share knowledge across sessions.
 
 ## Overview
 
-<CardGroup cols={2}>
-  <Card title="Named Storage" icon="tag">
-    Store and retrieve data using semantic keys like "user_preferences" or "session_context"
+<CardGroup cols={3}>
+  <Card title="Concentric Rings" icon="bullseye">
+    Five memory ring types inspired by how humans form and retain knowledge
   </Card>
 
-  <Card title="Indexed Storage" icon="list-ol">
-    Push and pop data in stack-like fashion for sequential processing
+  <Card title="Collective Best Practices" icon="users">
+    Privacy-preserving community wisdom with k-anonymity
   </Card>
 
-  <Card title="Profile Isolation" icon="shield-halved">
-    Data is scoped to your profile, ensuring complete isolation between users
+  <Card title="Intelligent Forgetting" icon="clock-rotate-left">
+    Token-based decay engine that compresses memories over time
   </Card>
 
-  <Card title="TTL Expiration" icon="clock">
-    Automatic cleanup of expired entries with configurable time-to-live
+  <Card title="Z-Reports" icon="file-lines">
+    End-of-session summaries that capture key observations and decisions
+  </Card>
+
+  <Card title="Progressive Retrieval" icon="layer-group">
+    3-layer retrieval system optimized for token efficiency
+  </Card>
+
+  <Card title="Persistent Clipboard" icon="clipboard">
+    Named and indexed key-value storage with TTL expiration
   </Card>
 </CardGroup>
 
-## Access Patterns
+---
+
+## Intelligent Memory System
+
+<Note>
+Intelligent Memory was introduced in v3.1.0. It requires the pgvector PostgreSQL extension, which is automatically enabled during migration.
+</Note>
+
+### Concentric Memory Rings
+
+The memory architecture uses five ring types that mirror how human cognition processes and stores information:
+
+<Tabs>
+  <Tab title="Fresh Memory">
+    **Observation buffer** -- the entry point for all new memories.
+
+    - Raw observations recorded during active sessions
+    - Auto-classified into appropriate ring types by the memory curator agent
+    - Vector embeddings generated for semantic search
+    - Short-lived unless promoted to a higher ring
+
+    **Example**: "User prefers TypeScript over JavaScript for new projects"
+  </Tab>
+
+  <Tab title="Procedures">
+    **Repeatable workflows** -- step-by-step guides and how-tos.
+
+    - Multi-step processes that can be replayed
+    - Versioned as they are refined over time
+    - Higher retention priority than general observations
+
+    **Example**: "Deploy to staging: 1) Run tests 2) Build Docker image 3) Push to registry 4) Apply k8s manifests"
+  </Tab>
+
+  <Tab title="Practice/Habits">
+    **Successful patterns** -- reinforced through repetition.
+
+    - Patterns that have been observed multiple times
+    - Strengthened each time the pattern succeeds
+    - Weakened when the pattern fails
+
+    **Example**: "Always run `pnpm db:generate` before `pnpm db:migrate` when changing schema"
+  </Tab>
+
+  <Tab title="Long-term">
+    **Validated insights** -- requires `success_score >= 0.7` to enter.
+
+    - High-confidence knowledge that has proven its value
+    - Slower decay rate than other rings
+    - Core knowledge base for the agent
+
+    **Example**: "The pluggedin-app uses Drizzle ORM with varchar-based enums, not pgEnum"
+  </Tab>
+
+  <Tab title="Shocks">
+    **Critical failures** -- never forgotten.
+
+    - Catastrophic errors, data loss events, security incidents
+    - Bypass the decay engine entirely
+    - Always surfaced when relevant context is detected
+
+    **Example**: "NEVER run `git push --force` to main -- caused production data loss on 2026-01-15"
+  </Tab>
+</Tabs>
+
+### Intelligent Forgetting (Decay Engine)
+
+Memories progressively compress over time, preserving essential knowledge while freeing token budget:
+
+| Stage | Tokens | Time to Next Stage | Description |
+|-------|--------|-------------------|-------------|
+| **FULL** | ~500 | 7 days | Complete observation with all context |
+| **COMPRESSED** | ~250 | 30 days | Key details preserved, context trimmed |
+| **SUMMARY** | ~150 | 90 days | Single paragraph summary |
+| **ESSENCE** | ~50 | 365 days | One-sentence core insight |
+| **FORGOTTEN** | 0 | Deleted | Removed from storage |
+
+**Decay exceptions**:
+- **Shocks** never decay regardless of age
+- **Frequently accessed** memories decay slower (access resets the timer)
+- **Low success score** memories decay faster
+
+### Progressive Retrieval (3-Layer)
+
+Token-efficient memory access that only loads what you need:
+
+<Steps>
+  <Step title="Layer 1: Search">
+    Returns `content_essence` or `content_summary` for each match (50-150 tokens per result). Ideal for scanning many memories quickly.
+  </Step>
+
+  <Step title="Layer 2: Timeline">
+    Adds temporal context -- when the memory was created, which session, and related observations. Useful for understanding sequence of events.
+  </Step>
+
+  <Step title="Layer 3: Full Details">
+    Returns `content_full` for specifically selected memories. Only used when you need the complete context for a particular memory.
+  </Step>
+</Steps>
+
+### Z-Reports (Session Summaries)
+
+Inspired by retail Z-reports (end-of-day cash register summaries), Z-reports capture what happened during each session:
+
+- **Summary text** with key observations and outcomes
+- **Decisions made** during the session
+- **Tools used** and their results
+- **Success rate** calculation (0.0 - 1.0)
+- Z-reports with high success scores are eligible for **promotion to long-term memory**
+
+### Vector Search Infrastructure
+
+Memory uses PostgreSQL pgvector for semantic search:
+
+- **HNSW Indexing**: High-recall approximate nearest neighbor search
+- **1536-Dimension Embeddings**: Generated via `text-embedding-3-small` (OpenAI) or Gemini (Google)
+- **Cosine Distance**: Similarity metric for comparing memory embeddings
+- **AI Provider Abstraction**: Automatic routing between available embedding providers
+
+---
+
+## Collective Best Practices (CBP)
+
+CBP is a privacy-preserving system that learns effective patterns from across the community and suggests them when relevant.
+
+### How It Works
+
+```
+User Action (e.g., fix a bug)
+      |
+      v
+Pattern Extracted & Normalized
+      |
+      v
+HMAC-SHA256 Hash (never stored in plaintext)
+      |
+      v
+k-Anonymity Check (k >= 3 unique profiles?)
+      |
+      v
+If yes: Pattern available for suggestions
+If no: Pattern stays private
+```
+
+### Privacy Guarantees
+
+<CardGroup cols={2}>
+  <Card title="HMAC-SHA256 Hashing" icon="lock">
+    Patterns are normalized and hashed before storage. The original pattern text is never stored in the collective pool.
+  </Card>
+
+  <Card title="k-Anonymity (k>=3)" icon="users">
+    Patterns are only surfaced as suggestions when observed independently by 3 or more unique profiles.
+  </Card>
+</CardGroup>
+
+### Feedback Loop
+
+When a CBP pattern is suggested, users can:
+- **Confirm**: Increases the pattern's success rate
+- **Reject**: Decreases the pattern's success rate and suppresses future suggestions
+
+This creates a self-improving knowledge base where the most effective patterns rise to the top.
+
+---
+
+## Memory MCP Tools
+
+### Session & Observation Tools
+
+| Tool | Description |
+|------|-------------|
+| `pluggedin_memory_session_start` | Start a memory session for the current interaction |
+| `pluggedin_memory_session_end` | End the session and trigger Z-report generation |
+| `pluggedin_memory_observe` | Record an observation during an active session |
+| `pluggedin_memory_search` | Search memories using progressive layer 1 retrieval |
+| `pluggedin_memory_details` | Get full memory details (layer 3) for a specific memory |
+
+### Collective Best Practices Tools
+
+| Tool | Description |
+|------|-------------|
+| `pluggedin_cbp_query` | Query collective best practices for relevant patterns |
+| `pluggedin_cbp_feedback` | Submit feedback (confirm/reject) on a CBP suggestion |
+
+---
+
+## Persistent Clipboard
+
+The Clipboard provides persistent key-value storage that MCP tools and AI agents can use to share data between tool invocations. With support for both named (semantic keys) and indexed (array-like) access patterns, it enables sophisticated data persistence workflows.
+
+### Access Patterns
 
 <Tabs>
   <Tab title="Named Access">
@@ -80,31 +279,9 @@ The Memory feature provides persistent key-value storage that MCP tools and AI a
   </Tab>
 </Tabs>
 
-## Quick Start
+### Clipboard MCP Tools
 
-<Steps>
-  <Step title="Access Memory Page">
-    Navigate to **Memory** in the sidebar to view your clipboard entries
-  </Step>
-
-  <Step title="Create Named Entry">
-    Click **+ New Entry** and provide a name, value, and optional settings
-  </Step>
-
-  <Step title="Use in MCP Tools">
-    MCP tools can read and write to your clipboard using the clipboard tools
-  </Step>
-
-  <Step title="Monitor & Clean">
-    View all entries, check expiration times, and delete unused data
-  </Step>
-</Steps>
-
-## MCP Tools
-
-The following MCP tools are available for clipboard operations:
-
-### Named Operations
+#### Named Operations
 
 | Tool | Description |
 |------|-------------|
@@ -113,16 +290,14 @@ The following MCP tools are available for clipboard operations:
 | `pluggedin_clipboard_delete` | Delete a specific entry |
 | `pluggedin_clipboard_list` | List all clipboard entries |
 
-### Stack Operations
+#### Stack Operations
 
 | Tool | Description |
 |------|-------------|
 | `pluggedin_clipboard_push` | Push value to indexed stack |
 | `pluggedin_clipboard_pop` | Pop and remove the most recent entry |
 
-## Data Structure
-
-### Clipboard Entry
+### Data Structure
 
 ```typescript
 interface ClipboardEntry {
@@ -145,8 +320,6 @@ interface ClipboardEntry {
 
 ### Source Types
 
-The `source` field indicates how the clipboard entry was created:
-
 | Source | Description |
 |--------|-------------|
 | `ui` | Created via the web interface (default) |
@@ -157,7 +330,7 @@ The `source` field indicates how the clipboard entry was created:
 The `source` field is automatically set based on how the entry was created. You cannot override this value.
 </Note>
 
-## Content Types & Encoding
+### Content Types & Encoding
 
 <Tabs>
   <Tab title="Text Content">
@@ -189,9 +362,9 @@ The `source` field is automatically set based on how the entry was created. You 
   </Tab>
 </Tabs>
 
-## Usage Examples
+### Usage Examples
 
-### Sharing Data Between Tools
+#### Sharing Data Between Tools
 
 <CodeGroup>
 ```typescript JavaScript SDK
@@ -265,7 +438,7 @@ func main() {
 ```
 </CodeGroup>
 
-### Processing Pipeline with Stack
+#### Processing Pipeline with Stack
 
 ```typescript
 // Step 1: Push initial data
@@ -287,7 +460,7 @@ const step2 = await client.clipboard.pop();
 const final = finalProcess(JSON.parse(step2.value));
 ```
 
-## Limits & Quotas
+### Limits & Quotas
 
 <CardGroup cols={2}>
   <Card title="Entry Size" icon="weight-hanging">
@@ -307,6 +480,8 @@ const final = finalProcess(JSON.parse(step2.value));
   </Card>
 </CardGroup>
 
+---
+
 ## Security & Isolation
 
 ### Access Control
@@ -315,8 +490,9 @@ const final = finalProcess(JSON.parse(step2.value));
 Clipboard entries are scoped to your profile and project. Never store sensitive credentials in clipboard entries.
 </Warning>
 
-- **Profile Isolation**: Each profile has its own clipboard namespace
+- **Profile Isolation**: Each profile has its own clipboard and memory namespace
 - **Project Scope**: Entries are associated with the current project
+- **CBP Privacy**: Collective patterns use HMAC-SHA256 hashing with k-anonymity
 - **Visibility Levels**:
   - `private`: Only accessible by you
   - `workspace`: Shared within your workspace
@@ -324,69 +500,60 @@ Clipboard entries are scoped to your profile and project. Never store sensitive 
 
 ### Data Protection
 
-- **Encryption**: Content encrypted at rest
+- **Encryption**: Content encrypted at rest (AES-256-GCM)
 - **TTL Enforcement**: Automatic cleanup of expired entries
 - **Size Limits**: 2 MB maximum prevents abuse
 - **Sanitization**: Content validated before storage
+- **Transaction Safety**: All memory operations wrapped in database transactions
 
-## Cleanup & Maintenance
+---
 
-### Automatic Cleanup
+## Quick Start
 
-Expired entries are automatically removed by the system cleanup job. You can also manually manage entries:
+<Steps>
+  <Step title="Access Memory Page">
+    Navigate to **Memory** in the sidebar to view your memories and clipboard entries
+  </Step>
 
-```typescript
-// Delete specific entry
-await client.clipboard.delete({ name: 'old_entry' });
+  <Step title="Start a Session (via MCP)">
+    Use `pluggedin_memory_session_start` to begin tracking observations in your AI session
+  </Step>
 
-// Clear all entries (use with caution)
-await client.clipboard.clearAll();
-```
+  <Step title="Record Observations">
+    Use `pluggedin_memory_observe` during your session to capture important patterns and decisions
+  </Step>
 
-### Best Practices
+  <Step title="End Session">
+    Use `pluggedin_memory_session_end` to generate a Z-report summarizing the session
+  </Step>
 
-<AccordionGroup>
-  <Accordion title="Use Meaningful Names">
-    Choose descriptive names for named entries:
-    - Good: `user_session_context`, `last_api_response`
-    - Bad: `temp`, `data1`, `x`
-  </Accordion>
-
-  <Accordion title="Set Appropriate TTLs">
-    - Short-term data: 5-15 minutes
-    - Session data: 1-4 hours
-    - Cache data: 24 hours (default)
-    - Persistent config: Set long TTL or refresh regularly
-  </Accordion>
-
-  <Accordion title="Choose Right Access Pattern">
-    - Named: For data you need to retrieve by key
-    - Indexed: For sequential processing or temporary storage
-  </Accordion>
-
-  <Accordion title="Content Type Matters">
-    Set appropriate content types for proper handling:
-    - `application/json` for structured data
-    - `text/plain` for simple strings
-    - `image/png`, `application/pdf` for binary (base64 encoded)
-  </Accordion>
-</AccordionGroup>
-
-## Monitoring
-
-### Memory Page Features
-
-The Memory page in the web interface provides:
-
-- **Entry List**: View all clipboard entries with metadata
-- **Filters**: Filter by name, content type, or visibility
-- **Quick Actions**: Copy, edit, or delete entries
-- **Expiration Info**: See when entries will expire
-- **Usage Stats**: Track clipboard usage
+  <Step title="Search Memories">
+    Use `pluggedin_memory_search` to find relevant past memories using natural language queries
+  </Step>
+</Steps>
 
 ## API Reference
 
-### Core Endpoints
+### Memory Endpoints
+
+```typescript
+// Session management
+POST /api/memory/sessions          // Start session
+PUT  /api/memory/sessions/:id      // End session / update
+
+// Observations
+POST /api/memory/observe           // Record observation
+
+// Search & retrieval
+POST /api/memory/search            // Search memories (progressive)
+GET  /api/memory/:id               // Get memory details
+
+// CBP
+POST /api/memory/cbp/query         // Query collective best practices
+POST /api/memory/cbp/feedback      // Submit CBP feedback
+```
+
+### Clipboard Endpoints
 
 ```typescript
 // List all entries
@@ -408,11 +575,15 @@ DELETE /api/clipboard/pop
 DELETE /api/clipboard
 ```
 
-See [Clipboard API Reference](/api/clipboard) for complete documentation.
+See [Clipboard API Reference](/api/clipboard) for complete clipboard documentation.
 
 ## Next Steps
 
 <CardGroup cols={2}>
+  <Card title="v3.1.0 Release Notes" icon="newspaper" href="/releases/v3-1-0">
+    Full details on the intelligent memory release
+  </Card>
+
   <Card title="API Reference" icon="code" href="/api/clipboard">
     Complete clipboard API documentation
   </Card>
@@ -423,9 +594,5 @@ See [Clipboard API Reference](/api/clipboard) for complete documentation.
 
   <Card title="Python SDK" icon="python" href="/sdks/python#clipboard">
     Clipboard methods in Python
-  </Card>
-
-  <Card title="Go SDK" icon="golang" href="/sdks/go#clipboard">
-    Clipboard methods in Go
   </Card>
 </CardGroup>

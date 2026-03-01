@@ -1,0 +1,134 @@
+---
+title: 'Version 3.1.0'
+description: 'Collective Best Practices, Intelligent Memory & Claude Code Plugin'
+---
+
+# Version 3.1.0 - Collective Best Practices & Intelligent Memory
+
+Released: March 2026
+
+## Overview
+
+Version 3.1.0 introduces the Collective Best Practices (CBP) system, a human cognition-inspired intelligent memory architecture, shared vector infrastructure with pgvector, and a native Claude Code plugin.
+
+## Key Features
+
+### Claude Code Plugin
+- **Native MCP Integration**: All plugged.in tools, knowledge base, memory, and notifications available directly in Claude Code
+- **Zero Configuration**: Add via `.mcp.json` with just your API key
+- **Memory Lifecycle Hooks**: Automatic session management -- start on session begin, Z-reports on end
+- **Pre-Compaction Context**: Relevant memories injected before context window compaction
+- **9 Built-in Skills**: Memory search, extraction, workflow, status, RAG context, setup, and more
+- **2 Agents**: Memory curator for classification, focus assistant for working set management
+- **CBP Post-Error Suggestions**: Automatic community pattern suggestions after tool errors
+
+### Collective Best Practices (CBP)
+- **Privacy-Preserving Pattern Aggregation**: Learns from all users while protecting individual data
+- **HMAC-SHA256 Pattern Hashing**: Patterns normalized and hashed -- never stored in plaintext
+- **k-Anonymity (k>=3)**: Patterns only shared when observed by 3+ unique profiles
+- **Success Rate Tracking**: Community patterns ranked by effectiveness
+- **Contextual Injection**: Relevant CBP patterns automatically suggested during sessions
+- **Feedback Loop**: Users can confirm or reject CBP suggestions to improve quality
+
+### Concentric Memory Rings
+Human cognition-inspired memory architecture with five ring types:
+- **Fresh Memory**: Observation buffer with auto-classification and embedding
+- **Procedures**: Repeatable workflows, how-tos, step-by-step guides
+- **Practice/Habits**: Successful patterns reinforced through repetition
+- **Long-term**: Validated insights requiring success_score >= 0.7
+- **Shocks**: Critical failures that bypass decay -- never forgotten
+
+### Intelligent Forgetting (Decay Engine)
+Token economics of forgetting inspired by human memory:
+
+| Stage | Tokens | Time to Next |
+|-------|--------|-------------|
+| FULL | ~500 | 7 days |
+| COMPRESSED | ~250 | 30 days |
+| SUMMARY | ~150 | 90 days |
+| ESSENCE | ~50 | 365 days |
+| FORGOTTEN | 0 | Deleted |
+
+Exceptions: Shocks never decay, frequently accessed memories decay slower, low-success memories decay faster.
+
+### Shared Vector Infrastructure (pgvector)
+- **PostgreSQL pgvector Extension**: Native vector search without external services
+- **HNSW Indexing**: High-recall cosine distance similarity search
+- **1536-Dimension Embeddings**: Using `text-embedding-3-small` via OpenAI or Google Gemini
+- **AI Provider Abstraction**: Automatic routing between OpenAI and Google embedding providers
+
+### Progressive Retrieval (3-Layer)
+Token-efficient memory access inspired by claude-mem:
+- **Layer 1 (Search)**: Returns `content_essence` or `content_summary` (50-150 tokens each)
+- **Layer 2 (Timeline)**: Adds temporal context -- when, which session, related observations
+- **Layer 3 (Full Details)**: Returns `content_full` only for selected memories
+
+### Z-Reports (Session Summaries)
+End-of-session compressed summaries (inspired by retail Z-reports):
+- Summary text with key observations
+- Decisions made and tools used
+- Success rate calculation (0.0-1.0)
+- Z-reports eligible for promotion to long-term memory
+
+### New MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `pluggedin_memory_session_start` | Start a memory session |
+| `pluggedin_memory_session_end` | End session + trigger Z-report |
+| `pluggedin_memory_observe` | Record an observation during a session |
+| `pluggedin_memory_search` | Search memories (layer 1 progressive) |
+| `pluggedin_memory_details` | Get full memory details (layer 3) |
+| `pluggedin_cbp_query` | Query collective best practices |
+| `pluggedin_cbp_feedback` | Submit feedback on CBP suggestions |
+
+## Database Changes
+
+4 new tables added:
+- `memory_sessions` -- Session tracking with Z-reports
+- `fresh_memory` -- Observation buffer with vector embeddings
+- `memory_ring` -- Unified long-term store for all ring types
+- `gut_patterns` -- Collective wisdom (NOT profile-scoped, k-anonymous)
+
+## Migration Notes
+
+### Upgrade Steps
+```bash
+# Pull latest and install
+git pull origin main
+pnpm install
+
+# Generate and apply migrations
+pnpm db:generate
+pnpm db:migrate
+
+# The migration automatically enables the pgvector extension
+```
+
+### New Environment Variables (Optional)
+```bash
+# Memory Configuration
+MEMORY_EMBEDDING_MODEL=text-embedding-3-small
+MEMORY_DECAY_CRON_ENABLED=true
+MEMORY_ANALYTICS_BATCH_SIZE=50
+MEMORY_EMBEDDING_DIMENSION=1536
+```
+
+## Security
+
+- 6 rounds of code review hardening (PR #138)
+- HMAC-SHA256 privacy for collective patterns
+- k-anonymity threshold enforcement
+- Advisory lock-based race condition prevention
+- Transaction safety for all memory operations
+
+## What's Next
+
+- Full memory UI (Fresh, Long-term, Procedures tabs)
+- Advanced analytics dashboard
+- Cross-agent memory sharing
+- Memory export/import
+
+---
+
+For questions or issues, please visit our [GitHub Discussions](https://github.com/orgs/VeriTeknik/discussions) or contact us at team@plugged.in.
