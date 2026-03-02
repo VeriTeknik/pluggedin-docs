@@ -1,0 +1,367 @@
+---
+title: Synchronicity Detection
+description: How temporal co-occurrence patterns are discovered across anonymized profiles using pure SQL analysis
+sidebarTitle: Synchronicity Detection
+icon: 'wave-pulse'
+---
+
+# Synchronicity Detection
+
+Synchronicity detection discovers **meaningful temporal co-occurrence patterns** across anonymized user profiles. Inspired by Carl Jung's concept of synchronicity -- "meaningful coincidences" that are not causally related -- this subsystem finds patterns that emerge organically from collective tool usage.
+
+<Info>
+Synchronicity detection uses **pure SQL analysis** with no LLM calls. It operates entirely on the `temporal_events` table and stores discovered patterns in `gut_patterns` with `pattern_type='synchronicity'`.
+</Info>
+
+## How It Works
+
+### Temporal Event Collection
+
+Every tool call and observation is recorded as a temporal event. Events are collected in a fire-and-forget manner -- failures never block the critical path.
+
+```
+User invokes tool
+      |
+      v
+Record temporal event (async, non-blocking)
+      |
+      v
+temporal_events table:
+  - profile_hash (HMAC-SHA256, never raw UUID)
+  - tool_name
+  - event_type
+  - outcome (success/failure/null)
+  - context_hash (optional)
+  - created_at
+```
+
+<Warning>
+Only `profile_hash` is stored -- never the raw profile UUID. This ensures that individual usage patterns cannot be traced back to specific users, even by database administrators.
+</Warning>
+
+### Three Analysis Types
+
+The synchronicity detector runs three independent analyses in parallel:
+
+<Tabs>
+  <Tab title="Co-occurrence">
+    **What it finds**: Tool pairs that are frequently used together within a short time window.
+
+    **Algorithm**:
+    1. Identify active tools (those with >= 10 events in the last 30 days)
+    2. Use SQL window functions (`LEAD`) to find sequential tool pairs within the same profile session
+    3. Filter to pairs where the gap between uses is less than 5 minutes
+    4. Group by tool pair and count distinct profiles
+    5. Only surface patterns observed by 3+ unique profiles (k-anonymity)
+
+    **Example output**: "After using `pluggedin_memory_search`, users frequently use `pluggedin_memory_details` (47 profiles)"
+
+    **SQL core logic**:
+    ```sql
+    WITH sequences AS (
+      SELECT
+        tool_name,
+        LEAD(tool_name) OVER (
+          PARTITION BY profile_hash
+          ORDER BY created_at
+        ) as next_tool,
+        LEAD(created_at) OVER (...) - created_at as gap
+      FROM temporal_events
+      WHERE created_at > NOW() - INTERVAL '30 days'
+    )
+    SELECT tool_name, next_tool,
+           COUNT(DISTINCT profile_hash) as unique_profiles
+    FROM sequences
+    WHERE gap < INTERVAL '5 minutes'
+    GROUP BY tool_name, next_tool
+    HAVING COUNT(DISTINCT profile_hash) >= 3
+    ```
+  </Tab>
+
+  <Tab title="Failure Correlation">
+    **What it finds**: Tools that have high failure rates at specific times of day or days of the week.
+
+    **Algorithm**:
+    1. Group events by tool, day-of-week, and hour-of-day
+    2. Calculate failure rate per group
+    3. Filter to groups where failure rate exceeds 50%
+    4. Only surface patterns from 3+ unique profiles
+
+    **Example output**: "`github_api_search` has 73% failure rate on day 1 (Monday) hour 9 (15 profiles, 42 events)"
+
+    **Use cases**:
+    - Detecting API rate-limit windows
+    - Identifying maintenance-related outages
+    - Finding time-of-day reliability patterns
+  </Tab>
+
+  <Tab title="Emergent Workflows">
+    **What it finds**: Three-tool sequential patterns that recur across multiple profiles.
+
+    **Algorithm**:
+    1. Use SQL `LEAD` with offset 1 and 2 to capture three-step sequences
+    2. Filter to sequences where total gap is under 15 minutes
+    3. Group by tool triple and count distinct profiles
+    4. Only surface workflows from 3+ unique profiles
+
+    **Example output**: "Common workflow: `pluggedin_search_documents` -> `pluggedin_get_document` -> `pluggedin_update_document` (12 profiles)"
+
+    **Use cases**:
+    - Discovering implicit best-practice workflows
+    - Identifying automation opportunities
+    - Building workflow templates from observed behavior
+  </Tab>
+</Tabs>
+
+### Pattern Storage
+
+Discovered patterns are stored as `gut_patterns` entries:
+
+<Steps>
+  <Step title="Generate Description">
+    Each pattern is formatted into a human-readable description.
+  </Step>
+
+  <Step title="Hash Check">
+    The description is HMAC-SHA256 hashed and checked against existing patterns to avoid duplicates.
+  </Step>
+
+  <Step title="Embedding Generation">
+    A vector embedding is generated for the pattern description to enable semantic search.
+  </Step>
+
+  <Step title="Store in gut_patterns">
+    New patterns are inserted with `pattern_type='synchronicity'`, initial confidence, and the anonymized profile count.
+  </Step>
+
+  <Step title="Reinforce Existing">
+    If the pattern already exists, its `occurrence_count` is incremented and the profile count is updated.
+  </Step>
+</Steps>
+
+### Concurrency Protection
+
+Synchronicity detection uses PostgreSQL advisory locks to prevent concurrent runs:
+
+```typescript
+// Only one detection can run at a time
+const lockResult = await db.execute(
+  sql`SELECT pg_try_advisory_lock(738203) as acquired`
+);
+if (!lockResult.acquired) {
+  return { error: 'Synchronicity detection already running' };
+}
+```
+
+### TABLESAMPLE for Scale
+
+When the temporal events table exceeds 1,000,000 rows, the detector automatically uses `TABLESAMPLE BERNOULLI(1%)` to sample the data. This keeps analysis time constant regardless of table size while maintaining statistical accuracy.
+
+## Privacy Model
+
+<CardGroup cols={3}>
+  <Card title="Profile Hashing" icon="lock">
+    Raw profile UUIDs are hashed with HMAC-SHA256 before storage. The hash function uses a server-side secret key.
+  </Card>
+
+  <Card title="k-Anonymity" icon="users">
+    Patterns are only surfaced when observed by 3+ unique profile hashes. Individual behaviors cannot be singled out.
+  </Card>
+
+  <Card title="Retention Cleanup" icon="clock-rotate-left">
+    Events older than 90 days (configurable) are automatically deleted via the cleanup cron endpoint.
+  </Card>
+</CardGroup>
+
+## API Reference
+
+### Record Temporal Events
+
+```bash
+POST /api/memory/temporal-events
+Authorization: Bearer <api_key>
+Content-Type: application/json
+
+{
+  "events": [
+    {
+      "toolName": "pluggedin_search_documents",
+      "eventType": "tool_call",
+      "outcome": "success"
+    },
+    {
+      "toolName": "pluggedin_get_document",
+      "eventType": "tool_call",
+      "outcome": "success"
+    }
+  ]
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": { "inserted": 2 }
+}
+```
+
+<Info>
+In most cases, temporal events are recorded automatically by the memory system during observations. You only need to call this endpoint directly if building custom integrations.
+</Info>
+
+### Cleanup Old Events
+
+```bash
+POST /api/memory/temporal-events/cleanup
+Authorization: Bearer <api_key>
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": { "deleted": 1247 }
+}
+```
+
+### Trigger Synchronicity Detection
+
+```bash
+POST /api/memory/sync/detect
+Authorization: Bearer <api_key>
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "coOccurrences": [
+      {
+        "analysisType": "co_occurrence",
+        "toolName": "pluggedin_memory_search",
+        "relatedTool": "pluggedin_memory_details",
+        "uniqueProfiles": 47
+      }
+    ],
+    "failureCorrelations": [
+      {
+        "analysisType": "failure_correlation",
+        "toolName": "github_api_search",
+        "dayOfWeek": 1,
+        "hourOfDay": 9,
+        "failureRate": 0.73,
+        "total": 42,
+        "uniqueProfiles": 15
+      }
+    ],
+    "emergentWorkflows": [
+      {
+        "analysisType": "emergent_workflow",
+        "toolName": "search_documents",
+        "relatedTool": "get_document",
+        "thirdTool": "update_document",
+        "uniqueProfiles": 12
+      }
+    ],
+    "patternsCreated": 5
+  }
+}
+```
+
+### Get Detected Patterns
+
+```bash
+GET /api/memory/sync/patterns
+Authorization: Bearer <api_key>
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "uuid": "abc-123",
+      "patternType": "synchronicity",
+      "description": "After using pluggedin_memory_search, users frequently use pluggedin_memory_details (47 profiles)",
+      "occurrenceCount": 3,
+      "uniqueProfileCount": 47,
+      "confidence": 0.5,
+      "metadata": {
+        "source": "synchronicity",
+        "analysis_type": "co_occurrence"
+      }
+    }
+  ]
+}
+```
+
+## SDK Usage
+
+<CodeGroup>
+```typescript JavaScript
+import { PluggedInClient } from 'pluggedinkit-js';
+
+const client = new PluggedInClient({ apiKey: 'your-api-key' });
+
+// Get synchronicity patterns
+const patterns = await client.getSynchronicityPatterns();
+for (const p of patterns) {
+  console.log(`${p.description} (${p.uniqueProfileCount} profiles)`);
+}
+```
+
+```python Python
+from pluggedinkit import PluggedInClient
+
+client = PluggedInClient(api_key="your-api-key")
+
+# Get synchronicity patterns
+patterns = client.get_synchronicity_patterns()
+for p in patterns:
+    print(f"{p.description} ({p.unique_profile_count} profiles)")
+```
+
+```go Go
+client := pluggedinkit.NewClient("your-api-key")
+ctx := context.Background()
+
+patterns, err := client.GetSynchronicityPatterns(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+for _, p := range patterns {
+    fmt.Printf("%s (%d profiles)\n", p.Description, p.UniqueProfileCount)
+}
+```
+</CodeGroup>
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SYNC_RETENTION_DAYS` | `90` | Temporal event retention period |
+| `SYNC_COOCCURRENCE_WINDOW_DAYS` | `30` | Lookback for co-occurrence |
+| `SYNC_COOCCURRENCE_GAP_MINUTES` | `5` | Max gap between co-occurring tools |
+| `SYNC_FAILURE_WINDOW_DAYS` | `90` | Lookback for failure correlation |
+| `SYNC_WORKFLOW_WINDOW_DAYS` | `30` | Lookback for emergent workflows |
+| `SYNC_WORKFLOW_GAP_MINUTES` | `15` | Max total gap for three-step workflows |
+| `SYNC_MIN_EVENTS_THRESHOLD` | `10` | Minimum events for a tool to be included |
+| `SYNC_ACTIVE_TOOLS_LIMIT` | `200` | Max tools analyzed per run |
+| `SYNC_TABLESAMPLE_PERCENT` | `1` | Sampling percentage for large tables |
+| `SYNC_TABLESAMPLE_TRIGGER_ROWS` | `1000000` | Row count that triggers sampling |
+| `SYNC_CRON_ENABLED` | `true` | Enable/disable the detection cron |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Archetype System" icon="masks-theater" href="/guides/archetype-system">
+    How synchronicity patterns are delivered through archetype routing
+  </Card>
+
+  <Card title="Jungian Intelligence Overview" icon="brain" href="/platform/jungian-intelligence">
+    See how all four subsystems work together
+  </Card>
+</CardGroup>

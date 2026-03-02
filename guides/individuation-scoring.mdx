@@ -1,0 +1,308 @@
+---
+title: Individuation Scoring
+description: Per-profile maturity metrics with four components, five maturity levels, and trend tracking
+sidebarTitle: Individuation Scoring
+icon: 'chart-line'
+---
+
+# Individuation Scoring
+
+Individuation scoring measures your profile's maturity across the memory system. Named after Carl Jung's concept of individuation -- the process of becoming a complete, integrated self -- this subsystem tracks four components that together paint a picture of how effectively you use memory, learning, collaboration, and self-reflection.
+
+<Info>
+Individuation scores are calculated via **pure SQL queries** with results cached in-memory for 60 minutes (configurable). No LLM calls are made during score calculation.
+</Info>
+
+## The Four Components
+
+Each component is scored from 0 to 25, for a total score of 0 to 100.
+
+<Tabs>
+  <Tab title="Memory Depth (0-25)">
+    **What it measures**: How diverse and durable your memory store is.
+
+    **Sub-components**:
+
+    | Sub-component | Points | Calculation |
+    |---------------|--------|-------------|
+    | Ring diversity | 0-10 | Number of distinct ring types used (x 2.5, max 4 types = 10) |
+    | Decay survival | 0-10 | Ratio of memories past the compressed stage (x 20) |
+    | Shock recovery | 0-5 | Ratio of shock memories with success_score > 0.5 |
+
+    **How to improve**:
+    - Use different tool types to build memory across all ring types (procedures, habits, long-term, shocks)
+    - Build high-quality memories that survive the decay engine
+    - Learn from failures (shock memories with eventual recovery)
+  </Tab>
+
+  <Tab title="Learning Velocity (0-25)">
+    **What it measures**: How quickly you acquire new patterns and how confidently they are classified.
+
+    **Sub-components**:
+
+    | Sub-component | Points | Calculation |
+    |---------------|--------|-------------|
+    | Weekly rate | 0-10 | Fresh memories per week (10+ = max) |
+    | Classification confidence | 0-10 | Average auto-classification confidence (x 10) |
+    | Reinforcement rate | 0-5 | Ratio of classified observations (x 5) |
+
+    **How to improve**:
+    - Record more observations during sessions using `pluggedin_memory_observe`
+    - Provide clear, well-structured observations that classify with high confidence
+    - Reinforce patterns by using tools consistently
+  </Tab>
+
+  <Tab title="Collective Contribution (0-25)">
+    **What it measures**: How much you give back to the collective knowledge base (CBP).
+
+    **Sub-components**:
+
+    | Sub-component | Points | Calculation |
+    |---------------|--------|-------------|
+    | CBP patterns promoted | 0-10 | Patterns promoted to collective pool (max 10) |
+    | Pattern diversity | 0-10 | Distinct ring types contributed (x 2.5) |
+    | Feedback given | 0-5 | CBP feedback submissions (max 5) |
+
+    **How to improve**:
+    - Build successful workflows that get promoted to collective patterns
+    - Contribute across different memory ring types
+    - Rate CBP suggestions using `pluggedin_cbp_feedback` (confirm or reject)
+  </Tab>
+
+  <Tab title="Self-Awareness (0-25)">
+    **What it measures**: How actively you reflect on and use your memory system.
+
+    **Sub-components**:
+
+    | Sub-component | Points | Calculation |
+    |---------------|--------|-------------|
+    | Memory search usage | 0-10 | Total access count across memories (log2 scale) |
+    | Decay acceptance | 0-10 | Average access count per memory |
+    | Dream consolidation | 0-5 | Number of dream consolidations performed |
+
+    **How to improve**:
+    - Search your memories regularly using `pluggedin_memory_search`
+    - Access specific memories with `pluggedin_memory_details`
+    - Allow dream processing to run (keep `DREAM_ENABLED=true`)
+  </Tab>
+</Tabs>
+
+## Five Maturity Levels
+
+Your total score maps to one of five maturity levels:
+
+| Level | Score Range | Description | Analogy |
+|-------|------------|-------------|---------|
+| **Nascent** | 0-20 | Just getting started. Few memories, minimal interaction with the system. | A seed planted but not yet sprouted |
+| **Developing** | 21-40 | Building initial patterns. Starting to use memory search and observe outcomes. | First leaves appearing |
+| **Established** | 41-60 | Consistent memory usage. Contributing to collective patterns and using diverse tools. | A young tree with branches |
+| **Mature** | 61-80 | Deep, diverse knowledge base. Active in collective learning and self-reflection. | A full canopy providing shade |
+| **Individuated** | 81-100 | Full integration. Rich memory across all rings, active community contributor, high self-awareness. | An ancient tree in a forest ecosystem |
+
+## Weekly Trends
+
+Individuation scores are snapshot daily (automatically at session start) and compared over two-week windows:
+
+| Trend | Condition | Meaning |
+|-------|-----------|---------|
+| **Accelerating** | Recent week average > previous week by 3+ points | Score is growing |
+| **Stable** | Difference within 3 points | Score is holding steady |
+| **Decelerating** | Recent week average < previous week by 3+ points | Score is declining |
+
+## Actionable Tips
+
+The API returns a contextual tip based on your weakest component:
+
+| Weakest Component | Tip |
+|-------------------|-----|
+| Memory Depth | "Try using different tool types to build diverse memory across all rings." |
+| Learning Velocity | "Record more observations during sessions to accelerate learning." |
+| Collective Contribution | "Rate collective patterns and your successful workflows will help others." |
+| Self-Awareness | "Search your memories more often -- self-reflection strengthens understanding." |
+
+## API Reference
+
+### Get Individuation Score
+
+```bash
+GET /api/memory/individuation
+Authorization: Bearer <api_key>
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": {
+    "total": 63,
+    "level": "mature",
+    "weeklyTrend": "accelerating",
+    "tip": "Rate collective patterns and your successful workflows will help others.",
+    "components": {
+      "memoryDepth": 19,
+      "learningVelocity": 17,
+      "collectiveContribution": 8,
+      "selfAwareness": 19
+    }
+  }
+}
+```
+
+### Get Score History
+
+```bash
+GET /api/memory/individuation?history=true&days=30
+Authorization: Bearer <api_key>
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "total": 45,
+      "memoryDepth": 12,
+      "learningVelocity": 14,
+      "collectiveContribution": 5,
+      "selfAwareness": 14,
+      "maturityLevel": "established",
+      "profileUuid": "prof-123",
+      "snapshotDate": "2026-02-01"
+    },
+    {
+      "total": 63,
+      "memoryDepth": 19,
+      "learningVelocity": 17,
+      "collectiveContribution": 8,
+      "selfAwareness": 19,
+      "maturityLevel": "mature",
+      "profileUuid": "prof-123",
+      "snapshotDate": "2026-03-01"
+    }
+  ]
+}
+```
+
+## SDK Usage
+
+<CodeGroup>
+```typescript JavaScript
+import { PluggedInClient } from 'pluggedinkit-js';
+
+const client = new PluggedInClient({ apiKey: 'your-api-key' });
+
+// Get current score
+const score = await client.getIndividuationScore();
+console.log(`Level: ${score.level} (${score.total}/100)`);
+console.log(`Trend: ${score.weeklyTrend}`);
+console.log(`Tip: ${score.tip}`);
+console.log(`Components:`);
+console.log(`  Memory Depth: ${score.components.memoryDepth}/25`);
+console.log(`  Learning Velocity: ${score.components.learningVelocity}/25`);
+console.log(`  Collective Contribution: ${score.components.collectiveContribution}/25`);
+console.log(`  Self-Awareness: ${score.components.selfAwareness}/25`);
+
+// Get history for charting
+const history = await client.getIndividuationHistory(30);
+for (const snapshot of history) {
+  console.log(`${snapshot.snapshotDate}: ${snapshot.total} (${snapshot.maturityLevel})`);
+}
+```
+
+```python Python
+from pluggedinkit import PluggedInClient
+
+client = PluggedInClient(api_key="your-api-key")
+
+# Get current score
+score = client.get_individuation_score()
+print(f"Level: {score.level} ({score.total}/100)")
+print(f"Trend: {score.weekly_trend}")
+print(f"Tip: {score.tip}")
+print(f"Components:")
+print(f"  Memory Depth: {score.components.memory_depth}/25")
+print(f"  Learning Velocity: {score.components.learning_velocity}/25")
+print(f"  Collective Contribution: {score.components.collective_contribution}/25")
+print(f"  Self-Awareness: {score.components.self_awareness}/25")
+
+# Get history for charting
+history = client.get_individuation_history(days=30)
+for snapshot in history:
+    print(f"{snapshot.snapshot_date}: {snapshot.total} ({snapshot.maturity_level})")
+```
+
+```go Go
+client := pluggedinkit.NewClient("your-api-key")
+ctx := context.Background()
+
+// Get current score
+score, err := client.GetIndividuationScore(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Level: %s (%d/100)\n", score.Level, score.Total)
+fmt.Printf("Trend: %s\n", score.WeeklyTrend)
+fmt.Printf("Tip: %s\n", score.Tip)
+fmt.Printf("Components:\n")
+fmt.Printf("  Memory Depth: %d/25\n", score.Components.MemoryDepth)
+fmt.Printf("  Learning Velocity: %d/25\n", score.Components.LearningVelocity)
+fmt.Printf("  Collective Contribution: %d/25\n", score.Components.CollectiveContribution)
+fmt.Printf("  Self-Awareness: %d/25\n", score.Components.SelfAwareness)
+
+// Get history for charting
+history, err := client.GetIndividuationHistory(ctx, 30)
+if err != nil {
+    log.Fatal(err)
+}
+for _, s := range history {
+    fmt.Printf("%s: %d (%s)\n", s.SnapshotDate, s.Total, s.MaturityLevel)
+}
+```
+</CodeGroup>
+
+### MCP Tool
+
+The `pluggedin_memory_individuation` MCP tool returns your score in a format optimized for AI agent consumption:
+
+```
+Individuation Score: 63/100 (Mature)
+Trend: Accelerating
+
+Components:
+  Memory Depth: 19/25
+  Learning Velocity: 17/25
+  Collective Contribution: 8/25
+  Self-Awareness: 19/25
+
+Tip: Rate collective patterns and your successful workflows will help others.
+```
+
+## Caching
+
+Individuation scores are cached in-memory with a configurable TTL (default 60 minutes). This means:
+
+- The first request after cache expiry triggers a fresh SQL calculation
+- Subsequent requests within the TTL return the cached result instantly
+- Session start automatically calculates and caches the score
+- Daily snapshots use the freshly calculated score (not the cache)
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `INDIVIDUATION_ENABLED` | `true` | Enable/disable individuation scoring |
+| `INDIVIDUATION_CACHE_TTL_MINUTES` | `60` | In-memory cache TTL for scores |
+| `INDIVIDUATION_HISTORY_DAYS` | `90` | Lookback window for component calculation |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Archetype System" icon="masks-theater" href="/guides/archetype-system">
+    How patterns are classified by archetype
+  </Card>
+
+  <Card title="Jungian Intelligence Overview" icon="brain" href="/platform/jungian-intelligence">
+    See how individuation ties into the full system
+  </Card>
+</CardGroup>

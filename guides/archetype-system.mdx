@@ -1,0 +1,281 @@
+---
+title: Archetype System
+description: How Jungian archetypes classify and prioritize pattern delivery based on context
+sidebarTitle: Archetype System
+icon: 'masks-theater'
+---
+
+# Archetype System
+
+The Archetype System wraps the existing Collective Best Practices (CBP) injection engine with Jungian archetype filtering. Every pattern injected into your session is classified into one of four archetypes and scored based on your current context, ensuring the most relevant patterns rise to the top.
+
+<Info>
+Archetype classification is **fully deterministic** -- no LLM calls are made. Context fields (outcome, observation type, consecutive failures) are mapped directly to archetype weights using a fixed algorithm.
+</Info>
+
+## The Four Archetypes
+
+<Tabs>
+  <Tab title="Shadow">
+    **Label**: Shadow Warning
+
+    The Shadow represents the hidden or unconscious negative side -- things that can go wrong if you are not careful.
+
+    **Pattern Types**:
+    - `anti_pattern` -- Common mistakes to avoid
+    - `security_warning` -- Security vulnerabilities and risks
+    - `gotcha` -- Surprising behaviors that catch developers off-guard
+
+    **When Dominant**: Error/failure contexts. When a tool call fails, Shadow patterns are boosted (1.2x multiplier) to surface warnings about what went wrong.
+
+    **Example**: "NEVER run `git push --force` to main without checking CI status first -- caused production data loss for 3 teams."
+  </Tab>
+
+  <Tab title="Sage">
+    **Label**: Sage Advice
+
+    The Sage is the wise guide -- proven solutions, best practices, and accumulated knowledge.
+
+    **Pattern Types**:
+    - `best_practice` -- Proven approaches that work well
+    - `error_solution` -- Known fixes for common errors
+    - `performance_tip` -- Optimization recommendations
+    - `migration_note` -- Version upgrade guidance
+
+    **When Dominant**: Default state. Sage is the primary archetype for knowledge sharing, weighted at 0.5 in the absence of other signals. Also boosted (1.1x) during error contexts alongside Shadow.
+
+    **Example**: "Always run `pnpm db:generate` before `pnpm db:migrate` when changing the Drizzle schema -- skipping generate leads to empty migrations."
+  </Tab>
+
+  <Tab title="Hero">
+    **Label**: Hero Path
+
+    The Hero is the active doer -- step-by-step workflows, tool sequences, and migration paths.
+
+    **Pattern Types**:
+    - `workflow` -- Multi-step processes
+    - `tool_sequence` -- Optimal tool ordering
+    - `migration_note` -- Step-by-step upgrade guides
+
+    **When Dominant**: Workflow and tool-call contexts. When you are actively using tools or following a multi-step process, Hero patterns are prioritized (weight 0.5).
+
+    **Example**: "Deploy workflow: 1) Run tests 2) Build Docker image 3) Push to registry 4) Apply Kubernetes manifests 5) Verify health endpoint."
+  </Tab>
+
+  <Tab title="Trickster">
+    **Label**: Trickster Insight
+
+    The Trickster is the unexpected disruptor -- creative solutions, edge cases, and workarounds for when conventional approaches fail.
+
+    **Pattern Types**:
+    - `gotcha` -- Edge cases and unexpected behaviors
+    - `compatibility` -- Version compatibility traps
+    - `error_recovery` -- Creative recovery strategies
+
+    **When Dominant**: After 2+ consecutive failures. When normal approaches keep failing, the Trickster surfaces unconventional solutions that might break through the impasse.
+
+    **Example**: "If `npm install` keeps failing with EACCES, try `npm cache clean --force` then install with `--prefer-offline` -- the cache corruption is the real issue."
+  </Tab>
+</Tabs>
+
+## How Weight Calculation Works
+
+Archetype weights are determined by a fixed algorithm that examines context fields. No machine learning or LLM is involved.
+
+### Weight Selection Rules
+
+```
+Context                         | Shadow | Sage | Hero | Trickster
+-------------------------------|--------|------|------|----------
+Default (no signals)           |  0.10  | 0.50 | 0.30 |   0.10
+Error / Failure                |  0.48* | 0.44*| 0.10 |   0.10
+Workflow / Tool Call           |  0.10  | 0.30 | 0.50 |   0.10
+Success                        |  0.10  | 0.40 | 0.40 |   0.10
+2+ Consecutive Failures        |  0.20  | 0.30 | 0.10 |   0.40
+```
+
+<Note>
+\* Shadow and Sage weights in error contexts include boost multipliers (1.2x and 1.1x respectively). The final weights are normalized so they always sum to 1.0.
+</Note>
+
+### Scoring Formula
+
+Each pattern receives a composite score:
+
+```
+score = archetypeWeight * confidence * similarity
+```
+
+- **archetypeWeight**: From the context-based weight table above (0.0-1.0)
+- **confidence**: The pattern's CBP confidence score (0.0-1.0)
+- **similarity**: Vector similarity between the query and the pattern (0.0-1.0)
+
+Patterns are sorted by this composite score in descending order, then capped at **2 patterns per archetype** and a global maximum (default: 5 total).
+
+### Input Context
+
+The archetype router accepts these optional context fields:
+
+```typescript
+interface ArchetypeContext {
+  observationType?: string;       // e.g., 'tool_call', 'error_pattern', 'workflow_step'
+  outcome?: string;               // 'success', 'failure', or undefined
+  toolName?: string;              // MCP tool name
+  errorMessage?: string;          // Error text for post-error suggestions
+  consecutiveFailures?: number;   // Count of back-to-back failures
+  query?: string;                 // Free-text search query
+}
+```
+
+## API Reference
+
+### Archetype-Enhanced Pattern Search
+
+```bash
+POST /api/memory/archetype/inject
+Authorization: Bearer <api_key>
+Content-Type: application/json
+
+{
+  "query": "database migration failing",
+  "toolName": "drizzle_migrate",
+  "outcome": "failure",
+  "errorMessage": "relation already exists",
+  "consecutiveFailures": 2
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "patternType": "error_solution",
+      "description": "Run pnpm db:generate before db:migrate to regenerate schema diff",
+      "confidence": 0.85,
+      "similarity": 0.92,
+      "archetype": "sage",
+      "archetypeLabel": "Sage Advice",
+      "archetypeWeight": 0.44
+    },
+    {
+      "patternType": "gotcha",
+      "description": "Drizzle ORM skips ALTER TABLE for enum changes -- drop and recreate manually",
+      "confidence": 0.72,
+      "similarity": 0.88,
+      "archetype": "trickster",
+      "archetypeLabel": "Trickster Insight",
+      "archetypeWeight": 0.40
+    },
+    {
+      "patternType": "anti_pattern",
+      "description": "Never apply migrations directly to production database without testing",
+      "confidence": 0.91,
+      "similarity": 0.85,
+      "archetype": "shadow",
+      "archetypeLabel": "Shadow Warning",
+      "archetypeWeight": 0.48
+    }
+  ]
+}
+```
+
+## SDK Usage
+
+<CodeGroup>
+```typescript JavaScript
+import { PluggedInClient } from 'pluggedinkit-js';
+
+const client = new PluggedInClient({ apiKey: 'your-api-key' });
+
+// Search with archetype-aware context
+const patterns = await client.searchWithContext(
+  'database migration failing',   // query
+  'drizzle_migrate',              // toolName (optional)
+  'failure'                       // outcome (optional)
+);
+
+for (const p of patterns) {
+  console.log(`[${p.archetypeLabel}] ${p.description}`);
+  console.log(`  Score: ${(p.archetypeWeight * p.confidence * p.similarity).toFixed(3)}`);
+}
+```
+
+```python Python
+from pluggedinkit import PluggedInClient
+
+client = PluggedInClient(api_key="your-api-key")
+
+# Search with archetype-aware context
+patterns = client.search_with_context(
+    query="database migration failing",
+    tool_name="drizzle_migrate",
+    outcome="failure"
+)
+
+for p in patterns:
+    print(f"[{p.archetype_label}] {p.description}")
+    score = p.archetype_weight * p.confidence * p.similarity
+    print(f"  Score: {score:.3f}")
+```
+
+```go Go
+client := pluggedinkit.NewClient("your-api-key")
+ctx := context.Background()
+
+patterns, err := client.SearchWithContext(ctx, &pluggedinkit.SearchWithContextRequest{
+    Query:    "database migration failing",
+    ToolName: "drizzle_migrate",
+    Outcome:  "failure",
+})
+if err != nil {
+    log.Fatal(err)
+}
+
+for _, p := range patterns {
+    fmt.Printf("[%s] %s\n", p.ArchetypeLabel, p.Description)
+    score := p.ArchetypeWeight * p.Confidence * p.Similarity
+    fmt.Printf("  Score: %.3f\n", score)
+}
+```
+</CodeGroup>
+
+### MCP Tool
+
+The `pluggedin_memory_search_with_context` MCP tool provides the same archetype-aware search:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | Yes | Search query text |
+| `toolName` | string | No | MCP tool name for context |
+| `outcome` | string | No | `"success"` or `"failure"` |
+
+## Backward Compatibility
+
+The archetype system is fully backward compatible:
+
+- **Existing injection API**: Unchanged. If `ARCHETYPE_ENABLED=false`, the standard injection engine is used and all patterns are labeled as `sage` by default.
+- **Existing patterns**: All previously stored patterns continue to work. They are classified into archetypes at query time based on their `patternType` field.
+- **Existing MCP tools**: `pluggedin_cbp_query` and `pluggedin_cbp_feedback` are unaffected.
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ARCHETYPE_ENABLED` | `true` | Enable/disable archetype routing |
+| `ARCHETYPE_MAX_PATTERNS_PER_TYPE` | `2` | Max patterns returned per archetype |
+| `ARCHETYPE_SHADOW_BOOST` | `1.2` | Shadow weight multiplier in error contexts |
+| `ARCHETYPE_SAGE_BOOST` | `1.1` | Sage weight multiplier in error contexts |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Synchronicity Detection" icon="wave-pulse" href="/guides/synchronicity-detection">
+    How patterns are discovered from temporal events
+  </Card>
+
+  <Card title="Dream Processing" icon="moon" href="/guides/dream-processing">
+    How related memories are consolidated
+  </Card>
+</CardGroup>

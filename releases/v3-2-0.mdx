@@ -1,0 +1,194 @@
+---
+title: 'Version 3.2.0'
+description: 'Jungian Intelligence Layer — Psychology-Inspired Memory Subsystems'
+---
+
+# Version 3.2.0 - Jungian Intelligence Layer
+
+Released: March 2026
+
+## Overview
+
+Version 3.2.0 introduces the **Jungian Intelligence Layer**, four psychology-inspired subsystems that transform raw memory data into meaningful, context-aware intelligence. Built on top of the concentric memory rings (v3.1.0) and Collective Best Practices, this release adds temporal pattern detection, archetype-driven pattern delivery, automatic memory consolidation, and per-profile maturity scoring.
+
+<Info>
+The Jungian Intelligence Layer is named after Carl Jung's analytical psychology. Each subsystem maps to a Jungian concept: **Archetypes** classify patterns, **Synchronicity** discovers meaningful coincidences, **Dreams** consolidate memories, and **Individuation** measures growth toward self-realization.
+</Info>
+
+## Key Features
+
+### 1. Synchronicity Detection
+
+Discovers temporal co-occurrence patterns across anonymized profiles using pure SQL analysis -- no LLM calls required. Three analysis types operate on the `temporal_events` table:
+
+- **Co-occurrence**: Tools that are frequently used together within a 5-minute window
+- **Failure Correlation**: Tools that tend to fail at specific times (day-of-week and hour-of-day clustering)
+- **Emergent Workflows**: Three-tool sequential patterns that recur across 3+ profiles
+
+Patterns that pass the k-anonymity threshold (k >= 3 unique profiles) are stored in `gut_patterns` with `pattern_type='synchronicity'` and embedded for vector search.
+
+**Privacy**: Only `profile_hash` (HMAC-SHA256) is stored in temporal events -- raw UUIDs never touch the table. Events are retained for 90 days by default.
+
+### 2. Archetype-Driven Pattern Delivery
+
+Wraps the existing CBP injection engine with Jungian archetype filtering. Each pattern is classified into one of four archetypes:
+
+| Archetype | Label | Pattern Types | When Dominant |
+|-----------|-------|--------------|---------------|
+| **Shadow** | Shadow Warning | `anti_pattern`, `security_warning`, `gotcha` | Error/failure contexts |
+| **Sage** | Sage Advice | `best_practice`, `error_solution`, `performance_tip`, `migration_note` | Default (knowledge sharing) |
+| **Hero** | Hero Path | `workflow`, `tool_sequence`, `migration_note` | Workflow/tool contexts |
+| **Trickster** | Trickster Insight | `gotcha`, `compatibility`, `error_recovery` | 2+ consecutive failures |
+
+Archetype selection is **fully deterministic** -- context fields (outcome, observation type, consecutive failures) are mapped to weights without any LLM call. Patterns are then sorted by `archetypeWeight * confidence * similarity` and capped at 2 per archetype.
+
+### 3. Dream Processing (Memory Consolidation)
+
+Discovers clusters of semantically similar memories and consolidates them into single unified memories via LLM, reducing token consumption while preserving all key insights.
+
+**Three-phase pipeline:**
+
+1. **Cluster Discovery** (no LLM): Uses zvec embeddings and Union-Find to identify connected components of memories with cosine similarity >= 0.75
+2. **LLM Consolidation**: Each cluster is fed to a compression-tuned LLM that merges redundant content into one coherent memory (max 300 output tokens)
+3. **Transactional Storage**: New consolidated memory, dream record, and source cluster marking all happen in a single database transaction
+
+Source memories are **not deleted** -- they continue to decay naturally through the existing decay engine. Dream processing is integrated into the decay cron; no separate job is needed.
+
+### 4. Individuation Scoring
+
+Per-profile maturity scoring with four components (each 0-25, total 0-100), calculated via pure SQL with in-memory caching:
+
+| Component | What It Measures | Max |
+|-----------|-----------------|-----|
+| **Memory Depth** | Ring diversity + decay survival + shock recovery | 25 |
+| **Learning Velocity** | Weekly observation rate + classification confidence + reinforcement | 25 |
+| **Collective Contribution** | CBP patterns promoted + pattern diversity + feedback given | 25 |
+| **Self-Awareness** | Memory search usage + decay acceptance + dream consolidation count | 25 |
+
+**Five maturity levels:**
+
+| Level | Score Range | Description |
+|-------|------------|-------------|
+| Nascent | 0-20 | Just getting started |
+| Developing | 21-40 | Building initial patterns |
+| Established | 41-60 | Consistent memory usage |
+| Mature | 61-80 | Deep, diverse knowledge base |
+| Individuated | 81-100 | Full self-realization |
+
+Daily snapshots are saved automatically at session start for trend tracking. Weekly trends are calculated as `accelerating`, `stable`, or `decelerating` by comparing recent vs. older snapshot averages.
+
+## Ecosystem Updates
+
+### New Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `temporal_events` | Anonymized tool usage events for synchronicity detection |
+| `dream_consolidations` | Records of cluster-to-memory consolidations |
+| `individuation_snapshots` | Daily per-profile individuation score snapshots |
+
+### New API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/memory/temporal-events` | POST | Batch write temporal events |
+| `/api/memory/temporal-events/cleanup` | POST | Cleanup events older than retention period |
+| `/api/memory/sync/detect` | POST | Trigger synchronicity detection |
+| `/api/memory/sync/patterns` | GET | Retrieve detected synchronicity patterns |
+| `/api/memory/dream/process` | POST | Trigger dream processing for current profile |
+| `/api/memory/dream/history` | GET | Get dream consolidation history |
+| `/api/memory/archetype/inject` | POST | Archetype-enhanced pattern search |
+| `/api/memory/individuation` | GET | Get individuation score (with optional `?history=true&days=30`) |
+
+### New SDK Methods
+
+Available in all three official SDKs (JavaScript, Python, Go):
+
+| Method | Description |
+|--------|-------------|
+| `searchWithContext(query, toolName?, outcome?)` | Archetype-aware memory search |
+| `getIndividuationScore()` | Get current individuation score and maturity level |
+| `getIndividuationHistory(days?)` | Get score history for trend visualization |
+| `getSynchronicityPatterns()` | Retrieve detected synchronicity patterns |
+| `getDreamHistory()` | Get dream consolidation history |
+
+### New MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `pluggedin_memory_search_with_context` | Search memories with archetype-aware context (tool name, outcome) |
+| `pluggedin_memory_individuation` | Get individuation score with maturity level and improvement tips |
+
+## Environment Variables
+
+All new settings have sensible defaults and are optional:
+
+```bash
+# Synchronicity Detector
+SYNC_RETENTION_DAYS=90
+SYNC_COOCCURRENCE_WINDOW_DAYS=30
+SYNC_COOCCURRENCE_GAP_MINUTES=5
+SYNC_FAILURE_WINDOW_DAYS=90
+SYNC_WORKFLOW_WINDOW_DAYS=30
+SYNC_WORKFLOW_GAP_MINUTES=15
+SYNC_MIN_EVENTS_THRESHOLD=10
+SYNC_CRON_ENABLED=true
+
+# Dream Processing
+DREAM_ENABLED=true
+DREAM_MIN_CLUSTER_SIZE=3
+DREAM_SIMILARITY_THRESHOLD=0.75
+DREAM_MAX_CLUSTERS_PER_RUN=10
+DREAM_CONSOLIDATION_MAX_INPUT_TOKENS=1500
+DREAM_COOLDOWN_DAYS=7
+
+# Archetype Router
+ARCHETYPE_ENABLED=true
+ARCHETYPE_MAX_PATTERNS_PER_TYPE=2
+ARCHETYPE_SHADOW_BOOST=1.2
+ARCHETYPE_SAGE_BOOST=1.1
+
+# Individuation Metrics
+INDIVIDUATION_ENABLED=true
+INDIVIDUATION_CACHE_TTL_MINUTES=60
+INDIVIDUATION_HISTORY_DAYS=90
+```
+
+## Migration Notes
+
+### Upgrade Steps
+
+```bash
+# Pull latest and install
+git pull origin main
+pnpm install
+
+# Generate and apply migrations
+pnpm db:generate
+pnpm db:migrate
+
+# No additional setup required -- all features are enabled by default
+```
+
+### Breaking Changes
+
+None. All new features are additive and backward compatible. The existing memory API, MCP tools, and injection engine continue to work unchanged. Archetype routing enriches existing patterns without altering their underlying data.
+
+## Security
+
+- **Temporal events** store only `profile_hash` (HMAC-SHA256), never raw UUIDs
+- **Synchronicity patterns** enforce k-anonymity (k >= 3) before surfacing
+- **Advisory locks** prevent concurrent synchronicity detection or dream processing runs
+- **Dream consolidation prompt** includes explicit anti-injection instructions
+- **Individuation scores** are profile-scoped and cached in-memory (not shared)
+
+## What's Next
+
+- Jungian Intelligence UI dashboard with archetype visualizations
+- Cross-agent synchronicity detection
+- Dream processing analytics and token savings reports
+- Individuation leaderboards (opt-in, anonymized)
+
+---
+
+For questions or issues, please visit our [GitHub Discussions](https://github.com/orgs/VeriTeknik/discussions) or contact us at team@plugged.in.

@@ -1,0 +1,255 @@
+---
+title: Jungian Intelligence Layer
+description: Psychology-inspired memory subsystems for pattern detection, archetype-driven delivery, memory consolidation, and maturity scoring
+sidebarTitle: Jungian Intelligence
+icon: 'masks-theater'
+---
+
+# Jungian Intelligence Layer
+
+The Jungian Intelligence Layer (v3.2.0) adds four psychology-inspired subsystems on top of the existing concentric memory rings and Collective Best Practices. Named after Carl Jung's analytical psychology, each subsystem maps to a core Jungian concept to transform raw memory data into meaningful, context-aware intelligence.
+
+<Info>
+The Jungian Intelligence Layer builds on the memory infrastructure introduced in v3.1.0. If you are new to the memory system, start with the [Memory & Intelligent Knowledge](/platform/memory) page.
+</Info>
+
+## The Four Subsystems
+
+<CardGroup cols={2}>
+  <Card title="Synchronicity Detection" icon="wave-pulse" href="/guides/synchronicity-detection">
+    Discovers meaningful temporal co-occurrence patterns across anonymized profiles using pure SQL analysis. Three detection types: co-occurrence, failure correlation, and emergent workflows.
+  </Card>
+
+  <Card title="Archetype System" icon="masks-theater" href="/guides/archetype-system">
+    Classifies patterns into four Jungian archetypes -- Shadow (warnings), Sage (best practices), Hero (workflows), and Trickster (creative solutions) -- using deterministic context mapping.
+  </Card>
+
+  <Card title="Dream Processing" icon="moon" href="/guides/dream-processing">
+    Consolidates clusters of semantically similar memories into single unified entries via LLM, reducing token consumption while preserving all key insights.
+  </Card>
+
+  <Card title="Individuation Scoring" icon="chart-line" href="/guides/individuation-scoring">
+    Per-profile maturity scoring across four components (Memory Depth, Learning Velocity, Collective Contribution, Self-Awareness) with five maturity levels from Nascent to Individuated.
+  </Card>
+</CardGroup>
+
+---
+
+## How It All Fits Together
+
+The four subsystems operate on different layers of the memory stack but work together to create a self-improving intelligence system:
+
+```
+  Observations (tool calls, outcomes, errors)
+         |
+         v
+  +-----------------------+     +-------------------------+
+  | Temporal Events       | --> | Synchronicity Detector  |
+  | (anonymized, hashed)  |     | (pure SQL, no LLM)      |
+  +-----------------------+     +-------------------------+
+         |                              |
+         v                              v
+  +-----------------------+     +-------------------------+
+  | Fresh Memory          | --> | Archetype Router        |
+  | (concentric rings)    |     | (deterministic mapping) |
+  +-----------------------+     +-------------------------+
+         |                              |
+         v                              v
+  +-----------------------+     +-------------------------+
+  | Memory Ring           | --> | Dream Processor         |
+  | (long-term store)     |     | (cluster + LLM merge)   |
+  +-----------------------+     +-------------------------+
+         |                              |
+         v                              v
+  +-----------------------+     +-------------------------+
+  | Individuation Score   | <-- | All subsystems feed     |
+  | (maturity metrics)    |     | into scoring components |
+  +-----------------------+     +-------------------------+
+```
+
+1. **Temporal events** are recorded during every tool call and observation (fire-and-forget, non-blocking)
+2. **Synchronicity detection** runs periodically (cron) to discover co-occurrence patterns, failure correlations, and emergent workflows across all anonymized profiles
+3. **The archetype router** enriches every pattern injection with a Jungian archetype label and weighted score, ensuring the most contextually relevant patterns are surfaced first
+4. **Dream processing** runs during the decay cron to discover clusters of related memories and consolidate them, saving tokens while preserving knowledge
+5. **Individuation scoring** aggregates metrics from all subsystems into a single maturity score that tracks profile growth over time
+
+## Privacy Model
+
+<CardGroup cols={2}>
+  <Card title="Profile Hash Only" icon="fingerprint">
+    Temporal events store `profile_hash` (HMAC-SHA256), never raw UUIDs. Individual usage patterns cannot be traced back to specific users.
+  </Card>
+
+  <Card title="k-Anonymity (k >= 3)" icon="users">
+    Synchronicity patterns are only surfaced when observed by 3 or more unique profiles. Individual behaviors are never exposed.
+  </Card>
+</CardGroup>
+
+## SDK & MCP Integration
+
+### SDK Methods
+
+All methods are available in the JavaScript, Python, and Go SDKs:
+
+<CodeGroup>
+```typescript JavaScript
+import { PluggedInClient } from 'pluggedinkit-js';
+
+const client = new PluggedInClient({ apiKey: 'your-api-key' });
+
+// Archetype-aware memory search
+const results = await client.searchWithContext(
+  'database migration patterns',
+  'drizzle_migrate',  // toolName (optional)
+  'failure'           // outcome (optional)
+);
+
+// Get individuation score
+const score = await client.getIndividuationScore();
+console.log(`Level: ${score.level}, Total: ${score.total}/100`);
+
+// Get score history for charting
+const history = await client.getIndividuationHistory(30);
+
+// Get synchronicity patterns
+const patterns = await client.getSynchronicityPatterns();
+
+// Get dream consolidation history
+const dreams = await client.getDreamHistory();
+```
+
+```python Python
+from pluggedinkit import PluggedInClient
+
+client = PluggedInClient(api_key="your-api-key")
+
+# Archetype-aware memory search
+results = client.search_with_context(
+    query="database migration patterns",
+    tool_name="drizzle_migrate",
+    outcome="failure"
+)
+
+# Get individuation score
+score = client.get_individuation_score()
+print(f"Level: {score.level}, Total: {score.total}/100")
+
+# Get score history
+history = client.get_individuation_history(days=30)
+
+# Get synchronicity patterns
+patterns = client.get_synchronicity_patterns()
+
+# Get dream history
+dreams = client.get_dream_history()
+```
+
+```go Go
+package main
+
+import (
+    "context"
+    "fmt"
+    pluggedinkit "github.com/veriteknik/pluggedinkit-go"
+)
+
+func main() {
+    client := pluggedinkit.NewClient("your-api-key")
+    ctx := context.Background()
+
+    // Archetype-aware memory search
+    results, _ := client.SearchWithContext(ctx, &pluggedinkit.SearchWithContextRequest{
+        Query:    "database migration patterns",
+        ToolName: "drizzle_migrate",
+        Outcome:  "failure",
+    })
+
+    // Get individuation score
+    score, _ := client.GetIndividuationScore(ctx)
+    fmt.Printf("Level: %s, Total: %d/100\n", score.Level, score.Total)
+
+    // Get score history
+    history, _ := client.GetIndividuationHistory(ctx, 30)
+
+    // Get synchronicity patterns
+    patterns, _ := client.GetSynchronicityPatterns(ctx)
+
+    // Get dream history
+    dreams, _ := client.GetDreamHistory(ctx)
+}
+```
+</CodeGroup>
+
+### MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `pluggedin_memory_search_with_context` | Search memories with archetype-aware context. Accepts `query`, optional `toolName`, and optional `outcome`. Returns patterns enriched with archetype labels and weights. |
+| `pluggedin_memory_individuation` | Get your individuation score with maturity level, component breakdown, weekly trend, and an actionable improvement tip. |
+
+## Configuration
+
+All settings have sensible defaults and can be tuned via environment variables:
+
+<Tabs>
+  <Tab title="Synchronicity">
+    | Variable | Default | Description |
+    |----------|---------|-------------|
+    | `SYNC_RETENTION_DAYS` | `90` | How long temporal events are retained |
+    | `SYNC_COOCCURRENCE_WINDOW_DAYS` | `30` | Lookback window for co-occurrence analysis |
+    | `SYNC_COOCCURRENCE_GAP_MINUTES` | `5` | Max gap between co-occurring tool uses |
+    | `SYNC_FAILURE_WINDOW_DAYS` | `90` | Lookback window for failure correlation |
+    | `SYNC_WORKFLOW_WINDOW_DAYS` | `30` | Lookback window for emergent workflows |
+    | `SYNC_WORKFLOW_GAP_MINUTES` | `15` | Max total gap for three-tool workflows |
+    | `SYNC_MIN_EVENTS_THRESHOLD` | `10` | Minimum events for a tool to be analyzed |
+    | `SYNC_CRON_ENABLED` | `true` | Enable/disable the synchronicity cron |
+  </Tab>
+
+  <Tab title="Dream Processing">
+    | Variable | Default | Description |
+    |----------|---------|-------------|
+    | `DREAM_ENABLED` | `true` | Enable/disable dream processing |
+    | `DREAM_MIN_CLUSTER_SIZE` | `3` | Minimum memories to form a cluster |
+    | `DREAM_SIMILARITY_THRESHOLD` | `0.75` | Cosine similarity threshold for clustering |
+    | `DREAM_MAX_CLUSTERS_PER_RUN` | `10` | Max clusters processed per decay cron |
+    | `DREAM_CONSOLIDATION_MAX_INPUT_TOKENS` | `1500` | Max input tokens per LLM consolidation |
+    | `DREAM_COOLDOWN_DAYS` | `7` | Minimum days between dream runs |
+  </Tab>
+
+  <Tab title="Archetype Router">
+    | Variable | Default | Description |
+    |----------|---------|-------------|
+    | `ARCHETYPE_ENABLED` | `true` | Enable/disable archetype routing |
+    | `ARCHETYPE_MAX_PATTERNS_PER_TYPE` | `2` | Max patterns returned per archetype |
+    | `ARCHETYPE_SHADOW_BOOST` | `1.2` | Weight multiplier for Shadow in error contexts |
+    | `ARCHETYPE_SAGE_BOOST` | `1.1` | Weight multiplier for Sage in error contexts |
+  </Tab>
+
+  <Tab title="Individuation">
+    | Variable | Default | Description |
+    |----------|---------|-------------|
+    | `INDIVIDUATION_ENABLED` | `true` | Enable/disable individuation scoring |
+    | `INDIVIDUATION_CACHE_TTL_MINUTES` | `60` | In-memory cache TTL for scores |
+    | `INDIVIDUATION_HISTORY_DAYS` | `90` | Lookback window for score calculation |
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Synchronicity Detection" icon="wave-pulse" href="/guides/synchronicity-detection">
+    Deep dive into temporal pattern detection
+  </Card>
+
+  <Card title="Archetype System" icon="masks-theater" href="/guides/archetype-system">
+    How archetype-driven pattern delivery works
+  </Card>
+
+  <Card title="Dream Processing" icon="moon" href="/guides/dream-processing">
+    Memory consolidation and token savings
+  </Card>
+
+  <Card title="Individuation Scoring" icon="chart-line" href="/guides/individuation-scoring">
+    Per-profile maturity metrics and trends
+  </Card>
+</CardGroup>
