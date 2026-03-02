@@ -64,6 +64,7 @@
         "platform/overview",
         "platform/document-library",
         "platform/memory",
+        "platform/jungian-intelligence",
         "platform/registry",
         "platform/sharing-servers",
         "platform/user-management"
@@ -86,6 +87,15 @@
         "sdks/javascript",
         "sdks/python",
         "sdks/go"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/synchronicity-detection",
+        "guides/archetype-system",
+        "guides/dream-processing",
+        "guides/individuation-scoring"
       ]
     },
     {
@@ -155,6 +165,7 @@
       "group": "Release Notes",
       "pages": [
         "releases/changelog",
+        "releases/v3-2-0",
         "releases/v3-1-0",
         "releases/v3-0-0",
         "releases/v2-12-0",
