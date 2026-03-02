@@ -7,9 +7,11 @@
     "href": "https://plugged.in"
   },
   "favicon": "/logo/P-logo.png",
-  "canonical": "https://docs.plugged.in",
   "seo": {
-    "indexing": "all"
+    "indexing": "all",
+    "metatags": {
+      "canonical": "https://docs.plugged.in"
+    }
   },
   "colors": {
     "primary": "#0D9373",
