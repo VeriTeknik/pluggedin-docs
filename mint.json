@@ -102,6 +102,7 @@
       "group": "Security",
       "pages": [
         "security/overview",
+        "security/data-anonymization",
         "security/sandboxing",
         "security/url-validation",
         "security/oauth-2.1"

@@ -1,0 +1,262 @@
+---
+title: Data Anonymization & Collective Knowledge
+description: How Plugged.in anonymizes user data for Collective Best Practices while preserving privacy
+sidebarTitle: Data Anonymization
+icon: 'user-secret'
+---
+
+# Data Anonymization & Collective Knowledge
+
+Plugged.in's **Collective Best Practices (CBP)** system learns effective patterns from the community and shares them back as suggestions. This page explains exactly what data we collect, how we anonymize it, and what guarantees we provide.
+
+## What We Collect
+
+When you use Plugged.in's memory system, your individual memories (tool usage patterns, error recovery steps, workflow sequences) are stored **privately in your profile**. These memories are never shared directly.
+
+However, when a memory proves valuable (high success rate, reinforced through repetition), it becomes a **candidate** for promotion to the collective pool. Before any data enters the collective pool, it goes through a multi-stage anonymization pipeline.
+
+<Warning>
+**Only high-quality, reinforced memories are candidates.** A memory must meet all of these criteria before it is even considered:
+- Reinforcement count ≥ 3 (observed multiple times)
+- Success score ≥ 0.6 (demonstrated effectiveness)
+- Not in a "forgotten" decay stage
+</Warning>
+
+---
+
+## The Anonymization Pipeline
+
+Every memory that enters the collective pool passes through three stages:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    ANONYMIZATION PIPELINE                        │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  Stage 1: Regex PII Removal                                     │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ Strips: emails, UUIDs, API keys, file paths, IPs,       │   │
+│  │ JWTs, connection strings, bearer tokens, AWS keys,       │   │
+│  │ GitHub/GitLab/Stripe tokens, URLs with auth params       │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                          │                                       │
+│                          ▼                                       │
+│  Stage 2: LLM Generalization                                    │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ AI removes: usernames, project names, company names,     │   │
+│  │ specific file paths, domain names                         │   │
+│  │ AI preserves: technical concepts, tool names, error       │   │
+│  │ types, general workflow patterns                          │   │
+│  │ Output: max 100 tokens, standalone description            │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                          │                                       │
+│                          ▼                                       │
+│  Stage 3: Post-Anonymization PII Re-Scan                        │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ Re-runs Stage 1 regex on LLM output to catch any PII     │   │
+│  │ that leaked through the generalization step               │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                          │                                       │
+│                          ▼                                       │
+│  HMAC-SHA256 Hashing + k-Anonymity Check                        │
+│  ┌──────────────────────────────────────────────────────────┐   │
+│  │ Pattern text → SHA-256 hash (for deduplication)           │   │
+│  │ Profile UUID → HMAC-SHA256 hash (for contribution        │   │
+│  │ tracking without storing identity)                        │   │
+│  │ k-Anonymity: pattern only visible when ≥ 3 unique        │   │
+│  │ profiles have independently contributed                   │   │
+│  └──────────────────────────────────────────────────────────┘   │
+│                                                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Stage 1: Regex PII Removal
+
+The first pass uses deterministic regex patterns to strip known PII formats:
+
+| Category | What's Detected | Replacement |
+|----------|----------------|-------------|
+| **Email addresses** | `user@example.com` | `<EMAIL>` |
+| **UUIDs** | `550e8400-e29b-41d4-a716-446655440000` | `<UUID>` |
+| **API keys** | OpenAI (`sk-`), Stripe (`sk_live_`), Plugged.in (`pg_in_`), Anthropic (`sk-ant-`), GitHub (`ghp_`, `github_pat_`), GitLab (`glpat-`), AWS (`AKIA`) | `<API_KEY>` |
+| **IP addresses** | IPv4 and IPv6 | `<IP>` |
+| **File paths** | Unix (`/Users/...`, `/home/...`) and Windows (`C:\...`) | `<PATH>` |
+| **URLs with auth** | URLs containing `?token=`, `?key=`, `?secret=` | `<URL_WITH_AUTH>` |
+| **Bearer tokens** | `Bearer eyJhbG...` | `Bearer <TOKEN>` |
+| **JWTs** | `eyJ...eyJ...` (three-part base64) | `<JWT>` |
+| **Connection strings** | `postgresql://`, `mysql://`, `mongodb://`, `redis://` | `<CONNECTION_STRING>` |
+| **Long hex strings** | 64+ character hex (secrets, keys) | `<HASH>` |
+
+<Note>
+This stage is purely mechanical — no data leaves your environment. The regex patterns are applied in-process before any external call.
+</Note>
+
+---
+
+## Stage 2: LLM Generalization
+
+After PII removal, an AI model generalizes the pattern to remove domain-specific details while preserving the technical insight.
+
+**What the AI removes:**
+- Usernames and personal identifiers
+- Project and repository names
+- Company and organization names
+- Specific file paths and directory structures
+- Domain names and hostnames
+
+**What the AI preserves:**
+- Technical concepts and programming patterns
+- Tool and framework names
+- Error types and categories
+- General workflow patterns and sequences
+- Best practices and anti-patterns
+
+### Example
+
+**Before anonymization (your private memory):**
+> "In the pluggedin-app project, when deploying to staging at acme-corp.com, always run pnpm db:generate before pnpm db:migrate. John's deployment on /Users/john/projects/pluggedin failed because he skipped the generate step, causing migration 0095 to be incomplete."
+
+**After Stage 1 (PII stripped):**
+> "In the pluggedin-app project, when deploying to staging at acme-corp.com, always run pnpm db:generate before pnpm db:migrate. <EMAIL>'s deployment on <PATH> failed because he skipped the generate step, causing migration 0095 to be incomplete."
+
+**After Stage 2 (LLM generalized):**
+> "When modifying database schema with Drizzle ORM, always run the schema generation step before applying migrations. Skipping generation can cause incomplete migrations."
+
+**After Stage 3 (final PII re-scan):**
+> Same as Stage 2 — no PII detected in the output.
+
+---
+
+## HMAC-SHA256 Hashing
+
+Two types of hashing are used:
+
+### Pattern Hashing (Deduplication)
+The anonymized pattern text is hashed with SHA-256 for deduplication. If two users independently discover the same pattern, it's recognized as the same pattern and the occurrence count increases.
+
+```
+anonymized text → normalize (lowercase, trim) → SHA-256 → pattern_hash
+```
+
+### Profile Hashing (Contribution Tracking)
+Your profile UUID is never stored in the collective pool. Instead, a keyed HMAC-SHA256 hash is used to track unique contributors without revealing identity.
+
+```
+profile_uuid → HMAC-SHA256(secret_key, profile_uuid) → profile_hash
+```
+
+<Info>
+The HMAC secret is server-side only (`CBP_HASH_SECRET`). It is impossible to reverse the hash back to a profile UUID without the secret key.
+</Info>
+
+---
+
+## k-Anonymity Protection
+
+A pattern is **only made visible** to other users when it has been independently contributed by **3 or more unique profiles**. This is known as [k-anonymity](https://en.wikipedia.org/wiki/K-anonymity) with k=3.
+
+| State | Unique Profiles | Visibility |
+|-------|----------------|------------|
+| **Accumulating** | 1-2 profiles | Pattern exists but is **invisible** to all users |
+| **Active** | 3+ profiles | Pattern available as a suggestion |
+
+This means:
+- A pattern unique to your workflow **will never** appear in collective suggestions
+- Patterns only surface when they represent **community consensus** — independently discovered by multiple users
+- Even if you are the first contributor, no one sees the pattern until two other profiles independently contribute the same insight
+
+---
+
+## What Is Stored in the Collective Pool
+
+Each pattern in the collective pool (`gut_patterns` table) contains:
+
+| Field | Content | Privacy Impact |
+|-------|---------|---------------|
+| `pattern_hash` | SHA-256 of normalized text | Cannot reverse to original |
+| `pattern_description` | Anonymized text (max 500 chars) | No PII, no project specifics |
+| `compressed_pattern` | Shorter version (max 200 chars) | No PII, no project specifics |
+| `pattern_type` | Category (workflow, best_practice, error_recovery) | Generic classification |
+| `occurrence_count` | How many times observed | Aggregate only |
+| `success_rate` | Effectiveness score (0.0-1.0) | Aggregate only |
+| `unique_profile_count` | Number of unique contributors | Count only, no identities |
+| `confidence` | Pattern reliability (0.0-1.0) | Computed metric |
+
+**What is NOT stored:**
+- Your profile UUID or username
+- Project names, file paths, or domain names
+- Original memory content
+- Session details or timestamps of your contributions
+- Any link back to your individual memories
+
+---
+
+## Contribution Tracking
+
+The `collective_contributions` table tracks which profiles contributed to which patterns, but only through hashed identifiers:
+
+| Field | Content |
+|-------|---------|
+| `pattern_uuid` | Which pattern was contributed to |
+| `profile_hash` | HMAC-SHA256 of profile UUID (not the UUID itself) |
+| `success_score` | The score from the contributing memory |
+| `ring_type` | Which memory ring type it came from |
+
+This table exists solely to:
+1. Prevent the same profile from inflating a pattern's unique_profile_count
+2. Enforce the k-anonymity threshold accurately
+3. Enable removal of a profile's contributions if requested
+
+---
+
+## Your Rights
+
+### Opt-Out
+The CBP system requires the memory system to be active. If you do not use Plugged.in's memory features, no data enters the collective pipeline.
+
+### Data Removal
+If you request account deletion, all your contributions are identified by your profile_hash and can be removed from the collective pool. If removing your contributions drops a pattern below the k-anonymity threshold (k=3), that pattern becomes invisible again.
+
+### Transparency
+You can view CBP statistics via the `pluggedin_cbp_query` MCP tool or the Memory page in the web interface. This shows you which collective patterns exist and their anonymized descriptions.
+
+---
+
+## Security Measures
+
+<CardGroup cols={2}>
+  <Card title="Multi-Stage Pipeline" icon="shield-halved">
+    Three independent anonymization stages ensure no single point of failure in PII removal.
+  </Card>
+
+  <Card title="Post-Processing Re-Scan" icon="magnifying-glass">
+    LLM output is re-scanned with the same regex patterns to catch any PII that leaked through generalization.
+  </Card>
+
+  <Card title="Server-Side HMAC" icon="key">
+    The HMAC secret never leaves the server. Profile hashes cannot be reversed without it.
+  </Card>
+
+  <Card title="Transaction Safety" icon="database">
+    All promotion operations are wrapped in database transactions with advisory locks to prevent race conditions.
+  </Card>
+</CardGroup>
+
+---
+
+## Summary
+
+| Aspect | Implementation |
+|--------|---------------|
+| **What's collected** | Only high-quality, reinforced memories (reinforcement ≥ 3, success ≥ 0.6) |
+| **How it's anonymized** | 3-stage pipeline: regex PII strip → LLM generalization → PII re-scan |
+| **How identity is protected** | HMAC-SHA256 hashed profile IDs, never raw UUIDs |
+| **When it becomes visible** | Only after 3+ unique profiles independently contribute (k-anonymity) |
+| **What's stored** | Anonymized pattern text, aggregate metrics only — no PII, no project details |
+| **How to opt out** | Don't use memory features, or request account deletion |
+
+<Info>
+For technical implementation details, see the [CBP source code](https://github.com/VeriTeknik/pluggedin-app/tree/main/lib/memory/cbp) on GitHub.
+</Info>

@@ -201,6 +201,23 @@ If a security issue is discovered:
 
 ## Additional Security Features
 
+### Collective Best Practices Privacy (v3.1.0+)
+
+Plugged.in's Collective Best Practices (CBP) system aggregates anonymized patterns from the community. All data undergoes a **three-stage anonymization pipeline** before entering the collective pool:
+
+1. **Regex PII Removal**: Strips emails, API keys, UUIDs, file paths, IPs, JWTs, connection strings, and bearer tokens
+2. **LLM Generalization**: AI removes usernames, project names, company names, and domain-specific details while preserving technical insights
+3. **Post-Processing Re-Scan**: LLM output is re-scanned to catch any PII that leaked through generalization
+
+Additional privacy guarantees:
+- **HMAC-SHA256 Profile Hashing**: Profile identities are keyed-hashed — raw UUIDs never stored in the collective pool
+- **k-Anonymity (k≥3)**: Patterns only become visible when 3+ independent profiles contribute the same insight
+- **No Reverse Mapping**: It is impossible to trace a collective pattern back to any individual user
+
+<Info>
+For full details on the anonymization pipeline, see [Data Anonymization & Collective Knowledge](/security/data-anonymization).
+</Info>
+
 ### End-to-End Encryption (v2.2.0+)
 
 - All sensitive MCP server configuration data encrypted at rest
