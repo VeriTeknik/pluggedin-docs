@@ -84,18 +84,20 @@ Archetype weights are determined by a fixed algorithm that examines context fiel
 
 ### Weight Selection Rules
 
+All weights are shown **after normalization** (each row sums to 1.0):
+
 ```
-Context                         | Shadow | Sage | Hero | Trickster
--------------------------------|--------|------|------|----------
-Default (no signals)           |  0.10  | 0.50 | 0.30 |   0.10
-Error / Failure                |  0.48* | 0.44*| 0.10 |   0.10
-Workflow / Tool Call           |  0.10  | 0.30 | 0.50 |   0.10
-Success                        |  0.10  | 0.40 | 0.40 |   0.10
-2+ Consecutive Failures        |  0.20  | 0.30 | 0.10 |   0.40
+Context                  | Shadow | Sage | Hero | Trickster
+-------------------------|--------|------|------|----------
+Default (no signals)     |  0.10  | 0.50 | 0.30 |   0.10
+Error / Failure          |  0.43  | 0.39 | 0.09 |   0.09
+Workflow / Tool Call     |  0.10  | 0.30 | 0.50 |   0.10
+Success                  |  0.10  | 0.40 | 0.40 |   0.10
+2+ Consecutive Failures  |  0.20  | 0.30 | 0.10 |   0.40
 ```
 
 <Note>
-\* Shadow and Sage weights in error contexts include boost multipliers (1.2x and 1.1x respectively). The final weights are normalized so they always sum to 1.0.
+In error/failure contexts, Shadow receives a 1.2x boost and Sage receives a 1.1x boost before normalization. The pre-normalization values are Shadow=0.48, Sage=0.44, Hero=0.10, Trickster=0.10 (sum=1.12), which normalize to the values shown above.
 </Note>
 
 ### Scoring Formula
@@ -138,10 +140,10 @@ Content-Type: application/json
 
 {
   "query": "database migration failing",
-  "toolName": "drizzle_migrate",
+  "tool_name": "drizzle_migrate",
   "outcome": "failure",
-  "errorMessage": "relation already exists",
-  "consecutiveFailures": 2
+  "error_message": "relation already exists",
+  "consecutive_failures": 2
 }
 ```
 
@@ -157,7 +159,7 @@ Content-Type: application/json
       "similarity": 0.92,
       "archetype": "sage",
       "archetypeLabel": "Sage Advice",
-      "archetypeWeight": 0.44
+      "archetypeWeight": 0.39
     },
     {
       "patternType": "gotcha",
@@ -166,7 +168,7 @@ Content-Type: application/json
       "similarity": 0.88,
       "archetype": "trickster",
       "archetypeLabel": "Trickster Insight",
-      "archetypeWeight": 0.40
+      "archetypeWeight": 0.09
     },
     {
       "patternType": "anti_pattern",
@@ -175,7 +177,7 @@ Content-Type: application/json
       "similarity": 0.85,
       "archetype": "shadow",
       "archetypeLabel": "Shadow Warning",
-      "archetypeWeight": 0.48
+      "archetypeWeight": 0.43
     }
   ]
 }
@@ -190,13 +192,13 @@ import { PluggedInClient } from 'pluggedinkit-js';
 const client = new PluggedInClient({ apiKey: 'your-api-key' });
 
 // Search with archetype-aware context
-const patterns = await client.searchWithContext(
-  'database migration failing',   // query
-  'drizzle_migrate',              // toolName (optional)
-  'failure'                       // outcome (optional)
-);
+const result = await client.jungian.searchWithContext({
+  query: 'database migration failing',
+  toolName: 'drizzle_migrate',
+  outcome: 'failure',
+});
 
-for (const p of patterns) {
+for (const p of result.data) {
   console.log(`[${p.archetypeLabel}] ${p.description}`);
   console.log(`  Score: ${(p.archetypeWeight * p.confidence * p.similarity).toFixed(3)}`);
 }
@@ -208,13 +210,13 @@ from pluggedinkit import PluggedInClient
 client = PluggedInClient(api_key="your-api-key")
 
 # Search with archetype-aware context
-patterns = client.search_with_context(
+result = client.jungian.search_with_context(
     query="database migration failing",
     tool_name="drizzle_migrate",
     outcome="failure"
 )
 
-for p in patterns:
+for p in result.patterns:
     print(f"[{p.archetype_label}] {p.description}")
     score = p.archetype_weight * p.confidence * p.similarity
     print(f"  Score: {score:.3f}")
@@ -224,16 +226,16 @@ for p in patterns:
 client := pluggedinkit.NewClient("your-api-key")
 ctx := context.Background()
 
-patterns, err := client.SearchWithContext(ctx, &pluggedinkit.SearchWithContextRequest{
-    Query:    "database migration failing",
-    ToolName: "drizzle_migrate",
-    Outcome:  "failure",
-})
+result, err := client.Jungian.SearchWithContext(ctx,
+    "database migration failing",
+    "drizzle_migrate",
+    "failure",
+)
 if err != nil {
     log.Fatal(err)
 }
 
-for _, p := range patterns {
+for _, p := range result.Data {
     fmt.Printf("[%s] %s\n", p.ArchetypeLabel, p.Description)
     score := p.ArchetypeWeight * p.Confidence * p.Similarity
     fmt.Printf("  Score: %.3f\n", score)

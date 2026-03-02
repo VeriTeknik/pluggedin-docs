@@ -98,24 +98,24 @@ import { PluggedInClient } from 'pluggedinkit-js';
 const client = new PluggedInClient({ apiKey: 'your-api-key' });
 
 // Archetype-aware memory search
-const results = await client.searchWithContext(
-  'database migration patterns',
-  'drizzle_migrate',  // toolName (optional)
-  'failure'           // outcome (optional)
-);
+const results = await client.jungian.searchWithContext({
+  query: 'database migration patterns',
+  toolName: 'drizzle_migrate',
+  outcome: 'failure',
+});
 
 // Get individuation score
-const score = await client.getIndividuationScore();
+const score = await client.jungian.getIndividuationScore();
 console.log(`Level: ${score.level}, Total: ${score.total}/100`);
 
 // Get score history for charting
-const history = await client.getIndividuationHistory(30);
+const history = await client.jungian.getIndividuationHistory(30);
 
 // Get synchronicity patterns
-const patterns = await client.getSynchronicityPatterns();
+const patterns = await client.jungian.getSynchronicityPatterns();
 
 // Get dream consolidation history
-const dreams = await client.getDreamHistory();
+const dreams = await client.jungian.getDreamHistory();
 ```
 
 ```python Python
@@ -124,24 +124,24 @@ from pluggedinkit import PluggedInClient
 client = PluggedInClient(api_key="your-api-key")
 
 # Archetype-aware memory search
-results = client.search_with_context(
+results = client.jungian.search_with_context(
     query="database migration patterns",
     tool_name="drizzle_migrate",
     outcome="failure"
 )
 
 # Get individuation score
-score = client.get_individuation_score()
+score = client.jungian.get_individuation_score()
 print(f"Level: {score.level}, Total: {score.total}/100")
 
 # Get score history
-history = client.get_individuation_history(days=30)
+history = client.jungian.get_individuation_history(days=30)
 
 # Get synchronicity patterns
-patterns = client.get_synchronicity_patterns()
+patterns = client.jungian.get_synchronicity_patterns()
 
 # Get dream history
-dreams = client.get_dream_history()
+dreams = client.jungian.get_dream_history()
 ```
 
 ```go Go
@@ -158,24 +158,24 @@ func main() {
     ctx := context.Background()
 
     // Archetype-aware memory search
-    results, _ := client.SearchWithContext(ctx, &pluggedinkit.SearchWithContextRequest{
-        Query:    "database migration patterns",
-        ToolName: "drizzle_migrate",
-        Outcome:  "failure",
-    })
+    results, _ := client.Jungian.SearchWithContext(ctx,
+        "database migration patterns",
+        "drizzle_migrate",
+        "failure",
+    )
 
     // Get individuation score
-    score, _ := client.GetIndividuationScore(ctx)
+    score, _ := client.Jungian.GetIndividuationScore(ctx)
     fmt.Printf("Level: %s, Total: %d/100\n", score.Level, score.Total)
 
     // Get score history
-    history, _ := client.GetIndividuationHistory(ctx, 30)
+    history, _ := client.Jungian.GetIndividuationHistory(ctx, 30)
 
     // Get synchronicity patterns
-    patterns, _ := client.GetSynchronicityPatterns(ctx)
+    patterns, _ := client.Jungian.GetSynchronicityPatterns(ctx)
 
     // Get dream history
-    dreams, _ := client.GetDreamHistory(ctx)
+    dreams, _ := client.Jungian.GetDreamHistory(ctx)
 }
 ```
 </CodeGroup>
@@ -213,7 +213,9 @@ All settings have sensible defaults and can be tuned via environment variables:
     | `DREAM_SIMILARITY_THRESHOLD` | `0.75` | Cosine similarity threshold for clustering |
     | `DREAM_MAX_CLUSTERS_PER_RUN` | `10` | Max clusters processed per decay cron |
     | `DREAM_CONSOLIDATION_MAX_INPUT_TOKENS` | `1500` | Max input tokens per LLM consolidation |
+    | `DREAM_CONSOLIDATION_MAX_OUTPUT_TOKENS` | `300` | Max output tokens for consolidated memory |
     | `DREAM_COOLDOWN_DAYS` | `7` | Minimum days between dream runs |
+    | `DREAM_TOP_K_NEIGHBORS` | `3` | Number of nearest neighbors per memory |
   </Tab>
 
   <Tab title="Archetype Router">

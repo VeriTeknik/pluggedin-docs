@@ -65,7 +65,7 @@ The synchronicity detector runs three independent analyses in parallel:
           PARTITION BY profile_hash
           ORDER BY created_at
         ) as next_tool,
-        LEAD(created_at) OVER (...) - created_at as gap
+        LEAD(created_at) OVER (PARTITION BY profile_hash ORDER BY created_at) - created_at as gap
       FROM temporal_events
       WHERE created_at > NOW() - INTERVAL '30 days'
     )
@@ -307,7 +307,7 @@ import { PluggedInClient } from 'pluggedinkit-js';
 const client = new PluggedInClient({ apiKey: 'your-api-key' });
 
 // Get synchronicity patterns
-const patterns = await client.getSynchronicityPatterns();
+const patterns = await client.jungian.getSynchronicityPatterns();
 for (const p of patterns) {
   console.log(`${p.description} (${p.uniqueProfileCount} profiles)`);
 }
@@ -319,7 +319,7 @@ from pluggedinkit import PluggedInClient
 client = PluggedInClient(api_key="your-api-key")
 
 # Get synchronicity patterns
-patterns = client.get_synchronicity_patterns()
+patterns = client.jungian.get_synchronicity_patterns()
 for p in patterns:
     print(f"{p.description} ({p.unique_profile_count} profiles)")
 ```
@@ -328,7 +328,7 @@ for p in patterns:
 client := pluggedinkit.NewClient("your-api-key")
 ctx := context.Background()
 
-patterns, err := client.GetSynchronicityPatterns(ctx)
+patterns, err := client.Jungian.GetSynchronicityPatterns(ctx)
 if err != nil {
     log.Fatal(err)
 }

@@ -187,7 +187,7 @@ import { PluggedInClient } from 'pluggedinkit-js';
 const client = new PluggedInClient({ apiKey: 'your-api-key' });
 
 // Get dream consolidation history
-const dreams = await client.getDreamHistory();
+const dreams = await client.jungian.getDreamHistory();
 let totalSavings = 0;
 for (const d of dreams) {
   totalSavings += d.tokenSavings;
@@ -204,7 +204,7 @@ from pluggedinkit import PluggedInClient
 client = PluggedInClient(api_key="your-api-key")
 
 # Get dream consolidation history
-dreams = client.get_dream_history()
+dreams = client.jungian.get_dream_history()
 total_savings = 0
 for d in dreams:
     total_savings += d.token_savings
@@ -216,7 +216,7 @@ print(f"Total tokens saved: {total_savings}")
 client := pluggedinkit.NewClient("your-api-key")
 ctx := context.Background()
 
-dreams, err := client.GetDreamHistory(ctx)
+dreams, err := client.Jungian.GetDreamHistory(ctx)
 if err != nil {
     log.Fatal(err)
 }

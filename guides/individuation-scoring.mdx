@@ -76,8 +76,8 @@ Each component is scored from 0 to 25, for a total score of 0 to 100.
 
     | Sub-component | Points | Calculation |
     |---------------|--------|-------------|
-    | Memory search usage | 0-10 | Total access count across memories (log2 scale) |
-    | Decay acceptance | 0-10 | Average access count per memory |
+    | Memory search usage | 0-10 | Total access count across memories (log2 scale, max at 1024 accesses) |
+    | Memory engagement | 0-10 | Average access count per memory (x2, capped at 10). Higher averages indicate more active re-use of stored knowledge. |
     | Dream consolidation | 0-5 | Number of dream consolidations performed |
 
     **How to improve**:
@@ -193,7 +193,7 @@ import { PluggedInClient } from 'pluggedinkit-js';
 const client = new PluggedInClient({ apiKey: 'your-api-key' });
 
 // Get current score
-const score = await client.getIndividuationScore();
+const score = await client.jungian.getIndividuationScore();
 console.log(`Level: ${score.level} (${score.total}/100)`);
 console.log(`Trend: ${score.weeklyTrend}`);
 console.log(`Tip: ${score.tip}`);
@@ -204,7 +204,7 @@ console.log(`  Collective Contribution: ${score.components.collectiveContributio
 console.log(`  Self-Awareness: ${score.components.selfAwareness}/25`);
 
 // Get history for charting
-const history = await client.getIndividuationHistory(30);
+const history = await client.jungian.getIndividuationHistory(30);
 for (const snapshot of history) {
   console.log(`${snapshot.snapshotDate}: ${snapshot.total} (${snapshot.maturityLevel})`);
 }
@@ -216,7 +216,7 @@ from pluggedinkit import PluggedInClient
 client = PluggedInClient(api_key="your-api-key")
 
 # Get current score
-score = client.get_individuation_score()
+score = client.jungian.get_individuation_score()
 print(f"Level: {score.level} ({score.total}/100)")
 print(f"Trend: {score.weekly_trend}")
 print(f"Tip: {score.tip}")
@@ -227,7 +227,7 @@ print(f"  Collective Contribution: {score.components.collective_contribution}/25
 print(f"  Self-Awareness: {score.components.self_awareness}/25")
 
 # Get history for charting
-history = client.get_individuation_history(days=30)
+history = client.jungian.get_individuation_history(days=30)
 for snapshot in history:
     print(f"{snapshot.snapshot_date}: {snapshot.total} ({snapshot.maturity_level})")
 ```
@@ -237,7 +237,7 @@ client := pluggedinkit.NewClient("your-api-key")
 ctx := context.Background()
 
 // Get current score
-score, err := client.GetIndividuationScore(ctx)
+score, err := client.Jungian.GetIndividuationScore(ctx)
 if err != nil {
     log.Fatal(err)
 }
@@ -251,7 +251,7 @@ fmt.Printf("  Collective Contribution: %d/25\n", score.Components.CollectiveCont
 fmt.Printf("  Self-Awareness: %d/25\n", score.Components.SelfAwareness)
 
 // Get history for charting
-history, err := client.GetIndividuationHistory(ctx, 30)
+history, err := client.Jungian.GetIndividuationHistory(ctx, 30)
 if err != nil {
     log.Fatal(err)
 }

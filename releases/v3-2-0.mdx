@@ -48,7 +48,7 @@ Discovers clusters of semantically similar memories and consolidates them into s
 
 **Three-phase pipeline:**
 
-1. **Cluster Discovery** (no LLM): Uses zvec embeddings and Union-Find to identify connected components of memories with cosine similarity >= 0.75
+1. **Cluster Discovery** (no LLM): Uses vector embeddings and Union-Find to identify connected components of memories with cosine similarity >= 0.75
 2. **LLM Consolidation**: Each cluster is fed to a compression-tuned LLM that merges redundant content into one coherent memory (max 300 output tokens)
 3. **Transactional Storage**: New consolidated memory, dream record, and source cluster marking all happen in a single database transaction
 
