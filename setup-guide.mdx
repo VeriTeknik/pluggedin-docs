@@ -177,37 +177,47 @@ Most users can connect without any installation - just use npx! The proxy packag
     ```
   </Accordion>
 
-  <Accordion title="Claude Code">
-    **CLI Setup:**
+  <Accordion title="Claude Code (via Official Plugin — Recommended)">
+    The **official Plugged.in plugin** provides the best Claude Code experience — device authorization, persistent memory, lifecycle hooks, and 9 built-in skills.
+
+    **Install from the marketplace:**
     ```bash
-    # In your project directory, run:
+    /plugin marketplace add VeriTeknik/pluggedin-plugin
+    /plugin install pluggedin@VeriTeknik-pluggedin-plugin
+    ```
+
+    **Set up with device authorization:**
+    ```bash
+    /pluggedin:setup
+    ```
+
+    This opens your browser for a one-click authorization flow (similar to `gh auth login`):
+    1. A verification code is displayed in your terminal
+    2. Your browser opens to the Plugged.in authorization page
+    3. Verify the codes match, select a Hub, and click **Authorize**
+    4. Your API key is automatically saved to `.claude/settings.local.json`
+    5. Restart Claude Code, then run `/pluggedin:status` to verify
+
+    No manual key copying needed.
+  </Accordion>
+
+  <Accordion title="Claude Code (Direct MCP Proxy)">
+    If you prefer a lightweight setup without the full plugin, connect directly via the MCP proxy:
+
+    ```bash
     claude mcp add PluggedIn npx @pluggedin/pluggedin-mcp-proxy@latest -e PLUGGEDIN_API_KEY=pg_in_your_key
     ```
 
-    **Alternative (manual config):**
-    ```bash
-    # Set environment variable
-    export PLUGGEDIN_API_KEY=pg_in_your_key
-
-    # Launch VS Code with Claude Code
-    code
-    ```
-
-    **Manual configuration file:**
+    **Or add to `.claude/settings.local.json`:**
     ```json
-    // .claude-code/config.json
     {
-      "mcpServers": {
-        "PluggedIn": {
-          "command": "npx",
-          "args": ["@pluggedin/pluggedin-mcp-proxy@latest"],
-          "env": {
-            "PLUGGEDIN_API_KEY": "pg_in_your_key"
-          }
-        }
+      "env": {
+        "PLUGGEDIN_API_KEY": "pg_in_your_key"
       }
     }
     ```
+
+    <Note>The direct proxy gives you MCP tools only. The official plugin adds memory sessions, lifecycle hooks, agents, and skills on top.</Note>
   </Accordion>
 </AccordionGroup>
 
