@@ -115,6 +115,63 @@ For third-party applications that need to access user data on their behalf.
 }
 ```
 
+### Device Authorization (CLI)
+
+For CLI tools and headless environments that cannot directly handle browser redirects. Inspired by [RFC 8628](https://datatracker.ietf.org/doc/html/rfc8628).
+
+<Steps>
+  <Step title="Initiate">
+    ```bash
+    curl -s -X POST "https://plugged.in/api/cli/auth/initiate"
+    ```
+
+    **Response:**
+    ```json
+    {
+      "device_code": "a1b2c3...",
+      "user_code": "ABCD-1234",
+      "verification_url": "https://plugged.in/cli/authorize?code=ABCD-1234",
+      "expires_in": 300,
+      "interval": 5
+    }
+    ```
+  </Step>
+  <Step title="Direct User to Browser">
+    Open `verification_url` in the user's browser. The user logs in (if needed), verifies the code, selects a Hub, and clicks **Authorize**.
+  </Step>
+  <Step title="Poll for Result">
+    Poll every `interval` seconds (returned in step 1, default 5). Do not poll faster — requests that exceed the rate limit receive a `429` response with a `Retry-After` header.
+
+    ```bash
+    # Wait `interval` seconds between each request
+    curl -s "https://plugged.in/api/cli/auth/poll?device_code=a1b2c3..."
+    ```
+
+    **Possible statuses:**
+    | Status | Meaning |
+    |--------|---------|
+    | `authorization_pending` | User hasn't acted yet — wait `interval` seconds and poll again |
+    | `approved` | User approved — response includes `api_key` |
+    | `denied` | User denied the request |
+    | `expired` | Code expired (5-minute TTL) |
+
+    Stop polling on any terminal status (`approved`, `denied`, `expired`) or when `expires_in` seconds have elapsed since initiation.
+  </Step>
+  <Step title="Use the API Key">
+    On `approved`, the response includes a ready-to-use API key:
+    ```json
+    {
+      "status": "approved",
+      "api_key": "pg_in_..."
+    }
+    ```
+  </Step>
+</Steps>
+
+<Info>
+The Plugged.in CLI plugin (`/pluggedin:setup`) automates this entire flow — it initiates, opens the browser, polls, and saves the key automatically.
+</Info>
+
 ### Session Authentication
 
 For browser-based applications using cookies.
