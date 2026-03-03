@@ -208,11 +208,18 @@ Most users can connect without any installation - just use npx! The proxy packag
     claude mcp add PluggedIn npx @pluggedin/pluggedin-mcp-proxy@latest -e PLUGGEDIN_API_KEY=pg_in_your_key
     ```
 
-    **Or add to `.claude/settings.local.json`:**
+    This registers the MCP server and injects the API key. If you prefer manual configuration, add the full MCP server block to `.claude/settings.local.json`:
+
     ```json
     {
-      "env": {
-        "PLUGGEDIN_API_KEY": "pg_in_your_key"
+      "mcpServers": {
+        "PluggedIn": {
+          "command": "npx",
+          "args": ["-y", "@pluggedin/pluggedin-mcp-proxy@latest"],
+          "env": {
+            "PLUGGEDIN_API_KEY": "pg_in_your_key"
+          }
+        }
       }
     }
     ```
