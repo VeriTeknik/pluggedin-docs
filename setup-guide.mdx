@@ -205,7 +205,7 @@ Most users can connect without any installation - just use npx! The proxy packag
     If you prefer a lightweight setup without the full plugin, connect directly via the MCP proxy:
 
     ```bash
-    claude mcp add PluggedIn npx @pluggedin/pluggedin-mcp-proxy@latest -e PLUGGEDIN_API_KEY=pg_in_your_key
+    claude mcp add -e PLUGGEDIN_API_KEY=pg_in_your_key PluggedIn -- npx -y @pluggedin/pluggedin-mcp-proxy@latest
     ```
 
     This registers the MCP server and injects the API key. If you prefer manual configuration, add the full MCP server block to `.claude/settings.local.json`:
